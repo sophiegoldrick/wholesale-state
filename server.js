@@ -418,6 +418,13 @@ app.post('/api/graph/poll', auth, async (req, res) => {
 cron.schedule('*/3 * * * *', pollInbox);
 
 // ── Serve frontend ──────────────────────────────────────────────
+app.use(express.static(join(__dirname, 'public')));
+
+app.get('/dashboard.jsx', (req, res) => {
+  res.setHeader('Content-Type', 'text/babel');
+  res.sendFile(join(__dirname, 'dashboard.jsx'));
+});
+
 app.get('*', (req, res) => {
   const p = join(__dirname, 'public', 'index.html');
   existsSync(p) ? res.sendFile(p) : res.send('<h2>Run: npm run build</h2>');
