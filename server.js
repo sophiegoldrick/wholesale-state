@@ -257,7 +257,7 @@ async function getAccessToken() {
 // ── Ordermentum email parser ────────────────────────────────────
 // Parses the structured Ordermentum invoice text (email body = PDF text content)
 // Format is line-by-line structured: "FIELD VALUE" or "FIELD\nVALUE on next line"
-function parseOrdermentumEmail(subject, bodyText, receivedDateTime) {
+function parseOrdermentumEmail(subject, bodyText, receivedDateTime, toRecipientName) {
   // Must contain an OMO/OMI number somewhere
   const omoMatch = (bodyText + ' ' + subject).match(/OMO\d+/);
   const omiMatch = (bodyText + ' ' + subject).match(/OMI(\d+)/);
@@ -297,7 +297,14 @@ function parseOrdermentumEmail(subject, bodyText, receivedDateTime) {
   // Try "To: Customer Name" on one line first
   const toInlineMatch = lines.find(l => /^To:\s*.+/i.test(l));
   if (toInlineMatch) {
-    customer = toInlineMatch.replace(/^To:\s*/i, '').trim();
+    const val = toInlineMatch.replace(/^To:\s*/i, '').trim();
+    // Ignore if it looks like an email address
+    if (!val.includes('@')) customer = val;
+  }
+  // Try subject: "Order Confirmed - Customer Name" or "New Order from Customer Name"
+  if (!customer) {
+    const subMatch = subject.match(/(?:Order(?:\s+Confirmed)?\s*[-–]\s*|New Order from\s+)(.+)/i);
+    if (subMatch) customer = subMatch[1].trim();
   }
   // Fallback: "TO" on its own line, customer on next
   const toIdx = !customer ? lines.findIndex(l => /^TO$/i.test(l)) : -1;
@@ -374,7 +381,7 @@ function parseOrdermentumEmail(subject, bodyText, receivedDateTime) {
     orderNumber,
     invoiceNumber:  invoiceNumber || '',
     invoiceDate:    normDate(invoiceDate),
-    customer:       customer || 'Unknown',
+    customer:       customer || toRecipientName || 'Unknown',
     address:        address  || '',
     suburb:         suburb   || '',
     state:          state    || '',
@@ -414,7 +421,7 @@ async function pollInbox() {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const filter = encodeURIComponent(`isRead eq false and receivedDateTime ge ${since}`);
     const resp = await fetch(
-      `${MSG_ENDPOINT}?$filter=${filter}&$select=id,subject,body,from,receivedDateTime&$top=50`,
+      `${MSG_ENDPOINT}?$filter=${filter}&$select=id,subject,body,from,toRecipients,receivedDateTime&$top=50`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
     const data = await resp.json();
@@ -430,6 +437,7 @@ async function pollInbox() {
       const fromAddr = msg.from?.emailAddress?.address || '';
       const subject  = msg.subject || '';
       // Preserve structure: block-level tags → newlines, then strip remaining HTML
+      const toRecipientName = msg.toRecipients?.[0]?.emailAddress?.name || '';
       const rawBody = msg.body?.content || '';
       const bodyText = rawBody
         .replace(/<br\s*\/?>/gi, '\n')
@@ -497,7 +505,7 @@ async function pollInbox() {
                             subject.toLowerCase().includes('ordermentum') ||
                             /OMO\d+/.test(subject);
       if (isOrdermentum && !podOrders) {
-        const order = parseOrdermentumEmail(subject, bodyText, msg.receivedDateTime);
+        const order = parseOrdermentumEmail(subject, bodyText, msg.receivedDateTime, toRecipientName);
         if (order) {
           const stored = await db(`SELECT value FROM kv_store WHERE key = 'ws-orders'`);
           const orders = stored.rows.length > 0 ? (stored.rows[0].value || []) : [];
@@ -992,6 +1000,18 @@ if GEN_TYPE in ('prints','all'):
     if rtea: make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Fronts.xlsx')
     if rtea: make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
     if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx')
+    if r1l:  make_print_file('BACKS',  True,  r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Backs.xlsx')
+
+# ══ ZIP all generated files ══
+zip_path = f'{OUT_DIR}/{DATE_STR}_Wholesale_State_Files.zip'
+with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
+    for fp in generated:
+        z.write(fp, os.path.basename(fp))
+print(f'✅ ZIP — {len(generated)} files', file=sys.stderr)
+
+# ══ Output JSON to stdout (required by server) ══
+result = {'paths': generated, 'files': [os.path.basename(p) for p in generated], 'zip': zip_path}
+print(json.dumps(result))
 `;
 
 app.post('/api/generate', auth, async (req, res) => {
