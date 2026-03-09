@@ -575,7 +575,7 @@ const TPL_DIR = join(process.cwd(), 'templates');
 const GEN_SCRIPT = `import csv, shutil, math, datetime, zipfile, json, sys, os
 from collections import defaultdict
 from openpyxl import load_workbook, Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Side, Border
 
 CSV_PATH = sys.argv[1] if len(sys.argv) > 1 else '/mnt/user-data/uploads/ORDER_ITEMS_MASTER_SHEET.csv'
 OUT_DIR  = sys.argv[2] if len(sys.argv) > 2 else '/tmp/gen_out'
@@ -606,12 +606,13 @@ for r in rows:
     by_order[r['OrderNumber']].append(r)
 
 def total_cartons(ords):
-    t = 0
-    for r in ords:
-        p = r.get('Product',''); qty = int(r.get('Quantity',0) or 0)
-        if p=='350': t += math.ceil(qty/24)
-        elif p=='TEA': t += math.ceil(qty/18)
-        elif p=='1L': t += math.ceil(qty/12)
+    # Sum ALL qty by product type first, THEN divide — mixed SKUs fill the same carton
+    q350 = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='350')
+    qtea = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='TEA')
+    q1l  = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='1L')
+    t  = math.ceil(q350/24) if q350 else 0
+    t += math.ceil(qtea/18) if qtea else 0
+    t += math.ceil(q1l /12) if q1l  else 0
     return t
 
 def inv_value(ords):
@@ -634,8 +635,10 @@ if GEN_TYPE in ('coldxpress','all'):
     wb = load_workbook(dst)
     ws = wb.active
     ws['B4'] = today
+    for ri in range(6, ws.max_row+1):
+        for c in range(1, 16): ws.cell(ri,c).value = None
     cx = courier_orders('COLDXPRESS')
-    for ri, onum in enumerate(sorted(cx.keys()), 6):
+    for ri, onum in enumerate(sorted(cx.keys(), key=lambda o: cx[o][0].get('Customer','').upper()), 6):
         ords = cx[onum]; r0 = ords[0]
         ws.cell(ri,1).value = onum
         ws.cell(ri,2).value = r0.get('DueDate','')
@@ -661,8 +664,10 @@ if GEN_TYPE in ('dk','all'):
     shutil.copy(src, dst)
     wb = load_workbook(dst)
     ws = wb['jobs']
+    for ri in range(2, ws.max_row+1):
+        for c in range(1, 19): ws.cell(ri,c).value = None
     dk = courier_orders('DKDISTRIBUTION')
-    for ri, onum in enumerate(sorted(dk.keys()), 2):
+    for ri, onum in enumerate(sorted(dk.keys(), key=lambda o: dk[o][0].get('Customer','').upper()), 2):
         ords = dk[onum]; r0 = ords[0]
         ws.cell(ri,1).value  = onum
         ws.cell(ri,2).value  = today
@@ -689,8 +694,10 @@ if GEN_TYPE in ('coolcouriers','all'):
     shutil.copy(src, dst)
     wb = load_workbook(dst)
     ws = wb['jobs']
+    for ri in range(2, ws.max_row+1):
+        for c in range(1, 13): ws.cell(ri,c).value = None
     cc = courier_orders('COOLCOURIERS')
-    for ri, onum in enumerate(sorted(cc.keys()), 2):
+    for ri, onum in enumerate(sorted(cc.keys(), key=lambda o: cc[o][0].get('Customer','').upper()), 2):
         ords = cc[onum]; r0 = ords[0]
         ws.cell(ri,1).value  = onum
         ws.cell(ri,2).value  = today
@@ -734,14 +741,15 @@ if GEN_TYPE in ('production','all'):
     def build_section_rows(skus, product_filter):
         """Build list of row dicts for this product section — couriers sorted, with subtotals + grand total."""
         couriers_data = defaultdict(list)
-        for onum, ords in sorted(by_order.items()):
+        for onum, ords in sorted(by_order.items(), key=lambda x: x[1][0].get('Customer','').upper()):
             pr = [r for r in ords if r.get('Product') == product_filter]
             if not pr: continue
             r0 = ords[0]
             sq = defaultdict(int)
             for r in pr: sq[r['Name']] += int(r.get('Quantity', 0) or 0)
             total_qty = sum(sq.values())
-            tot_crt = math.ceil(total_qty / (24 if product_filter=='350' else 18 if product_filter=='TEA' else 12))
+            divisor = 24 if product_filter=='350' else 18 if product_filter=='TEA' else 12
+            tot_crt = total_qty / divisor  # exact decimal e.g. 2.5, not rounded up
             couriers_data[r0.get('Courier','')].append({
                 'courier': r0.get('Courier',''), 'onum': onum,
                 'cid': r0.get('CustomerId',''), 'cust': r0.get('Customer',''),
@@ -809,6 +817,8 @@ if GEN_TYPE in ('production','all'):
             # Clear the row first
             for c in range(1, 17): ws.cell(r, c).value = None
 
+            PLAIN = Font(bold=False, name='Calibri', size=11)
+            for c in range(1, 17): ws.cell(r, c).font = PLAIN
             if rtype == 'data':
                 ws.cell(r, 1).value = rdata['courier']
                 ws.cell(r, 2).value = rdata['onum']
@@ -821,34 +831,75 @@ if GEN_TYPE in ('production','all'):
                 ws.cell(r, 6 + len(skus)).value = rdata['tc']
 
             elif rtype == 'subtotal':
-                ws.cell(r, 4).value = 'Total'; ws.cell(r, 4).font = BOLD
+                ws.cell(r, 4).value = 'Total'
                 for ci, sku in enumerate(skus, 5):
                     v = rdata['cst'].get(sku, 0)
-                    if v: ws.cell(r, ci).value = v; ws.cell(r, ci).font = BOLD
-                ws.cell(r, 5 + len(skus)).value = rdata['cqt']; ws.cell(r, 5 + len(skus)).font = BOLD
-                ws.cell(r, 6 + len(skus)).value = rdata['cct']; ws.cell(r, 6 + len(skus)).font = BOLD
+                    if v: ws.cell(r, ci).value = v
+                ws.cell(r, 5 + len(skus)).value = rdata['cqt']
+                ws.cell(r, 6 + len(skus)).value = rdata['cct']
+                # Bold entire subtotal row
+                for c in range(1, 17): ws.cell(r, c).font = Font(bold=True, name='Calibri', size=11)
 
             elif rtype == 'grandtotal':
-                ws.cell(r, 4).value = 'Grand Total'; ws.cell(r, 4).font = BOLD; ws.cell(r, 4).fill = GREY
+                ws.cell(r, 4).value = 'Grand Total'
                 for ci, sku in enumerate(skus, 5):
                     v = rdata['grand_totals'].get(sku, 0)
-                    if v: ws.cell(r, ci).value = v; ws.cell(r, ci).font = BOLD; ws.cell(r, ci).fill = GREY
+                    if v: ws.cell(r, ci).value = v
                 gt = sum(rdata['grand_totals'].values())
-                ws.cell(r, 5 + len(skus)).value = gt; ws.cell(r, 5 + len(skus)).font = BOLD; ws.cell(r, 5 + len(skus)).fill = GREY
-                ws.cell(r, 6 + len(skus)).value = rdata['grand_cartons']; ws.cell(r, 6 + len(skus)).font = BOLD; ws.cell(r, 6 + len(skus)).fill = GREY
+                ws.cell(r, 5 + len(skus)).value = gt
+                ws.cell(r, 6 + len(skus)).value = rdata['grand_cartons']
+                # Bold entire grand total row + top border across all columns
+                TOP = Side(style='thin')
+                for c in range(1, 17):
+                    ws.cell(r, c).font = Font(bold=True, name='Calibri', size=11)
+                    ws.cell(r, c).border = Border(top=TOP)
 
     # Find section headers dynamically
     courier_rows = []
     for row in ws.iter_rows(min_row=1, max_row=ws.max_row):
         if row[0].value == 'Courier': courier_rows.append(row[0].row)
 
+    r350_data = [r for r in rows if r.get('Product')=='350']
+    rtea_data = [r for r in rows if r.get('Product')=='TEA']
+    r1l_data  = [r for r in rows if r.get('Product')=='1L']
+
     if len(courier_rows) >= 3:
         # Write sections in REVERSE order so insert_rows doesn't shift subsequent section positions
-        write_section(ws, courier_rows[2], SKUS_1L,  '1L')
-        write_section(ws, courier_rows[1], SKUS_TEA, 'TEA')
+        if r1l_data:  write_section(ws, courier_rows[2], SKUS_1L,  '1L')
+        if rtea_data: write_section(ws, courier_rows[1], SKUS_TEA, 'TEA')
         write_section(ws, courier_rows[0], SKUS_350, '350')
     else:
         print(f'  ERROR: only found {len(courier_rows)} Courier header rows', file=sys.stderr)
+
+    # Strip fill from all rows EXCEPT the 'Courier' header rows (SKU headers)
+    NO_FILL = PatternFill(fill_type=None)
+    for row in ws.iter_rows():
+        is_header = row[0].value == 'Courier'
+        if not is_header:
+            for cell in row:
+                cell.fill = NO_FILL
+
+    # Delete Tea / 1L sections entirely if no orders for that SKU type
+    def delete_section(ws, section_marker):
+        start_row = None
+        end_row = None
+        for ri in range(1, ws.max_row + 1):
+            v = str(ws.cell(ri, 1).value or '')
+            if section_marker in v and start_row is None:
+                start_row = ri
+            if start_row and 'Discrepancies Sent to Sophie' in v:
+                end_row = ri
+                break
+        if start_row and end_row:
+            actual_start = start_row
+            while actual_start > 1 and not ws.cell(actual_start - 1, 1).value:
+                actual_start -= 1
+            count = end_row - actual_start + 1
+            ws.delete_rows(actual_start, count)
+            print(f'  Deleted {section_marker} section ({count} rows)', file=sys.stderr)
+
+    if not r1l_data:  delete_section(ws, '1L Orders')
+    if not rtea_data: delete_section(ws, 'Tea Orders')
 
     wb.save(dst); generated.append(dst)
     print(f'✅ Production_Sheet', file=sys.stderr)
