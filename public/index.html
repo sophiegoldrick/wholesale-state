@@ -1260,11 +1260,13 @@ function App(){
                   )}
 
                   {vStats&&(
-                    <div style={{marginTop:14,padding:"11px 16px",background:vStats.errors>0?T.redL:vStats.warnings>0?T.amberL:T.sageL,border:`1px solid ${vStats.errors>0?T.redB:vStats.warnings>0?T.amberB:T.sageD+"44"}`,borderRadius:11,display:"flex",alignItems:"center",gap:9}}>
-                      <span style={{fontSize:15}}>{vStats.errors>0?"🚫":vStats.warnings>0?"⚠️":"✅"}</span>
-                      <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:600,color:vStats.errors>0?T.red:vStats.warnings>0?T.amber:T.sageD}}>
-                        {vStats.errors>0?`${vStats.errors} blocking errors — fix before generating`:vStats.warnings>0?`${vStats.warnings} warnings — review before generating`:`All ${vStats.orders} orders validated ✓`}
+                    <div style={{marginTop:14,padding:"11px 16px",background:vStats.errors>0&&!errDismissed?T.redL:vStats.warnings>0&&!warnDismissed?T.amberL:T.sageL,border:`1px solid ${vStats.errors>0&&!errDismissed?T.redB:vStats.warnings>0&&!warnDismissed?T.amberB:T.sageD+"44"}`,borderRadius:11,display:"flex",alignItems:"center",gap:9}}> 
+                      <span style={{fontSize:15}}>{vStats.errors>0&&!errDismissed?"🚫":vStats.warnings>0&&!warnDismissed?"⚠️":"✅"}</span>
+                      <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:600,color:vStats.errors>0&&!errDismissed?T.red:vStats.warnings>0&&!warnDismissed?T.amber:T.sageD,flex:1}}>
+                        {vStats.errors>0&&!errDismissed?`${vStats.errors} blocking errors — fix before generating`:vStats.warnings>0&&!warnDismissed?`${vStats.warnings} warnings — review before generating`:`All ${vStats.orders} orders validated ✓`}
                       </span>
+                      {(vStats.errors>0&&!errDismissed)&&<button onClick={()=>setErrDismissed(true)} style={{background:"none",border:"none",cursor:"pointer",color:T.red,fontSize:13,fontWeight:700,padding:0,lineHeight:1}}>✕</button>}
+                      {(vStats.warnings>0&&!warnDismissed&&!(vStats.errors>0&&!errDismissed))&&<button onClick={()=>setWarnDismissed(true)} style={{background:"none",border:"none",cursor:"pointer",color:T.amber,fontSize:13,fontWeight:700,padding:0,lineHeight:1}}>✕</button>}
                     </div>
                   )}
                 </div>
@@ -1395,7 +1397,7 @@ function App(){
             const statusPie=Object.entries(byStatus).map(([name,value])=>({name,value}));
             const regOrders=allO.filter(o=>!o.isPallet).length;
             const palOrders=allO.filter(o=>o.isPallet).length;
-            const StatBox=({value,label,icon,color})=>(
+            const SB=({value,label,icon,color})=>(
               <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px 22px"}}>
                 <div style={{fontSize:20,marginBottom:8}}>{icon}</div>
                 <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:26,fontWeight:800,color,lineHeight:1}}>{value}</div>
@@ -1407,13 +1409,9 @@ function App(){
                 <div style={{marginBottom:22,display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
                   <div><div className="sc">Reports</div><div className="ss">ALL-TIME BUSINESS INTELLIGENCE · {totalOrdersAllTime} ORDERS · {allC.length} CUSTOMERS</div></div>
                 </div>
-                {/* Sub-tabs */}
                 <div style={{display:"flex",gap:4,marginBottom:22,background:T.creamD,padding:3,borderRadius:10,border:`1px solid ${T.border}`,width:"fit-content"}}>
                   {[["overview","📊 Overview"],["products","🧃 Products"],["customers","🏪 Customers"],["geography","🗺️ Geography"],["couriers","🚚 Couriers"]].map(([id,label])=>(
-                    <button key={id} onClick={()=>setRepTab(id)}
-                      style={{padding:"7px 16px",borderRadius:8,border:"none",background:repTab===id?T.terra:"transparent",color:repTab===id?"#fff":T.inkL,fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .15s",letterSpacing:.3,whiteSpace:"nowrap"}}>
-                      {label}
-                    </button>
+                    <button key={id} onClick={()=>setRepTab(id)} style={{padding:"7px 16px",borderRadius:8,border:"none",background:repTab===id?T.terra:"transparent",color:repTab===id?"#fff":T.inkL,fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap"}}>{label}</button>
                   ))}
                 </div>
                 {allO.length===0?(
@@ -1427,11 +1425,11 @@ function App(){
                     {repTab==="overview"&&(
                       <div>
                         <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:20}}>
-                          <StatBox value={f$(totalRevAllTime)} label="ALL-TIME REVENUE" icon="💰" color={T.terra}/>
-                          <StatBox value={totalOrdersAllTime.toLocaleString()} label="TOTAL ORDERS" icon="🛒" color={T.sage}/>
-                          <StatBox value={fN(totalBottlesAllTime)} label="BOTTLES SOLD" icon="🧃" color={T.sand}/>
-                          <StatBox value={f$(avgOrderVal)} label="AVG ORDER VALUE" icon="📊" color={T.teal}/>
-                          <StatBox value={uniqueCustomers.toLocaleString()} label="UNIQUE CUSTOMERS" icon="🏪" color={T.inkM}/>
+                          <SB value={f$(totalRevAllTime)} label="ALL-TIME REVENUE" icon="💰" color={T.terra}/>
+                          <SB value={totalOrdersAllTime.toLocaleString()} label="TOTAL ORDERS" icon="🛒" color={T.sage}/>
+                          <SB value={fN(totalBottlesAllTime)} label="BOTTLES SOLD" icon="🧃" color={T.sand}/>
+                          <SB value={f$(avgOrderVal)} label="AVG ORDER VALUE" icon="📊" color={T.teal}/>
+                          <SB value={uniqueCustomers.toLocaleString()} label="UNIQUE CUSTOMERS" icon="🏪" color={T.inkM}/>
                         </div>
                         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:16,marginBottom:16}}>
                           <div className="rc">
@@ -1440,7 +1438,7 @@ function App(){
                               <ResponsiveContainer width="100%" height={200}>
                                 <LineChart data={revenueHistory} margin={{top:4,right:8,left:-14,bottom:28}}>
                                   <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
-                                  <XAxis dataKey="date" tick={{fontSize:9,fontFamily:"'Montserrat',sans-serif",fill:T.inkL}} angle={-35} textAnchor="end" interval="preserveStartEnd"/>
+                                  <XAxis dataKey="date" tick={{fontSize:9,fill:T.inkL}} angle={-35} textAnchor="end" interval="preserveStartEnd"/>
                                   <YAxis tick={{fontSize:9,fill:T.inkL}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
                                   <Tooltip {...TT} formatter={v=>[f$(v),"Revenue"]}/>
                                   <Line type="monotone" dataKey="revenue" stroke={T.terra} strokeWidth={2.5} dot={{r:3,fill:T.terra}} activeDot={{r:5}}/>
@@ -1468,7 +1466,7 @@ function App(){
                               <ResponsiveContainer width="100%" height={180}>
                                 <BarChart data={revenueHistory} margin={{top:4,right:8,left:-14,bottom:28}}>
                                   <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
-                                  <XAxis dataKey="date" tick={{fontSize:9,fontFamily:"'Montserrat',sans-serif",fill:T.inkL}} angle={-35} textAnchor="end" interval="preserveStartEnd"/>
+                                  <XAxis dataKey="date" tick={{fontSize:9,fill:T.inkL}} angle={-35} textAnchor="end" interval="preserveStartEnd"/>
                                   <YAxis tick={{fontSize:9,fill:T.inkL}}/>
                                   <Tooltip {...TT} formatter={v=>[v,"Orders"]}/>
                                   <Bar dataKey="orders" fill={T.sage} radius={[4,4,0,0]} name="Orders"/>
@@ -1476,18 +1474,13 @@ function App(){
                               </ResponsiveContainer>
                             )}
                           </div>
-                          <div className="rc" style={{display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+                          <div className="rc" style={{display:"flex",flexDirection:"column"}}>
                             <div className="rt">ORDER TYPE SPLIT</div>
                             <div style={{display:"flex",flexDirection:"column",gap:12,flex:1,justifyContent:"center"}}>
                               {[["Regular Wholesale",regOrders,T.terra],["Pallet / Special",palOrders,T.amber]].map(([label,count,color])=>(
                                 <div key={label}>
-                                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                                    <span style={{fontSize:12,color:T.ink,fontWeight:500}}>{label}</span>
-                                    <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:800,color}}>{count}</span>
-                                  </div>
-                                  <div style={{height:8,borderRadius:4,background:T.creamD,overflow:"hidden"}}>
-                                    <div style={{height:"100%",borderRadius:4,background:color,width:totalOrdersAllTime>0?`${(count/totalOrdersAllTime*100).toFixed(0)}%`:"0%"}}/>
-                                  </div>
+                                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}><span style={{fontSize:12,color:T.ink,fontWeight:500}}>{label}</span><span style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:800,color}}>{count}</span></div>
+                                  <div style={{height:8,borderRadius:4,background:T.creamD,overflow:"hidden"}}><div style={{height:"100%",borderRadius:4,background:color,width:totalOrdersAllTime>0?`${(count/totalOrdersAllTime*100).toFixed(0)}%`:"0%"}}/></div>
                                 </div>
                               ))}
                             </div>
@@ -1506,9 +1499,7 @@ function App(){
                                 <XAxis type="number" tick={{fontSize:9,fill:T.inkL}}/>
                                 <YAxis type="category" dataKey="name" tick={{fontSize:10,fill:T.ink}} width={80}/>
                                 <Tooltip {...TT} formatter={v=>[fN(v),"Bottles"]}/>
-                                <Bar dataKey="qty" radius={[0,4,4,0]} name="Bottles">
-                                  {productData.slice(0,12).map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
-                                </Bar>
+                                <Bar dataKey="qty" radius={[0,4,4,0]} name="Bottles">{productData.slice(0,12).map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}</Bar>
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
@@ -1543,22 +1534,20 @@ function App(){
                     {repTab==="customers"&&(
                       <div>
                         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
-                          <StatBox value={allC.length.toLocaleString()} label="TOTAL CUSTOMERS" icon="🏪" color={T.terra}/>
-                          <StatBox value={allC.filter(c=>c.type==="Pallet").length} label="PALLET ACCOUNTS" icon="🏗️" color={T.amber}/>
-                          <StatBox value={allC.filter(c=>c.type==="Regular").length} label="REGULAR ACCOUNTS" icon="🛒" color={T.sage}/>
-                          <StatBox value={f$(allC.reduce((s,c)=>s+(c.totalRevenue||0),0)/Math.max(allC.filter(c=>c.totalRevenue>0).length,1))} label="AVG CUSTOMER LTV" icon="📊" color={T.teal}/>
+                          <SB value={allC.length.toLocaleString()} label="TOTAL CUSTOMERS" icon="🏪" color={T.terra}/>
+                          <SB value={allC.filter(c=>c.type==="Pallet").length} label="PALLET ACCOUNTS" icon="🏗️" color={T.amber}/>
+                          <SB value={allC.filter(c=>c.type==="Regular").length} label="REGULAR ACCOUNTS" icon="🛒" color={T.sage}/>
+                          <SB value={f$(allC.reduce((s,c)=>s+(c.totalRevenue||0),0)/Math.max(allC.filter(c=>c.totalRevenue>0).length,1))} label="AVG CUSTOMER LTV" icon="📊" color={T.teal}/>
                         </div>
                         <div className="rc" style={{marginBottom:16}}>
                           <div className="rt">TOP 10 CUSTOMERS BY REVENUE</div>
                           <ResponsiveContainer width="100%" height={220}>
                             <BarChart data={topCustomers.map(c=>({name:c.name.length>14?c.name.slice(0,13)+"…":c.name,revenue:Math.round(c.totalRevenue||0)}))} margin={{top:4,right:8,left:-8,bottom:40}}>
                               <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
-                              <XAxis dataKey="name" tick={{fontSize:9,fontFamily:"'Montserrat',sans-serif",fill:T.inkL}} angle={-35} textAnchor="end" interval={0}/>
+                              <XAxis dataKey="name" tick={{fontSize:9,fill:T.inkL}} angle={-35} textAnchor="end" interval={0}/>
                               <YAxis tick={{fontSize:9,fill:T.inkL}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
                               <Tooltip {...TT} formatter={v=>[f$(v),"Revenue"]}/>
-                              <Bar dataKey="revenue" radius={[4,4,0,0]} name="Revenue">
-                                {topCustomers.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
-                              </Bar>
+                              <Bar dataKey="revenue" radius={[4,4,0,0]} name="Revenue">{topCustomers.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}</Bar>
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
@@ -1586,12 +1575,10 @@ function App(){
                             <ResponsiveContainer width="100%" height={230}>
                               <BarChart data={stateData} margin={{top:4,right:8,left:-8,bottom:0}}>
                                 <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
-                                <XAxis dataKey="state" tick={{fontSize:11,fontFamily:"'Montserrat',sans-serif",fill:T.inkL}}/>
+                                <XAxis dataKey="state" tick={{fontSize:11,fill:T.inkL}}/>
                                 <YAxis tick={{fontSize:9,fill:T.inkL}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
                                 <Tooltip {...TT} formatter={v=>[f$(v),"Revenue"]}/>
-                                <Bar dataKey="revenue" radius={[4,4,0,0]} name="Revenue">
-                                  {stateData.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
-                                </Bar>
+                                <Bar dataKey="revenue" radius={[4,4,0,0]} name="Revenue">{stateData.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}</Bar>
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
@@ -1631,7 +1618,7 @@ function App(){
                               <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:T.inkL,letterSpacing:.8,marginBottom:12}}>{c.name.toUpperCase()}</div>
                               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                                 {[["Orders",c.orders,T.sage],["Revenue",f$(c.revenue),T.terra],["Bottles",fN(c.bottles),T.sand]].map(([l,v,col])=>(
-                                  <div key={l}><div style={{fontFamily:"'Montserrat',sans-serif",fontSize:18,fontWeight:800,color:col}}>{v}</div><div style={{fontSize:10,color:T.inkL,marginTop:2,fontFamily:"'Montserrat',sans-serif",fontWeight:600,letterSpacing:.3}}>{l}</div></div>
+                                  <div key={l}><div style={{fontFamily:"'Montserrat',sans-serif",fontSize:18,fontWeight:800,color:col}}>{v}</div><div style={{fontSize:10,color:T.inkL,marginTop:2,fontFamily:"'Montserrat',sans-serif",fontWeight:600}}>{l}</div></div>
                                 ))}
                               </div>
                             </div>
@@ -1642,7 +1629,7 @@ function App(){
                           <ResponsiveContainer width="100%" height={220}>
                             <BarChart data={courierData} margin={{top:4,right:8,left:-8,bottom:0}}>
                               <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
-                              <XAxis dataKey="name" tick={{fontSize:11,fontFamily:"'Montserrat',sans-serif",fill:T.inkL}}/>
+                              <XAxis dataKey="name" tick={{fontSize:11,fill:T.inkL}}/>
                               <YAxis yAxisId="left" tick={{fontSize:9,fill:T.inkL}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
                               <YAxis yAxisId="right" orientation="right" tick={{fontSize:9,fill:T.inkL}}/>
                               <Tooltip {...TT} formatter={(v,n)=>n==="Revenue"?[f$(v),n]:[v,n]}/>
@@ -1849,7 +1836,7 @@ function App(){
                   <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden",marginBottom:18}}>
                     <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.creamD}`,background:T.creamD}}>
                       <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:13,color:T.ink}}>Special Order Delivery</div>
-                      <div style={{fontSize:11,color:T.inkL,marginTop:2}}>Click an order to see SKUs · use 🖨️ to generate a print file for that order only</div>
+                      <div style={{fontSize:11,color:T.inkL,marginTop:2}}>Click an order to see SKUs · 🖨️ generates Fronts + Backs print files for that order</div>
                     </div>
                     {palletOrders.map((o,i)=>{
                       const delivered=!!specialDelivered[o.orderNumber];
@@ -1864,12 +1851,16 @@ function App(){
                         const csvText=[headers.join(','),...orderRows.map(r=>headers.map(h=>esc(r[h])).join(','))].join('\n');
                         const d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
                         try{
+                          // Generate all print types — server returns a zip with fronts+backs
                           const resp=await apiFetch("/api/generate",{method:"POST",body:JSON.stringify({csvData:csvText,type:"prints",dateStr:d})});
                           if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.error||"Generation failed");}
                           const blob=await resp.blob();
                           const url=URL.createObjectURL(blob);
                           const a=document.createElement("a");
-                          a.href=url;a.download=`${d}_${o.orderNumber}_Prints.xlsx`;
+                          a.href=url;
+                          // If zip (multiple files), name as zip; otherwise xlsx
+                          const ct=resp.headers.get("content-type")||"";
+                          a.download=ct.includes("zip")?`${d}_${o.orderNumber}_Prints.zip`:`${d}_${o.orderNumber}_Prints.xlsx`;
                           document.body.appendChild(a);a.click();
                           setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
                         }catch(err){alert("Print error: "+err.message);}
@@ -1894,7 +1885,7 @@ function App(){
                               style={{flexShrink:0,padding:"6px 13px",borderRadius:8,border:`1.5px solid ${T.terra}`,background:T.terraL,color:T.terra,fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5,transition:"all .15s",whiteSpace:"nowrap"}}
                               onMouseEnter={e=>{e.currentTarget.style.background=T.terra;e.currentTarget.style.color="#fff";}}
                               onMouseLeave={e=>{e.currentTarget.style.background=T.terraL;e.currentTarget.style.color=T.terra;}}>
-                              🖨️ Print File
+                              🖨️ Print Files
                             </button>
                             <button onClick={e=>{e.stopPropagation();setTab("tracker");}}
                               style={{flexShrink:0,padding:"6px 11px",borderRadius:8,border:`1.5px solid ${T.border}`,background:"transparent",color:T.inkM,fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:600,cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap"}}
