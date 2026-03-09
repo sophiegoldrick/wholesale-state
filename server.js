@@ -588,6 +588,17 @@ os.makedirs(OUT_DIR, exist_ok=True)
 with open(CSV_PATH, newline='', encoding='utf-8-sig') as f:
     ALL = list(csv.DictReader(f))
 rows = [r for r in ALL if r.get('SKU','') != 'FREIGHT']
+# Normalise Product field — some CSVs export 'JUICE' instead of '350'
+for r in rows:
+    if r.get('Product','') not in ('350','TEA','1L'):
+        sku = r.get('SKU','')
+        if 'TEA' in sku: r['Product'] = 'TEA'
+        elif sku.endswith('1') or '1L' in sku: r['Product'] = '1L'
+        else: r['Product'] = '350'
+# Fix float quantities
+for r in rows:
+    try: r['Quantity'] = str(int(float(r['Quantity'])))
+    except: pass
 today = datetime.date.today().strftime('%d/%m/%Y')
 
 by_order = defaultdict(list)
@@ -843,91 +854,68 @@ if GEN_TYPE in ('production','all'):
     print(f'✅ Production_Sheet', file=sys.stderr)
 
 # ══════════════════════════════════════════════
-# 5 & 6. PRINT FILES — clone templates, write only cols A,C,D,E,F
-#         Col B has formulas — DO NOT TOUCH
-#         Use insert_rows to handle any volume
+# 5–9. PRINT FILES — built from scratch (no template needed)
+#       Single sheet. All formula cols written explicitly.
+#       FRONTS: order 1=blank, 2..N=data, N+1=blank; col F = CustomerId
+#       BACKS:  order N+1=blank, N..2=data reversed, 1=blank; col F = BackLabels
 # ══════════════════════════════════════════════
 if GEN_TYPE in ('prints','all'):
-    sr = sorted(rows, key=lambda r:(r.get('Courier',''),r.get('Customer',''),r.get('OrderNumber',''),r.get('SKU','')))
-    r350 = [r for r in sr if r.get('Product')=='350']
-    rtea = [r for r in sr if r.get('Product')=='TEA']
-    r1l  = [r for r in sr if r.get('Product')=='1L']
+    from openpyxl import Workbook
+    from openpyxl.styles import Font as XFont, PatternFill as XFill
 
-    def write_print(tpl_name, sheet_name, data_rows, is_backs):
-        src = f'{TPL_DIR}/{tpl_name}'
-        dst = f'{OUT_DIR}/{DATE_STR}_{tpl_name}'
-        shutil.copy(src, dst)
-        wb = load_workbook(dst)
-        ws = wb[sheet_name]
+    XGREY = XFill('solid', fgColor='D3D3D3')
+    XBOLD = XFont(bold=True, name='Calibri', size=11)
+    HEADS = ['Order','#file','SKU','#copies','Customer','Customer ID','.PDF','CODE',
+             '#pages','#papersize','#duplex','#orientation','#trayname']
+    ADDR  = r'J:\\My Drive\\Print Files'
 
-        copies_blank = 24 if '350' in tpl_name else 18 if 'Tea' in tpl_name else 12
+    def write_prow(ws, ri, order_n, sku, copies, customer, folder):
+        ws.cell(ri,1).value = order_n
+        # Col B: plain text computed path e.g. J:\\My Drive\\Print Files\\1073\\ANTIOX350.PDF
+        ws.cell(ri,2).value = 'J:\\\\My Drive\\\\Print Files\\\\' + str(folder) + '\\\\' + sku + '.PDF'
+        ws.cell(ri,3).value = sku
+        ws.cell(ri,4).value = int(float(copies)) if copies else 24
+        ws.cell(ri,5).value = customer if customer else None
+        ws.cell(ri,6).value = folder
+        ws.cell(ri,7).value = '.PDF'
+        ws.cell(ri,8).value = sku + '.PDF'
+        ws.cell(ri,9).value  = 'all'
+        ws.cell(ri,10).value = 'As in printer'
+        ws.cell(ri,11).value = 'As in printer'
+        ws.cell(ri,12).value = 'Portrait'
+        ws.cell(ri,13).value = 'As in printer'
 
-        # How many data rows currently exist (row 2 onwards, before the final blank row)
-        # Template has: row1=headers, row2=top BLANK, rows 3..N-1=data, rowN=bottom BLANK
-        existing_total = ws.max_row - 1  # excluding header row 1
-        # We need: 1 top blank + len(data_rows) data rows + 1 bottom blank
-        rows_needed = len(data_rows) + 2
-
-        if rows_needed > existing_total:
-            # Insert rows after row 2 (after top blank), pushing everything down
-            insert_count = rows_needed - existing_total
-            ws.insert_rows(3, insert_count)
-            print(f'  {tpl_name}: inserted {insert_count} rows ({existing_total}→{rows_needed})', file=sys.stderr)
-        elif rows_needed < existing_total:
-            delete_count = existing_total - rows_needed
-            ws.delete_rows(3, delete_count)
-            print(f'  {tpl_name}: deleted {delete_count} rows ({existing_total}→{rows_needed})', file=sys.stderr)
-
-        # Clear all data cols (not col B — formula) from row 2 to end
-        for r in range(2, ws.max_row + 1):
-            for c in [1, 3, 4, 5, 6]:
-                ws.cell(r, c).value = None
-
-        if is_backs:
-            n = rows_needed
-            # Top blank
-            ws.cell(2,1).value=n; ws.cell(2,3).value='BLANK'; ws.cell(2,4).value=copies_blank; ws.cell(2,5).value=''; ws.cell(2,6).value='BLANK'; n-=1
-            # Data rows
-            for di, r in enumerate(data_rows, 3):
-                bl = r.get('BackLabels','BACKS')
-                ws.cell(di,1).value=n; ws.cell(di,3).value=r['SKU']
-                ws.cell(di,4).value=int(r.get('Quantity',0) or 0)
-                ws.cell(di,5).value=r.get('Customer',''); ws.cell(di,6).value=bl; n-=1
-            # Bottom blank
-            last = 2 + len(data_rows) + 1
-            ws.cell(last,1).value=n; ws.cell(last,3).value='BLANK'; ws.cell(last,4).value=copies_blank; ws.cell(last,5).value=''; ws.cell(last,6).value='BLANK'
+    def make_print_file(sheet_name, is_backs, data, out_path):
+        wb = Workbook(); ws = wb.active; ws.title = sheet_name
+        for ci, h in enumerate(HEADS, 1):
+            c = ws.cell(1, ci, h); c.font = XBOLD; c.fill = XGREY
+        total = len(data) + 2
+        if not is_backs:
+            write_prow(ws, 2, 1, 'BLANK', 24, None, 'BLANK')
+            for i, r in enumerate(data, 3):
+                write_prow(ws, i, i-1, r['SKU'], r['Quantity'], r['Customer'], r['CustomerId'])
+            write_prow(ws, 2+len(data)+1, total, 'BLANK', 24, None, 'BLANK')
         else:
-            n = 1
-            # Top blank
-            ws.cell(2,1).value=n; ws.cell(2,3).value='BLANK'; ws.cell(2,4).value=copies_blank; ws.cell(2,5).value=''; ws.cell(2,6).value='BLANK'; n+=1
-            # Data rows
-            for di, r in enumerate(data_rows, 3):
-                ws.cell(di,1).value=n; ws.cell(di,3).value=r['SKU']
-                ws.cell(di,4).value=int(r.get('Quantity',0) or 0)
-                ws.cell(di,5).value=r.get('Customer',''); ws.cell(di,6).value=r.get('CustomerId',''); n+=1
-            # Bottom blank
-            last = 2 + len(data_rows) + 1
-            ws.cell(last,1).value=n; ws.cell(last,3).value='BLANK'; ws.cell(last,4).value=copies_blank; ws.cell(last,5).value=''; ws.cell(last,6).value='BLANK'
+            # Entire data is reversed — rows printed in reverse so labels align on the backing roll
+            reversed_data = list(reversed(data))
+            write_prow(ws, 2, total, 'BLANK', 24, None, 'BLANK')
+            for i, r in enumerate(reversed_data, 3):
+                write_prow(ws, i, total-(i-2), r['SKU'], r['Quantity'], r['Customer'], r.get('BackLabels','BACKS') or 'BACKS')
+            write_prow(ws, 2+len(data)+1, 1, 'BLANK', 24, None, 'BLANK')
+        wb.save(out_path)
+        generated.append(out_path)
+        print(f'✅ {os.path.basename(out_path)} — {len(data)} lines, order 1–{total}', file=sys.stderr)
 
-        wb.save(dst); generated.append(dst)
-        print(f'✅ {tpl_name} — {len(data_rows)} lines', file=sys.stderr)
+    sr = sorted(rows, key=lambda r:(r.get('Courier',''),r.get('Customer',''),r.get('OrderNumber',''),r.get('SKU','')))
+    r350=[r for r in sr if r.get('Product')=='350']
+    rtea=[r for r in sr if r.get('Product')=='TEA']
+    r1l =[r for r in sr if r.get('Product')=='1L']
 
-    write_print('350ml_Fronts.xlsx', 'FRONTS', r350, False)
-    write_print('350ml_Backs.xlsx',  'BACKS',  r350, True)
-    write_print('Tea_Fronts.xlsx',   'FRONTS', rtea, False)
-    write_print('Tea_Backs.xlsx',    'BACKS',  rtea, True)
-    write_print('1L_Fronts.xlsx',    'FRONTS', r1l,  False)
-
-# ══════════════════════════════════════════════
-# ZIP
-# ══════════════════════════════════════════════
-if GEN_TYPE == 'all':
-    zip_path = f'{OUT_DIR}/{DATE_STR}_Wholesale_State_Files.zip'
-    with zipfile.ZipFile(zip_path,'w',zipfile.ZIP_DEFLATED) as z:
-        for fp in generated: z.write(fp, os.path.basename(fp))
-    print(json.dumps({'zip': zip_path, 'files': [os.path.basename(f) for f in generated]}))
-else:
-    print(json.dumps({'files': [os.path.basename(f) for f in generated], 'paths': generated}))
+    make_print_file('FRONTS', False, r350, f'{OUT_DIR}/{DATE_STR}_350ml_Fronts.xlsx')
+    make_print_file('BACKS',  True,  r350, f'{OUT_DIR}/{DATE_STR}_350ml_Backs.xlsx')
+    if rtea: make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Fronts.xlsx')
+    if rtea: make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
+    if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx')
 `;
 
 app.post('/api/generate', auth, async (req, res) => {
