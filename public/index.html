@@ -834,7 +834,7 @@ function App(){
   const[pendingDrawdowns,setPendingDrawdowns]=useState([]); // [{csvName, date, skuTotals, id}]
   const[approvedDrawdowns,setApprovedDrawdowns]=useState([]); // history
   const[quickAdd,setQuickAdd]=useState({});
-  const[snapGen,setSnapGen]=useState({}); // {dateKey: type} — tracks which snap is generating // {sku: delta string} for quick +/- inputs
+  const[snapGen,setSnapGen]=useState({}); // {sku: delta string} for quick +/- inputs
   const fileRef=useRef();
   const rowsRef=useRef([]);  // always holds latest parsed rows, safe for async doGen
 
@@ -1026,22 +1026,7 @@ function App(){
       try{await window.storage.set("ws-snaps",JSON.stringify(updated));}catch(e){}
       // Store raw CSV text separately keyed by dateKey (small, ~100KB each)
       try{await window.storage.set("ws-csv-"+dk, e.target.result);}catch(err){console.warn("CSV store failed:",err);}
-      // Silent background: generate full ZIP and store as base64
-      (async()=>{
-        try{
-          const d2=dk.split("/").reverse().join("-");
-          const res=await apiFetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({csvData:e.target.result,type:"all",dateStr:d2})});
-          if(!res.ok) return;
-          const blob=await res.blob();
-          const ab=await blob.arrayBuffer();
-          const ua=new Uint8Array(ab);
-          let b64="";
-          for(let i=0;i<ua.length;i+=8192){b64+=String.fromCharCode(...ua.subarray(i,i+8192));}
-          b64=btoa(b64);
-          await window.storage.set("ws-zip-"+dk, b64);
-          console.log("Background ZIP stored for",dk);
-        }catch(err){console.warn("Background ZIP failed:",err);}
-      })();
+    };
     };
     r.readAsText(file);
   },[snapshots]);
@@ -1479,56 +1464,57 @@ function App(){
                         {(()=>{
                           const d2=snap.dateKey?snap.dateKey.split("/").reverse().join("-"):"";
                           const currentGen=snapGen[snap.dateKey]||null;
-                          const regenFile=async(type,label)=>{
+                          const regenFile=async(type,fname)=>{
                             setSnapGen(p=>({...p,[snap.dateKey]:type}));
                             try{
                               const stored=await window.storage.get("ws-csv-"+snap.dateKey);
-                              if(!stored){alert("CSV not found for this upload. Re-upload the original CSV file to restore access.");setSnapGen(p=>({...p,[snap.dateKey]:null}));return;}
+                              if(!stored){alert("CSV not stored for this upload — re-upload the original CSV on the Generate tab to restore access.");setSnapGen(p=>({...p,[snap.dateKey]:null}));return;}
                               const resp=await apiFetch("/api/generate",{method:"POST",body:JSON.stringify({csvData:stored.value,type,dateStr:d2})});
                               if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.error||"Generation failed");}
                               const blob=await resp.blob();
+                              const ct=resp.headers.get("content-type")||"";
+                              const ext=ct.includes("zip")?".zip":".xlsx";
                               const url=URL.createObjectURL(blob);
                               const a=document.createElement("a");
-                              a.href=url;
-                              a.download=type==="all"?`${d2}_Wholesale_State_Files.zip`:type==="prints"?`${d2}_Print_Files.zip`:`${d2}_${label}.xlsx`;
+                              a.href=url;a.download=`${d2}_${fname}${ext}`;
                               document.body.appendChild(a);a.click();
                               setTimeout(()=>{URL.revokeObjectURL(url);document.body.removeChild(a);},1000);
-                            }catch(e){alert("Error: "+e.message);}
+                            }catch(err){alert("Error: "+err.message);}
                             setSnapGen(p=>({...p,[snap.dateKey]:null}));
                           };
                           const dlCsv=async()=>{
                             try{
                               const stored=await window.storage.get("ws-csv-"+snap.dateKey);
-                              if(!stored){alert("CSV not found for this upload.");return;}
+                              if(!stored){alert("CSV not stored for this upload.");return;}
                               const blob=new Blob([stored.value],{type:"text/csv"});
                               const url=URL.createObjectURL(blob);
                               const a=document.createElement("a");a.href=url;a.download=snap.fileName||"orders.csv";
                               document.body.appendChild(a);a.click();
                               setTimeout(()=>{URL.revokeObjectURL(url);document.body.removeChild(a);},1000);
-                            }catch(e){alert("Download failed: "+e.message);}
+                            }catch(err){alert("Download failed: "+err.message);}
                           };
-                          const couriers=(snap.manifests||[]);
                           const COURIER_TYPE={"COLDXPRESS":"coldxpress","DKDISTRIBUTION":"dk","COOLCOURIERS":"coolcouriers"};
                           const COURIER_FNAME={"COLDXPRESS":"COLDXPRESS","DKDISTRIBUTION":"DK_DISTRIBUTIONS","COOLCOURIERS":"COOLCOURIERS"};
-                          const btn=(onClick,icon,label,type)=>{
-                            const isLoading=currentGen===type;
+                          const Btn=({onClick,icon,label,type})=>{
+                            const busy=currentGen===type;
                             return(
-                              <button key={type} onClick={onClick} disabled={!!currentGen}
-                                style={{padding:"5px 12px",borderRadius:7,border:`1px solid ${T.border}`,background:isLoading?T.creamD:T.white,color:isLoading?T.inkL:T.inkM,fontSize:11,cursor:currentGen?"default":"pointer",fontFamily:"'Montserrat',sans-serif",fontWeight:600,display:"flex",alignItems:"center",gap:5,transition:"border-color .15s,color .15s",opacity:currentGen&&!isLoading?0.5:1}}
+                              <button onClick={onClick} disabled={!!currentGen}
+                                style={{padding:"5px 12px",borderRadius:7,border:`1px solid ${busy?T.terra:T.border}`,background:busy?T.terraL:T.white,color:busy?T.terra:T.inkM,fontSize:11,cursor:currentGen?"not-allowed":"pointer",fontFamily:"'Montserrat',sans-serif",fontWeight:600,display:"flex",alignItems:"center",gap:5,transition:"all .15s",opacity:currentGen&&!busy?0.45:1}}
                                 onMouseEnter={e=>{if(!currentGen){e.currentTarget.style.borderColor=T.terra;e.currentTarget.style.color=T.terra;}}}
-                                onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=isLoading?T.inkL:T.inkM;}}>
-                                {isLoading?<span className="spin" style={{fontSize:11}}>⟳</span>:icon} {label}
+                                onMouseLeave={e=>{if(!busy){e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.inkM;}}}>
+                                {busy?<span className="spin" style={{fontSize:11,display:"inline-block"}}>⟳</span>:icon} {label}
                               </button>
                             );
                           };
+                          const couriers=snap.manifests||[];
                           return(
                             <div style={{borderTop:`1px solid ${T.creamD}`,padding:"11px 22px",background:T.cream,display:"flex",flexWrap:"wrap",alignItems:"center",gap:7}}>
-                              <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:.8,marginRight:2,flexShrink:0}}>↓ REGENERATE</span>
-                              {couriers.map(m=>btn(()=>regenFile(COURIER_TYPE[m.courier],COURIER_FNAME[m.courier]),m.icon,m.label.replace(" Manifest","").replace(" Distributions",""),COURIER_TYPE[m.courier]))}
-                              {btn(()=>regenFile("production","Production_Sheet"),"🏭","Production","production")}
-                              {btn(()=>regenFile("prints","Print_Files"),"🖨️","Print Files","prints")}
-                              {btn(dlCsv,"📄","CSV","csv")}
-                              {btn(()=>regenFile("all","Wholesale_State_Files"),"📦","All Files","all")}
+                              <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:.8,marginRight:4,flexShrink:0}}>↓ REGENERATE</span>
+                              {couriers.map(m=><Btn key={m.courier} onClick={()=>regenFile(COURIER_TYPE[m.courier],COURIER_FNAME[m.courier])} icon={m.icon} label={m.label.replace(" Manifest","").replace(" Distributions","")} type={COURIER_TYPE[m.courier]}/>)}
+                              <Btn onClick={()=>regenFile("production","Production_Sheet")} icon="🏭" label="Production" type="production"/>
+                              <Btn onClick={()=>regenFile("prints","Print_Files")} icon="🖨️" label="Print Files" type="prints"/>
+                              <Btn onClick={dlCsv} icon="📄" label="CSV" type="csv"/>
+                              <Btn onClick={()=>regenFile("all","Wholesale_State_Files")} icon="📦" label="All Files" type="all"/>
                             </div>
                           );
                         })()}
