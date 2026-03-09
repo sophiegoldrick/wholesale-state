@@ -666,6 +666,59 @@ function OrdersTable({rows,allOrders,setOrders}){
 }
 
 /* ══ MAIN APP ══ */
+const REQUIRED_TEMPLATES = ['COLDXPRESS.xlsx','DK_DISTRIBUTIONS.xlsx','COOLCOURIERS.xlsx','Production_Sheet.xlsx','350ml_Fronts.xlsx','350ml_Backs.xlsx','Tea_Fronts.xlsx','Tea_Backs.xlsx','1L_Fronts.xlsx'];
+
+function TemplateUploader({apiFetch,T}){
+  const [uploaded,setUploaded]=React.useState([]);
+  const [loading,setLoading]=React.useState(true);
+  const [uploading,setUploading]=React.useState(false);
+
+  React.useEffect(()=>{
+    apiFetch('/api/templates').then(r=>r.json()).then(d=>{
+      setUploaded(d.files||[]);setLoading(false);
+    }).catch(()=>setLoading(false));
+  },[]);
+
+  const missing=REQUIRED_TEMPLATES.filter(f=>!uploaded.includes(f));
+  if(loading) return null;
+  if(missing.length===0) return(
+    <div style={{background:T.sageL,border:`1px solid ${T.sageD}44`,borderRadius:8,padding:"8px 12px",fontSize:11,color:T.sageD,marginBottom:4}}>
+      ✅ All {REQUIRED_TEMPLATES.length} template files uploaded
+    </div>
+  );
+
+  const handleDrop=async(e)=>{
+    e.preventDefault();
+    const files=[...e.dataTransfer.files].filter(f=>f.name.endsWith('.xlsx'));
+    if(!files.length) return;
+    setUploading(true);
+    for(const file of files){
+      const buf=await file.arrayBuffer();
+      const b64=btoa(String.fromCharCode(...new Uint8Array(buf)));
+      await apiFetch('/api/templates',{method:'POST',body:JSON.stringify({filename:file.name,data:b64})});
+    }
+    const r=await apiFetch('/api/templates');
+    const d=await r.json();
+    setUploaded(d.files||[]);
+    setUploading(false);
+  };
+
+  return(
+    <div style={{marginBottom:8}}>
+      <div style={{background:"#FFF8EE",border:`1.5px dashed ${T.sand}`,borderRadius:8,padding:"10px 14px",fontSize:12}}>
+        <div style={{fontWeight:700,color:T.terra,marginBottom:4}}>⚠️ Template files needed ({missing.length} missing)</div>
+        <div style={{color:T.inkM,marginBottom:8,fontSize:11}}>Drop your template .xlsx files here once to enable file generation:</div>
+        <div onDrop={handleDrop} onDragOver={e=>e.preventDefault()}
+          style={{border:`2px dashed ${T.sand}`,borderRadius:6,padding:"8px 12px",textAlign:"center",fontSize:11,color:T.inkL,cursor:"pointer",background:T.cream}}>
+          {uploading?"Uploading...":"📂 Drop template .xlsx files here"}
+        </div>
+        <div style={{marginTop:6,fontSize:10,color:T.inkL}}>{missing.map(f=>`• ${f}`).join("  ")}</div>
+      </div>
+    </div>
+  );
+}
+
+
 function App(){
   // ── Auth ──────────────────────────────────────────────────────
   const[token,setToken]=useState(()=>localStorage.getItem('ws-token')||null);
@@ -978,7 +1031,7 @@ function App(){
 
       // Server-side generation via Python + openpyxl
       if(IS_DEPLOYED){
-        const csvText=[Object.keys(rows[0]).join(","),...rows.map(r=>Object.values(r).map(v=>'"'+String(v??'')+'"').join(","))].join("\n");
+        const csvText=JSON.stringify(rows);
         const resp=await apiFetch("/api/generate",{method:"POST",body:JSON.stringify({csvData:csvText,type,dateStr:d})});
         if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.error||"Generation failed");}
         const blob=await resp.blob();
@@ -1182,7 +1235,9 @@ function App(){
 
                 {/* RIGHT — Generate buttons */}
                 <div style={{display:"flex",flexDirection:"column",gap:11}}>
-                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:2,marginBottom:2}}>GENERATE FILES</div>
+                  {/* Template upload status */}
+                  {IS_DEPLOYED&&<TemplateUploader apiFetch={apiFetch} T={T}/>}
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:2,marginBottom:2,marginTop:8}}>GENERATE FILES</div>
                   {BTNS.map(btn=>(
                     <button key={btn.id} className={`gen-card${done[btn.id]?" done":""}`}
                       onClick={()=>triggerGen(btn.id,btn.label)}
