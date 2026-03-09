@@ -1260,13 +1260,13 @@ function App(){
                   )}
 
                   {vStats&&(
-                    <div style={{marginTop:14,padding:"11px 16px",background:vStats.errors>0&&!errDismissed?T.redL:vStats.warnings>0&&!warnDismissed?T.amberL:T.sageL,border:`1px solid ${vStats.errors>0&&!errDismissed?T.redB:vStats.warnings>0&&!warnDismissed?T.amberB:T.sageD+"44"}`,borderRadius:11,display:"flex",alignItems:"center",gap:9}}> 
+                    <div style={{marginTop:14,padding:"11px 16px",background:vStats.errors>0&&!errDismissed?T.redL:vStats.warnings>0&&!warnDismissed?T.amberL:T.sageL,border:`1px solid ${vStats.errors>0&&!errDismissed?T.redB:vStats.warnings>0&&!warnDismissed?T.amberB:T.sageD+"44"}`,borderRadius:11,display:"flex",alignItems:"center",gap:9}}>
                       <span style={{fontSize:15}}>{vStats.errors>0&&!errDismissed?"🚫":vStats.warnings>0&&!warnDismissed?"⚠️":"✅"}</span>
                       <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:600,color:vStats.errors>0&&!errDismissed?T.red:vStats.warnings>0&&!warnDismissed?T.amber:T.sageD,flex:1}}>
                         {vStats.errors>0&&!errDismissed?`${vStats.errors} blocking errors — fix before generating`:vStats.warnings>0&&!warnDismissed?`${vStats.warnings} warnings — review before generating`:`All ${vStats.orders} orders validated ✓`}
                       </span>
-                      {(vStats.errors>0&&!errDismissed)&&<button onClick={()=>setErrDismissed(true)} style={{background:"none",border:"none",cursor:"pointer",color:T.red,fontSize:13,fontWeight:700,padding:0,lineHeight:1}}>✕</button>}
-                      {(vStats.warnings>0&&!warnDismissed&&!(vStats.errors>0&&!errDismissed))&&<button onClick={()=>setWarnDismissed(true)} style={{background:"none",border:"none",cursor:"pointer",color:T.amber,fontSize:13,fontWeight:700,padding:0,lineHeight:1}}>✕</button>}
+                      {vStats.errors>0&&!errDismissed&&<button onClick={()=>setErrDismissed(true)} style={{background:"none",border:"none",cursor:"pointer",color:T.red,fontSize:13,fontWeight:700,padding:0,lineHeight:1,flexShrink:0}}>✕</button>}
+                      {vStats.warnings>0&&!warnDismissed&&!(vStats.errors>0&&!errDismissed)&&<button onClick={()=>setWarnDismissed(true)} style={{background:"none",border:"none",cursor:"pointer",color:T.amber,fontSize:13,fontWeight:700,padding:0,lineHeight:1,flexShrink:0}}>✕</button>}
                     </div>
                   )}
                 </div>
@@ -1432,8 +1432,7 @@ function App(){
                           <SB value={uniqueCustomers.toLocaleString()} label="UNIQUE CUSTOMERS" icon="🏪" color={T.inkM}/>
                         </div>
                         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:16,marginBottom:16}}>
-                          <div className="rc">
-                            <div className="rt">REVENUE OVER TIME</div>
+                          <div className="rc"><div className="rt">REVENUE OVER TIME</div>
                             {revenueHistory.length<2?<div style={{textAlign:"center",padding:"28px 0",color:T.inkL,fontSize:12}}>Upload more CSVs to build the trend.</div>:(
                               <ResponsiveContainer width="100%" height={200}>
                                 <LineChart data={revenueHistory} margin={{top:4,right:8,left:-14,bottom:28}}>
@@ -1446,8 +1445,7 @@ function App(){
                               </ResponsiveContainer>
                             )}
                           </div>
-                          <div className="rc">
-                            <div className="rt">ORDER STATUS</div>
+                          <div className="rc"><div className="rt">ORDER STATUS</div>
                             <ResponsiveContainer width="100%" height={200}>
                               <PieChart>
                                 <Pie data={statusPie} cx="50%" cy="46%" innerRadius={40} outerRadius={72} paddingAngle={3} dataKey="value">
@@ -1460,8 +1458,7 @@ function App(){
                           </div>
                         </div>
                         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:16}}>
-                          <div className="rc">
-                            <div className="rt">ORDERS PER RUN</div>
+                          <div className="rc"><div className="rt">ORDERS PER RUN</div>
                             {revenueHistory.length<2?<div style={{textAlign:"center",padding:"28px 0",color:T.inkL,fontSize:12}}>Upload more CSVs to see history.</div>:(
                               <ResponsiveContainer width="100%" height={180}>
                                 <BarChart data={revenueHistory} margin={{top:4,right:8,left:-14,bottom:28}}>
@@ -1474,8 +1471,7 @@ function App(){
                               </ResponsiveContainer>
                             )}
                           </div>
-                          <div className="rc" style={{display:"flex",flexDirection:"column"}}>
-                            <div className="rt">ORDER TYPE SPLIT</div>
+                          <div className="rc" style={{display:"flex",flexDirection:"column"}}><div className="rt">ORDER TYPE SPLIT</div>
                             <div style={{display:"flex",flexDirection:"column",gap:12,flex:1,justifyContent:"center"}}>
                               {[["Regular Wholesale",regOrders,T.terra],["Pallet / Special",palOrders,T.amber]].map(([label,count,color])=>(
                                 <div key={label}>
@@ -1491,8 +1487,7 @@ function App(){
                     {repTab==="products"&&(
                       <div>
                         <div style={{display:"grid",gridTemplateColumns:"1.4fr 1fr",gap:16,marginBottom:16}}>
-                          <div className="rc">
-                            <div className="rt">BOTTLES SOLD BY PRODUCT</div>
+                          <div className="rc"><div className="rt">BOTTLES SOLD BY PRODUCT</div>
                             <ResponsiveContainer width="100%" height={280}>
                               <BarChart data={productData.slice(0,12)} layout="vertical" margin={{top:0,right:16,left:80,bottom:0}}>
                                 <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
@@ -1503,8 +1498,7 @@ function App(){
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
-                          <div className="rc">
-                            <div className="rt">REVENUE BY PRODUCT</div>
+                          <div className="rc"><div className="rt">REVENUE BY PRODUCT</div>
                             <ResponsiveContainer width="100%" height={280}>
                               <PieChart>
                                 <Pie data={productData.slice(0,8)} cx="50%" cy="48%" innerRadius={48} outerRadius={88} paddingAngle={2} dataKey="revenue">
@@ -1539,8 +1533,7 @@ function App(){
                           <SB value={allC.filter(c=>c.type==="Regular").length} label="REGULAR ACCOUNTS" icon="🛒" color={T.sage}/>
                           <SB value={f$(allC.reduce((s,c)=>s+(c.totalRevenue||0),0)/Math.max(allC.filter(c=>c.totalRevenue>0).length,1))} label="AVG CUSTOMER LTV" icon="📊" color={T.teal}/>
                         </div>
-                        <div className="rc" style={{marginBottom:16}}>
-                          <div className="rt">TOP 10 CUSTOMERS BY REVENUE</div>
+                        <div className="rc" style={{marginBottom:16}}><div className="rt">TOP 10 CUSTOMERS BY REVENUE</div>
                           <ResponsiveContainer width="100%" height={220}>
                             <BarChart data={topCustomers.map(c=>({name:c.name.length>14?c.name.slice(0,13)+"…":c.name,revenue:Math.round(c.totalRevenue||0)}))} margin={{top:4,right:8,left:-8,bottom:40}}>
                               <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
@@ -1570,8 +1563,7 @@ function App(){
                     {repTab==="geography"&&(
                       <div>
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
-                          <div className="rc">
-                            <div className="rt">REVENUE BY STATE</div>
+                          <div className="rc"><div className="rt">REVENUE BY STATE</div>
                             <ResponsiveContainer width="100%" height={230}>
                               <BarChart data={stateData} margin={{top:4,right:8,left:-8,bottom:0}}>
                                 <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
@@ -1582,8 +1574,7 @@ function App(){
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
-                          <div className="rc">
-                            <div className="rt">ORDERS BY STATE</div>
+                          <div className="rc"><div className="rt">ORDERS BY STATE</div>
                             <ResponsiveContainer width="100%" height={230}>
                               <PieChart>
                                 <Pie data={stateData} cx="50%" cy="46%" innerRadius={44} outerRadius={80} paddingAngle={3} dataKey="orders">
@@ -1624,8 +1615,7 @@ function App(){
                             </div>
                           ))}
                         </div>
-                        <div className="rc">
-                          <div className="rt">COURIER COMPARISON</div>
+                        <div className="rc"><div className="rt">COURIER COMPARISON</div>
                           <ResponsiveContainer width="100%" height={220}>
                             <BarChart data={courierData} margin={{top:4,right:8,left:-8,bottom:0}}>
                               <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
@@ -1819,58 +1809,48 @@ function App(){
                 <div style={{textAlign:"center",padding:"60px 0",color:T.inkL}}><div style={{fontSize:48,marginBottom:12}}>🏗️</div><div style={{fontFamily:"'Montserrat',sans-serif",fontSize:20,fontWeight:700,color:T.ink,marginBottom:6}}>No special orders</div><div style={{fontSize:13}}>Special/pallet customers are auto-detected by a non-REGULAR CustomerGroup, PriceGroup, or VisibilityGroup.</div></div>
               ):(
                 <>
-                  {/* Generate buttons */}
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:11,marginBottom:18}}>
-                    {[{id:"pallet-prod",label:"Pallet Production Sheet",sub:"Separate run for pallet customers",icon:"🏭"},{id:"pallet-prints",label:"Pallet Print Files (5)",sub:"Fronts & backs for pallet SKUs",icon:"🖨️"}].map(btn=>(
-                      <button key={btn.id} className={`gen-card${done[btn.id]?" done":""}`} onClick={()=>triggerGen(btn.id,btn.label)} disabled={!!gen||!csvName}>
-                        <div style={{width:40,height:40,borderRadius:10,background:done[btn.id]?T.sageL:T.creamDD,border:`1px solid ${done[btn.id]?T.sageD+"44":T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
-                          {gen===btn.id?<span className="spin" style={{fontSize:15,color:T.inkL}}>⟳</span>:done[btn.id]?"✅":btn.icon}
-                        </div>
-                        <div style={{flex:1}}><div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:12,color:T.ink}}>{btn.label}</div><div style={{fontSize:11,color:T.inkL,marginTop:2}}>{btn.sub}</div></div>
-                        {done[btn.id]?<span style={{fontSize:11,color:T.sage,fontWeight:600}}>Done ✓</span>:<span style={{fontSize:14,color:T.sand}}>↓</span>}
-                      </button>
-                    ))}
-                  </div>
 
                   {/* Special order delivery confirmation */}
                   <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden",marginBottom:18}}>
                     <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.creamD}`,background:T.creamD}}>
                       <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:13,color:T.ink}}>Special Order Delivery</div>
-                      <div style={{fontSize:11,color:T.inkL,marginTop:2}}>Click an order to see SKUs · 🖨️ generates Fronts + Backs print files for that order</div>
+                      <div style={{fontSize:11,color:T.inkL,marginTop:2}}>Expand an order to see SKUs · generate Production Sheet, Fronts, or Backs per order</div>
                     </div>
                     {palletOrders.map((o,i)=>{
                       const delivered=!!specialDelivered[o.orderNumber];
                       const isExp=palletExpanded===o.orderNumber;
                       const total=o.items.reduce((s,it)=>s+(parseFloat(it.price||0)*parseInt(it.qty||0)),0);
                       const COURIER_LABEL={"COLDXPRESS":"Cold Xpress","DKDISTRIBUTION":"DK Distributions","COOLCOURIERS":"Cool Couriers"};
-                      const genSinglePrint=async()=>{
-                        const orderRows=csvRows.filter(r=>r.OrderNumber===o.orderNumber&&r.SKU!=="FREIGHT"&&r.Product);
+                      const getOrderRows=()=>csvRows.filter(r=>r.OrderNumber===o.orderNumber&&r.SKU!=="FREIGHT"&&r.Product);
+                      const genFile=(type)=>{
+                        const orderRows=getOrderRows();
                         if(!orderRows.length){alert("No CSV data loaded for this order — upload the CSV on the Generate tab first.");return;}
-                        const headers=Object.keys(orderRows[0]);
-                        const esc=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-                        const csvText=[headers.join(','),...orderRows.map(r=>headers.map(h=>esc(r[h])).join(','))].join('\n');
                         const d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
-                        try{
-                          // Generate all print types — server returns a zip with fronts+backs
-                          const resp=await apiFetch("/api/generate",{method:"POST",body:JSON.stringify({csvData:csvText,type:"prints",dateStr:d})});
-                          if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.error||"Generation failed");}
-                          const blob=await resp.blob();
-                          const url=URL.createObjectURL(blob);
-                          const a=document.createElement("a");
-                          a.href=url;
-                          // If zip (multiple files), name as zip; otherwise xlsx
-                          const ct=resp.headers.get("content-type")||"";
-                          a.download=ct.includes("zip")?`${d}_${o.orderNumber}_Prints.zip`:`${d}_${o.orderNumber}_Prints.xlsx`;
-                          document.body.appendChild(a);a.click();
-                          setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
-                        }catch(err){alert("Print error: "+err.message);}
+                        const on=o.orderNumber;
+                        if(type==="prod"){
+                          dlXlsx(genProduction(orderRows,true),`${d}_${on}_Production.xlsx`);
+                        } else if(type==="fronts"){
+                          const{f350,fT,f1}=genPrints(orderRows,true);
+                          for(const[s,n]of[[f350,`${d}_${on}_350ml_Fronts.xlsx`],[fT,`${d}_${on}_Tea_Fronts.xlsx`],[f1,`${d}_${on}_1L_Fronts.xlsx`]])dlXlsx(s,n);
+                        } else if(type==="backs"){
+                          const{b350,bT}=genPrints(orderRows,true);
+                          for(const[s,n]of[[b350,`${d}_${on}_350ml_Backs.xlsx`],[bT,`${d}_${on}_Tea_Backs.xlsx`]])dlXlsx(s,n);
+                        }
                       };
+                      const PBtn=({onClick,icon,label,color})=>(
+                        <button onClick={e=>{e.stopPropagation();onClick();}}
+                          style={{flexShrink:0,padding:"5px 11px",borderRadius:8,border:`1.5px solid ${color||T.terra}`,background:"transparent",color:color||T.terra,fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4,transition:"all .15s",whiteSpace:"nowrap"}}
+                          onMouseEnter={e=>{e.currentTarget.style.background=color||T.terra;e.currentTarget.style.color="#fff";}}
+                          onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=color||T.terra;}}>
+                          {icon} {label}
+                        </button>
+                      );
                       return(
                         <div key={o.orderNumber} style={{borderBottom:i<palletOrders.length-1?`1px solid ${T.creamD}`:"none"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 20px",background:delivered?"#F0FDF4":"transparent",cursor:"pointer",transition:"background .15s"}}
+                          <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 20px",background:delivered?"#F0FDF4":"transparent",cursor:"pointer",transition:"background .15s"}}
                             onClick={()=>setPalletExpanded(isExp?null:o.orderNumber)}>
                             <div style={{fontSize:10,color:T.inkL,transform:isExp?"rotate(90deg)":"none",transition:"transform .15s",flexShrink:0}}>▶</div>
-                            <div style={{flex:1}}>
+                            <div style={{flex:1,minWidth:0}}>
                               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                                 <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:800,color:T.terra}}>{o.orderNumber}</span>
                                 <span style={{fontSize:13,color:T.ink,fontWeight:500}}>{o.customer}</span>
@@ -1881,34 +1861,33 @@ function App(){
                                 {delivered&&specialDelivered[o.orderNumber].at&&<span style={{color:T.sageD,fontWeight:600,marginLeft:8}}>· Delivered {specialDelivered[o.orderNumber].at}</span>}
                               </div>
                             </div>
-                            <button onClick={e=>{e.stopPropagation();genSinglePrint();}}
-                              style={{flexShrink:0,padding:"6px 13px",borderRadius:8,border:`1.5px solid ${T.terra}`,background:T.terraL,color:T.terra,fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5,transition:"all .15s",whiteSpace:"nowrap"}}
-                              onMouseEnter={e=>{e.currentTarget.style.background=T.terra;e.currentTarget.style.color="#fff";}}
-                              onMouseLeave={e=>{e.currentTarget.style.background=T.terraL;e.currentTarget.style.color=T.terra;}}>
-                              🖨️ Print Files
-                            </button>
-                            <button onClick={e=>{e.stopPropagation();setTab("tracker");}}
-                              style={{flexShrink:0,padding:"6px 11px",borderRadius:8,border:`1.5px solid ${T.border}`,background:"transparent",color:T.inkM,fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:600,cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap"}}
-                              onMouseEnter={e=>{e.currentTarget.style.borderColor=T.terra;e.currentTarget.style.color=T.terra;}}
-                              onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.inkM;}}>
-                              ↗ Order
-                            </button>
-                            <button onClick={e=>{
-                              e.stopPropagation();
-                              const next={...specialDelivered};
-                              if(delivered){delete next[o.orderNumber];}
-                              else{
-                                next[o.orderNumber]={at:new Date().toLocaleString("en-AU")};
-                                setOrders(prev=>{const updated=prev.map(x=>x.orderNumber===o.orderNumber?{...x,status:"Delivered",deliveredAt:next[o.orderNumber].at}:x);window.storage.set("ws-orders",JSON.stringify(updated)).catch(()=>{});return updated;});
-                              }
-                              setSpecialDelivered(next);
-                              localStorage.setItem('ws-special-delivered',JSON.stringify(next));
-                            }} style={{flexShrink:0,width:36,height:36,borderRadius:10,border:`2px solid ${delivered?T.sage:T.border}`,background:delivered?T.sage:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,transition:"all .2s"}}>
-                              {delivered?"✓":""}
-                            </button>
+                            <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                              <PBtn onClick={()=>genFile("prod")} icon="🏭" label="Production" color={T.inkM}/>
+                              <PBtn onClick={()=>genFile("fronts")} icon="🖨️" label="Fronts" color={T.terra}/>
+                              <PBtn onClick={()=>genFile("backs")} icon="🖨️" label="Backs" color={T.sage}/>
+                              <button onClick={e=>{e.stopPropagation();setTab("tracker");}}
+                                style={{flexShrink:0,padding:"5px 11px",borderRadius:8,border:`1.5px solid ${T.border}`,background:"transparent",color:T.inkM,fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:600,cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap"}}
+                                onMouseEnter={e=>{e.currentTarget.style.borderColor=T.terra;e.currentTarget.style.color=T.terra;}}
+                                onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.inkM;}}>
+                                ↗ Order
+                              </button>
+                              <button onClick={e=>{
+                                e.stopPropagation();
+                                const next={...specialDelivered};
+                                if(delivered){delete next[o.orderNumber];}
+                                else{
+                                  next[o.orderNumber]={at:new Date().toLocaleString("en-AU")};
+                                  setOrders(prev=>{const updated=prev.map(x=>x.orderNumber===o.orderNumber?{...x,status:"Delivered",deliveredAt:next[o.orderNumber].at}:x);window.storage.set("ws-orders",JSON.stringify(updated)).catch(()=>{});return updated;});
+                                }
+                                setSpecialDelivered(next);
+                                localStorage.setItem('ws-special-delivered',JSON.stringify(next));
+                              }} style={{flexShrink:0,width:34,height:34,borderRadius:10,border:`2px solid ${delivered?T.sage:T.border}`,background:delivered?T.sage:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,transition:"all .2s"}}>
+                                {delivered?"✓":""}
+                              </button>
+                            </div>
                           </div>
                           {isExp&&(
-                            <div style={{background:T.creamD,borderTop:`1px solid ${T.border}`,padding:"14px 20px 16px 46px"}}>
+                            <div style={{background:T.creamD,borderTop:`1px solid ${T.border}`,padding:"14px 20px 16px 44px"}}>
                               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
                                 <div>
                                   <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:8}}>LINE ITEMS</div>
