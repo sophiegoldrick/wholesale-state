@@ -127,7 +127,7 @@ app.delete('/api/store/:key', auth, async (req, res) => {
 const GRAPH_SCOPES = 'offline_access Mail.Read Mail.ReadWrite';
 const authBase = () => `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0`;
 
-app.get('/api/graph/connect', auth, (req, res) => {
+app.get('/api/graph/connect', (req, res) => {
   const params = new URLSearchParams({
     client_id: process.env.AZURE_CLIENT_ID,
     response_type: 'code',
