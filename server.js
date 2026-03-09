@@ -621,13 +621,13 @@ os.makedirs(OUT_DIR, exist_ok=True)
 with open(CSV_PATH, newline='', encoding='utf-8-sig') as f:
     ALL = list(csv.DictReader(f))
 rows = [r for r in ALL if r.get('SKU','') != 'FREIGHT']
-# Normalise Product field — some CSVs export 'JUICE' instead of '350'
+# Always derive Product from SKU — CSV Product field is unreliable (Ordermentum exports 'JUICE' or 'TEA' for 1L SKUs)
+TEA_SKUS = {'LTEA350','PTEA350','RTEA350'}
 for r in rows:
-    if r.get('Product','') not in ('350','TEA','1L'):
-        sku = r.get('SKU','')
-        if 'TEA' in sku: r['Product'] = 'TEA'
-        elif sku.endswith('1') or '1L' in sku: r['Product'] = '1L'
-        else: r['Product'] = '350'
+    sku = r.get('SKU','')
+    if sku in TEA_SKUS:              r['Product'] = 'TEA'
+    elif sku.endswith('350'):        r['Product'] = '350'
+    elif sku.endswith('1') or sku.endswith('1L'): r['Product'] = '1L'
 # Fix float quantities
 for r in rows:
     try: r['Quantity'] = str(int(float(r['Quantity'])))
@@ -674,7 +674,7 @@ if GEN_TYPE in ('coldxpress','all'):
     for ri, onum in enumerate(sorted(cx.keys(), key=lambda o: cx[o][0].get('Customer','').upper()), 6):
         ords = cx[onum]; r0 = ords[0]
         ws.cell(ri,1).value = onum
-        ws.cell(ri,2).value = r0.get('DueDate','')
+        ws.cell(ri,2).value = r0.get('DeliveryDate','') or r0.get('DueDate','')
         ws.cell(ri,4).value = r0.get('Customer','')
         ws.cell(ri,5).value = r0.get('CustomerAddress1','')
         ws.cell(ri,6).value = r0.get('CustomerSuburb','')
@@ -703,7 +703,7 @@ if GEN_TYPE in ('dk','all'):
     for ri, onum in enumerate(sorted(dk.keys(), key=lambda o: dk[o][0].get('Customer','').upper()), 2):
         ords = dk[onum]; r0 = ords[0]
         ws.cell(ri,1).value  = onum
-        ws.cell(ri,2).value  = today
+        ws.cell(ri,2).value  = r0.get('DeliveryDate','') or r0.get('DueDate','')
         ws.cell(ri,3).value  = 'Business'
         ws.cell(ri,4).value  = r0.get('Customer','')
         ws.cell(ri,5).value  = r0.get('CustomerAddress1','')
@@ -733,7 +733,7 @@ if GEN_TYPE in ('coolcouriers','all'):
     for ri, onum in enumerate(sorted(cc.keys(), key=lambda o: cc[o][0].get('Customer','').upper()), 2):
         ords = cc[onum]; r0 = ords[0]
         ws.cell(ri,1).value  = onum
-        ws.cell(ri,2).value  = today
+        ws.cell(ri,2).value  = r0.get('DeliveryDate','') or r0.get('DueDate','')
         ws.cell(ri,3).value  = 'Business'
         ws.cell(ri,4).value  = r0.get('Customer','')
         ws.cell(ri,5).value  = r0.get('CustomerAddress1','')
@@ -870,8 +870,11 @@ if GEN_TYPE in ('production','all'):
                     if v: ws.cell(r, ci).value = v
                 ws.cell(r, 5 + len(skus)).value = rdata['cqt']
                 ws.cell(r, 6 + len(skus)).value = rdata['cct']
-                # Bold entire subtotal row
-                for c in range(1, 17): ws.cell(r, c).font = Font(bold=True, name='Calibri', size=11)
+                # Bold + top border to visually separate orders from subtotal
+                TOP = Side(style='thin')
+                for c in range(1, 17):
+                    ws.cell(r, c).font = Font(bold=True, name='Calibri', size=11)
+                    ws.cell(r, c).border = Border(top=TOP)
 
             elif rtype == 'grandtotal':
                 ws.cell(r, 4).value = 'Grand Total'
