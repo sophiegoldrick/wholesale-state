@@ -75,7 +75,11 @@ app.post('/api/login', async (req, res) => {
   try {
     const { password } = req.body;
     const result = await db(`SELECT value FROM kv_store WHERE key = 'auth_password'`);
-    const hash = JSON.parse(result.rows[0].value);
+    if (result.rows.length === 0) return res.status(401).json({ error: 'No password set' });
+    // value may be stored as a JSON string or raw string — handle both
+    let hash = result.rows[0].value;
+    if (typeof hash === 'object') hash = JSON.stringify(hash);
+    hash = hash.replace(/^"|"$/g, ''); // strip surrounding quotes if double-encoded
     const valid = await bcrypt.compare(password, hash);
     if (!valid) return res.status(401).json({ error: 'Incorrect password' });
     const token = jwt.sign({ role: 'staff' }, process.env.JWT_SECRET || 'ws-secret-change-me', { expiresIn: '30d' });
