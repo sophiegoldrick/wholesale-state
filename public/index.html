@@ -147,11 +147,6 @@ input[type=file]{display:none}
 .stat-card:hover{border-color:${T.terra}55;box-shadow:0 5px 18px rgba(224,122,95,.09);transform:translateY(-2px)}
 .rc{background:${T.white};border:1px solid ${T.border};border-radius:14px;padding:20px 22px;margin-bottom:16px}
 .ebadge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.7px;font-family:'Montserrat',sans-serif}
-.disc-flag-btn{background:none;border:1.5px solid ${T.border};border-radius:7px;padding:3px 7px;cursor:pointer;font-size:11px;color:${T.inkL};transition:all .15s;font-family:'Montserrat',sans-serif;font-weight:600;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
-.disc-flag-btn:hover{border-color:#E07A5F;color:#E07A5F;background:#FCEAE5}
-.disc-flag-btn.flagged{border-color:#DC2626;background:#FEF2F2;color:#DC2626}
-@keyframes discIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
-.disc-row{animation:discIn .22s ease both}
 `;
 
 /* ── XLSX ── */
@@ -506,7 +501,7 @@ function ValModal({result,label,onProceed,onCancel}){
 }
 
 /* ── ORDERS TABLE ── */
-function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
+function OrdersTable({rows,allOrders,setOrders}){
   const[filterSt,setFilterSt]=useState("All");
   const[search,setSearch]=useState("");
   const[expanded,setExpanded]=useState(null);
@@ -590,8 +585,9 @@ function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
                 <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:700,color:T.ink}}>{total>0?`$${total.toFixed(2)}`:"—"}</div>
                 {/* Order placed + delivery date */}
                 <div>
-                  <div style={{fontSize:12,color:T.inkL}}>{o.orderDate||o.placedAt||"—"}</div>
-                  {o.deliveryDate&&<div style={{fontSize:10,color:T.inkL,opacity:.7,marginTop:1}}>Delivery: {o.deliveryDate}</div>}
+                  <div style={{fontSize:12,color:T.ink,fontWeight:500}}>{o.orderDate||o.placedAt||"—"}</div>
+                  {o.dueDate&&<div style={{fontSize:10,color:T.inkL,marginTop:1}}>Delivery: {o.dueDate}</div>}
+                  {o.deliveryDate&&<div style={{fontSize:10,color:T.inkL,marginTop:1}}>Delivery: {o.deliveryDate}</div>}
                 </div>
                 {/* Status pill */}
                 <div style={{display:"inline-flex",alignItems:"center",gap:5,background:ss.bg,border:`1px solid ${ss.border}`,borderRadius:20,padding:"4px 10px",width:"fit-content"}}>
@@ -636,50 +632,13 @@ function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
                     </div>
                     <div>
                       <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:6}}>LINE ITEMS</div>
-                      {o.items.map((it,ii)=>{
-                        const isFlagged=discrepancies&&discrepancies.some(d=>d.orderNumber===o.orderNumber&&d.itemName===it.name&&d.status!=='resolved');
-                        return(
-                        <div key={ii} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,marginBottom:5,color:T.ink,gap:6}}>
-                          <span style={{flex:1,marginRight:4,color:isFlagged?T.red:T.ink,fontWeight:isFlagged?600:400}}>{it.name}</span>
-                          <span style={{color:T.inkL,marginRight:8}}>×{it.qty}</span>
-                          <span style={{fontWeight:600,marginRight:8}}>{it.lineTotal?`$${parseFloat(it.lineTotal).toFixed(2)}`:it.price?`$${(parseFloat(it.price)*parseInt(it.qty)).toFixed(2)}`:"—"}</span>
-                          {discrepancies!=null&&(
-                            <button
-                              className={`disc-flag-btn${isFlagged?" flagged":""}`}
-                              title={isFlagged?"Item flagged as discrepancy":"Flag as discrepancy"}
-                              onClick={e=>{
-                                e.stopPropagation();
-                                if(isFlagged){
-                                  // Remove open discrepancy for this item
-                                  const updated=discrepancies.filter(d=>!(d.orderNumber===o.orderNumber&&d.itemName===it.name&&d.status!=='resolved'));
-                                  setDiscrepancies(updated);
-                                  window.storage.set("ws-discrepancies",JSON.stringify(updated)).catch(()=>{});
-                                } else {
-                                  const nd={
-                                    id:o.orderNumber+"-"+it.name+"-"+Date.now(),
-                                    orderNumber:o.orderNumber,
-                                    customer:o.customer,
-                                    courier:o.courier||"",
-                                    itemName:it.name,
-                                    qty:it.qty,
-                                    sku:it.sku||"",
-                                    flaggedAt:new Date().toLocaleString("en-AU"),
-                                    status:"open",
-                                    resolvedAt:null,
-                                    notes:"",
-                                  };
-                                  const updated=[nd,...discrepancies];
-                                  setDiscrepancies(updated);
-                                  window.storage.set("ws-discrepancies",JSON.stringify(updated)).catch(()=>{});
-                                }
-                              }}
-                              style={{flexShrink:0,fontSize:10,padding:"2px 7px",borderRadius:6,border:`1.5px solid ${isFlagged?T.red:T.border}`,background:isFlagged?T.redL:"transparent",color:isFlagged?T.red:T.inkL,cursor:"pointer",fontFamily:"'Montserrat',sans-serif",fontWeight:700,transition:"all .15s",whiteSpace:"nowrap"}}
-                            >
-                              {isFlagged?"🚩 Flagged":"⚑ Flag"}
-                            </button>
-                          )}
+                      {o.items.map((it,ii)=>(
+                        <div key={ii} style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3,color:T.ink}}>
+                          <span style={{flex:1,marginRight:8}}>{it.name}</span>
+                          <span style={{color:T.inkL,marginRight:12}}>×{it.qty}{it.qty&&String(it.qty).includes('.')?'':''}</span>
+                          <span style={{fontWeight:600}}>{it.lineTotal?`$${parseFloat(it.lineTotal).toFixed(2)}`:it.price?`$${(parseFloat(it.price)*parseInt(it.qty)).toFixed(2)}`:"—"}</span>
                         </div>
-                      );})}
+                      ))}
                       {total>0&&(
                         <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginTop:6,paddingTop:6,borderTop:`1px solid ${T.border}`,fontWeight:700,color:T.ink}}>
                           <span>Total</span><span>${total.toFixed(2)}</span>
@@ -874,7 +833,6 @@ function App(){
   const[stockEdit,setStockEdit]=useState({}); // editing state for stocktake inputs
   const[pendingDrawdowns,setPendingDrawdowns]=useState([]); // [{csvName, date, skuTotals, id}]
   const[approvedDrawdowns,setApprovedDrawdowns]=useState([]); // history
-  const[discrepancies,setDiscrepancies]=useState([]); // [{id, orderNumber, customer, courier, itemName, qty, sku, flaggedAt, status, resolvedAt, notes}]
   const[quickAdd,setQuickAdd]=useState({}); // {sku: delta string} for quick +/- inputs
   const fileRef=useRef();
   const rowsRef=useRef([]);  // always holds latest parsed rows, safe for async doGen
@@ -899,7 +857,6 @@ function App(){
     try{const r=await window.storage.get("ws-stock");if(r)setStock(JSON.parse(r.value));}catch(e){}
     try{const r=await window.storage.get("ws-pending-drawdowns");if(r)setPendingDrawdowns(JSON.parse(r.value));}catch(e){}
     try{const r=await window.storage.get("ws-approved-drawdowns");if(r)setApprovedDrawdowns(JSON.parse(r.value));}catch(e){}
-    try{const r=await window.storage.get("ws-discrepancies");if(r)setDiscrepancies(JSON.parse(r.value));}catch(e){}
   })();},[]);
 
   const loadFile=useCallback((file)=>{
@@ -1191,7 +1148,7 @@ function App(){
   const piData=analytics?Object.entries(analytics.productTotals).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([name,value])=>({name:name.replace(" 350ml","").replace(" 1L","").slice(0,12),value})):[];
   const TT={contentStyle:{background:T.white,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 13px",fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.ink}};
 
-  const TABS=[{id:"generate",icon:"⚡",label:"Generate"},{id:"tracker",icon:"📦",label:"Orders"},{id:"pallets",icon:"🏗️",label:"Pallets"},{id:"dashboard",icon:"📊",label:"Dashboard"},{id:"reports",icon:"📈",label:"Reports"},{id:"history",icon:"📋",label:"Manifests"},{id:"customers",icon:"🏪",label:"Customers"},{id:"stocktake",icon:"📋",label:"Stocktake"},{id:"discrepancies",icon:"⚠️",label:"Discrepancies"},{id:"email",icon:"✉️",label:"Email Hub"}];
+  const TABS=[{id:"generate",icon:"⚡",label:"Generate"},{id:"tracker",icon:"📦",label:"Orders"},{id:"pallets",icon:"🏗️",label:"Pallets"},{id:"dashboard",icon:"📊",label:"Dashboard"},{id:"reports",icon:"📈",label:"Reports"},{id:"history",icon:"📋",label:"Manifests"},{id:"customers",icon:"🏪",label:"Customers"},{id:"stocktake",icon:"📋",label:"Stocktake"},{id:"email",icon:"✉️",label:"Email Hub"}];
   const SKUS_350=['Antiox 350ml','Blueberry Glow 350ml','Botanical 350ml','Cloudy Apple 350ml','Energise 350ml','Immunity 350ml','Pure Orange 350ml','Refresh 350ml','Roots 350ml','Tropical Bliss 350ml'];
   const SKUS_TEA=['Organic Lemon Iced Tea 350ml','Organic Peach Iced Tea 350ml','Organic Raspberry Iced Tea 350ml'];
   const SKUS_1L=['Antiox 1L','Blueberry Glow 1L','Botanical 1L','Cloudy Apple 1L','Energise 1L','Immunity 1L','Pure Orange 1L','Refresh 1L','Roots 1L','Tropical Bliss 1L'];
@@ -1215,7 +1172,7 @@ function App(){
               </div>
             </div>
             <nav style={{display:"flex",gap:2,background:T.creamD,padding:3,borderRadius:10,border:`1px solid ${T.border}`}}>
-              {TABS.map(t=><button key={t.id} className={`tab-btn${tab===t.id?" active":""}`} onClick={()=>setTab(t.id)}><span>{t.icon}</span>{t.label}{t.id==="discrepancies"&&discrepancies.filter(d=>d.status==="open").length>0&&<span style={{background:T.red,color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:9,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",marginLeft:2,fontFamily:"'Montserrat',sans-serif"}}>{discrepancies.filter(d=>d.status==="open").length}</span>}</button>)}
+              {TABS.map(t=><button key={t.id} className={`tab-btn${tab===t.id?" active":""}`} onClick={()=>setTab(t.id)}><span>{t.icon}</span>{t.label}</button>)}
             </nav>
             <div style={{display:"flex",alignItems:"center",gap:7}}>
               {vStats&&vStats.errors>0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:T.redL,border:`1px solid ${T.redB}`,borderRadius:20}}><span style={{fontSize:11}}>🚫</span><span className="mt" style={{fontSize:11,color:T.red,fontWeight:700}}>{vStats.errors} error{vStats.errors>1?"s":""}</span></div>}
@@ -1368,7 +1325,7 @@ function App(){
           {tab==="tracker"&&(
             <div className="fu">
               <div style={{marginBottom:18}}><div className="sc">Order Tracker</div><div className="ss">REGULAR WHOLESALE · {regularOrders.length} ORDERS</div></div>
-              <OrdersTable rows={regularOrders} allOrders={orders} setOrders={setOrders} discrepancies={discrepancies} setDiscrepancies={setDiscrepancies}/>
+              <OrdersTable rows={regularOrders} allOrders={orders} setOrders={setOrders}/>
             </div>
           )}
 
@@ -1947,244 +1904,6 @@ function App(){
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* ═══ DISCREPANCIES ═══ */}
-          {tab==="discrepancies"&&(
-            <div className="fu">
-              <div style={{marginBottom:22,display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-                <div>
-                  <div className="sc">Discrepancies</div>
-                  <div className="ss">
-                    FLAG MISSING OR INCORRECT ITEMS · {discrepancies.filter(d=>d.status==="open").length} OPEN · {discrepancies.filter(d=>d.status==="resolved").length} RESOLVED
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                  {discrepancies.length>0&&(
-                    <button className="btn-o" style={{fontSize:11,color:T.red,borderColor:T.red+"66"}} onClick={()=>{
-                      if(!window.confirm("Clear ALL discrepancy history? This cannot be undone.")) return;
-                      setDiscrepancies([]);
-                      window.storage.set("ws-discrepancies",JSON.stringify([])).catch(()=>{});
-                    }}>Clear All</button>
-                  )}
-                  <button className="btn-o" style={{fontSize:11}} onClick={()=>setTab("tracker")}>
-                    ↗ Go to Orders
-                  </button>
-                </div>
-              </div>
-
-              {/* How-to hint */}
-              <div style={{marginBottom:18,padding:"11px 16px",background:T.blueL,border:"1px solid #BFDBFE",borderRadius:11,display:"flex",gap:10,alignItems:"flex-start"}}>
-                <span style={{fontSize:16,flexShrink:0}}>💡</span>
-                <div style={{fontSize:12,color:"#1E40AF",lineHeight:1.6}}>
-                  <strong>How to flag a discrepancy:</strong> Open any order on the <strong>Orders</strong> tab → expand it → click <strong>⚑ Flag</strong> next to the problem item. It will appear here instantly. Use the status dropdown to track resolution.
-                </div>
-              </div>
-
-              {discrepancies.length===0?(
-                <div style={{textAlign:"center",padding:"80px 0",color:T.inkL}}>
-                  <div style={{fontSize:52,marginBottom:14}}>✅</div>
-                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:20,fontWeight:800,color:T.ink,marginBottom:8}}>No discrepancies logged</div>
-                  <div style={{fontSize:13,maxWidth:400,margin:"0 auto",lineHeight:1.7}}>
-                    When production misses an item, open the order on the <strong>Orders</strong> tab and click <strong>⚑ Flag</strong> next to the affected item. It will appear here for tracking.
-                  </div>
-                </div>
-              ):(()=>{
-                const open=discrepancies.filter(d=>d.status==="open");
-                const inProgress=discrepancies.filter(d=>d.status==="in-progress");
-                const resolved=discrepancies.filter(d=>d.status==="resolved");
-
-                const DiscRow=({d,idx})=>{
-                  const [showNotes,setShowNotes]=useState(false);
-                  const [noteVal,setNoteVal]=useState(d.notes||"");
-                  const statusCfg={
-                    open:{color:T.red,bg:T.redL,border:"#FECACA",label:"Open"},
-                    "in-progress":{color:T.amber,bg:T.amberL,border:T.amberB,label:"In Progress"},
-                    resolved:{color:T.sage,bg:T.sageL,border:"#B8E6B8",label:"Resolved"},
-                  };
-                  const sc=statusCfg[d.status]||statusCfg.open;
-                  const COURIER_LABEL={"COLDXPRESS":"Cold Xpress","DKDISTRIBUTION":"DK Distributions","COOLCOURIERS":"Cool Couriers"};
-
-                  const updateDisc=(patch)=>{
-                    setDiscrepancies(prev=>{
-                      const updated=prev.map(x=>x.id===d.id?{...x,...patch}:x);
-                      window.storage.set("ws-discrepancies",JSON.stringify(updated)).catch(()=>{});
-                      return updated;
-                    });
-                  };
-
-                  return(
-                    <div className="disc-row" style={{background:T.white,border:`1.5px solid ${d.status==="resolved"?T.sageD+"33":d.status==="in-progress"?T.amberB:T.redB}`,borderRadius:14,overflow:"hidden",transition:"border-color .2s"}}>
-                      {/* Main row */}
-                      <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:12,padding:"16px 20px",alignItems:"start"}}>
-                        <div>
-                          {/* Order + Customer */}
-                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:7,flexWrap:"wrap"}}>
-                            <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:800,color:T.terra}}>{d.orderNumber}</span>
-                            <span style={{fontSize:13,fontWeight:600,color:T.ink}}>{d.customer}</span>
-                            {d.courier&&(
-                              <span style={{fontSize:11,color:T.inkL,background:T.creamD,padding:"2px 8px",borderRadius:20,border:`1px solid ${T.border}`}}>
-                                {COURIER_LABEL[d.courier]||d.courier}
-                              </span>
-                            )}
-                            <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 9px",borderRadius:20,fontSize:11,fontWeight:700,background:sc.bg,color:sc.color,border:`1px solid ${sc.border}`,fontFamily:"'Montserrat',sans-serif"}}>
-                              <span style={{width:5,height:5,borderRadius:"50%",background:sc.color,flexShrink:0}}/>
-                              {sc.label}
-                            </span>
-                          </div>
-
-                          {/* Item detail */}
-                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                            <div style={{padding:"6px 14px",background:d.status==="resolved"?T.sageL:T.redL,border:`1.5px solid ${d.status==="resolved"?"#B8E6B8":T.redB}`,borderRadius:9,display:"inline-flex",alignItems:"center",gap:8}}>
-                              <span style={{fontSize:14}}>{d.status==="resolved"?"✅":"🚩"}</span>
-                              <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:700,color:d.status==="resolved"?T.sageD:T.red}}>
-                                {d.qty} × {d.itemName}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Meta */}
-                          <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
-                            <span style={{fontSize:11,color:T.inkL}}>🕐 Flagged {d.flaggedAt}</span>
-                            {d.resolvedAt&&<span style={{fontSize:11,color:T.sageD,fontWeight:600}}>✓ Resolved {d.resolvedAt}</span>}
-                            {d.notes&&!showNotes&&(
-                              <button onClick={()=>setShowNotes(true)} style={{background:"none",border:"none",fontSize:11,color:T.inkM,cursor:"pointer",padding:0,fontFamily:"'DM Sans',sans-serif",textDecoration:"underline"}}>
-                                📝 View note
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Notes panel */}
-                          {showNotes&&(
-                            <div style={{marginTop:10,display:"flex",gap:8,alignItems:"flex-end"}}>
-                              <textarea
-                                value={noteVal}
-                                onChange={e=>setNoteVal(e.target.value)}
-                                placeholder="Add a note about this discrepancy…"
-                                style={{flex:1,minHeight:52,padding:"8px 11px",borderRadius:8,border:`1.5px solid ${T.border}`,fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.ink,background:T.creamD,resize:"vertical",outline:"none"}}
-                              />
-                              <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                                <button className="btn-t" style={{padding:"7px 14px",fontSize:11}} onClick={()=>{
-                                  updateDisc({notes:noteVal});
-                                  setShowNotes(false);
-                                }}>Save</button>
-                                <button className="btn-o" style={{padding:"7px 14px",fontSize:11}} onClick={()=>{setNoteVal(d.notes||"");setShowNotes(false);}}>Cancel</button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Right controls */}
-                        <div style={{display:"flex",flexDirection:"column",gap:7,alignItems:"flex-end",flexShrink:0}}>
-                          {/* Status selector */}
-                          <select
-                            value={d.status}
-                            onChange={e=>{
-                              const ns=e.target.value;
-                              updateDisc({
-                                status:ns,
-                                resolvedAt:ns==="resolved"?new Date().toLocaleString("en-AU"):null
-                              });
-                            }}
-                            style={{padding:"7px 12px",borderRadius:9,border:`1.5px solid ${sc.border}`,background:sc.bg,color:sc.color,fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:"pointer",outline:"none",minWidth:130}}
-                          >
-                            <option value="open">🔴 Open</option>
-                            <option value="in-progress">🟡 In Progress</option>
-                            <option value="resolved">✅ Resolved</option>
-                          </select>
-
-                          <div style={{display:"flex",gap:6}}>
-                            {/* Notes toggle */}
-                            <button onClick={()=>{setShowNotes(v=>!v);setNoteVal(d.notes||"");}}
-                              style={{padding:"5px 10px",borderRadius:7,border:`1px solid ${T.border}`,background:"none",color:T.inkL,fontSize:11,cursor:"pointer",fontFamily:"'Montserrat',sans-serif",fontWeight:600,transition:"all .15s"}}
-                              onMouseEnter={e=>{e.currentTarget.style.borderColor=T.terra;e.currentTarget.style.color=T.terra;}}
-                              onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.inkL;}}>
-                              📝 Note
-                            </button>
-                            {/* Go to order */}
-                            <button onClick={()=>setTab("tracker")}
-                              style={{padding:"5px 10px",borderRadius:7,border:`1px solid ${T.border}`,background:"none",color:T.inkL,fontSize:11,cursor:"pointer",fontFamily:"'Montserrat',sans-serif",fontWeight:600,transition:"all .15s"}}
-                              onMouseEnter={e=>{e.currentTarget.style.borderColor=T.terra;e.currentTarget.style.color=T.terra;}}
-                              onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.inkL;}}>
-                              ↗ Order
-                            </button>
-                            {/* Delete */}
-                            <button onClick={()=>{
-                              if(!window.confirm(`Remove this discrepancy for ${d.itemName}?`)) return;
-                              const updated=discrepancies.filter(x=>x.id!==d.id);
-                              setDiscrepancies(updated);
-                              window.storage.set("ws-discrepancies",JSON.stringify(updated)).catch(()=>{});
-                            }}
-                              style={{padding:"5px 8px",borderRadius:7,border:`1px solid ${T.border}`,background:"none",color:T.inkL,fontSize:13,cursor:"pointer",transition:"all .15s"}}
-                              onMouseEnter={e=>{e.currentTarget.style.borderColor=T.red;e.currentTarget.style.color=T.red;}}
-                              onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.inkL;}}>
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                };
-
-                return(
-                  <div>
-                    {/* Summary strip */}
-                    <div style={{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap"}}>
-                      {[
-                        [open.length,"Open",T.red,T.redL,T.redB],
-                        [inProgress.length,"In Progress",T.amber,T.amberL,T.amberB],
-                        [resolved.length,"Resolved",T.sage,T.sageL,"#B8E6B8"],
-                      ].map(([count,label,color,bg,border])=>(
-                        <div key={label} style={{background:bg,border:`1.5px solid ${border}`,borderRadius:12,padding:"12px 20px",minWidth:110,textAlign:"center"}}>
-                          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:26,fontWeight:800,color,lineHeight:1}}>{count}</div>
-                          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color,letterSpacing:.5,marginTop:4}}>{label.toUpperCase()}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Open section */}
-                    {open.length>0&&(
-                      <div style={{marginBottom:22}}>
-                        <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:T.red,letterSpacing:1.5,marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
-                          🔴 OPEN DISCREPANCIES
-                          <span style={{background:T.redL,border:`1px solid ${T.redB}`,borderRadius:20,padding:"1px 9px",fontSize:10,color:T.red}}>{open.length}</span>
-                        </div>
-                        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                          {open.map((d,i)=><DiscRow key={d.id} d={d} idx={i}/>)}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* In Progress section */}
-                    {inProgress.length>0&&(
-                      <div style={{marginBottom:22}}>
-                        <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:T.amber,letterSpacing:1.5,marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
-                          🟡 IN PROGRESS
-                          <span style={{background:T.amberL,border:`1px solid ${T.amberB}`,borderRadius:20,padding:"1px 9px",fontSize:10,color:T.amber}}>{inProgress.length}</span>
-                        </div>
-                        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                          {inProgress.map((d,i)=><DiscRow key={d.id} d={d} idx={i}/>)}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Resolved section */}
-                    {resolved.length>0&&(
-                      <div style={{marginBottom:22}}>
-                        <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:T.sageD,letterSpacing:1.5,marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
-                          ✅ RESOLVED
-                          <span style={{background:T.sageL,border:`1px solid ${T.sageD}44`,borderRadius:20,padding:"1px 9px",fontSize:10,color:T.sageD}}>{resolved.length}</span>
-                        </div>
-                        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                          {resolved.map((d,i)=><DiscRow key={d.id} d={d} idx={i}/>)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
             </div>
           )}
 
