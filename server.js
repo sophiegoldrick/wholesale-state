@@ -293,10 +293,15 @@ function parseOrdermentumEmail(subject, bodyText, receivedDateTime) {
 
   // ── TO block: customer name + address ──
   let customer = null, address = null, suburb = null, state = null, postcode = null;
-  const toIdx = lines.findIndex(l => /^TO$/i.test(l));
+  // Try "To: Customer Name" on one line first
+  const toInlineMatch = lines.find(l => /^To:\s*.+/i.test(l));
+  if (toInlineMatch) {
+    customer = toInlineMatch.replace(/^To:\s*/i, '').trim();
+  }
+  // Fallback: "TO" on its own line, customer on next
+  const toIdx = !customer ? lines.findIndex(l => /^TO$/i.test(l)) : -1;
   if (toIdx >= 0) {
     let i = toIdx + 1;
-    // Skip any line that is a known header/label
     const isLabel = l => /^(FROM|INVOICE|ORDER|DELIVERY|DUE|PAYMENT|ITEM|Subtotal|Total|Freight|GST)/i.test(l);
     if (i < lines.length && !isLabel(lines[i])) {
       customer = lines[i].trim(); i++;

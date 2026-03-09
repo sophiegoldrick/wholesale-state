@@ -545,7 +545,7 @@ function OrdersTable({rows,allOrders,setOrders}){
       <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
         {/* Header */}
         <div style={{display:"grid",gridTemplateColumns:"24px 110px 1fr 120px 80px 90px 130px 100px",gap:0,padding:"10px 18px",background:T.creamD,borderBottom:`1px solid ${T.border}`}}>
-          {["","Order","Customer","Courier","Items","Total","Delivery Date","Status"].map(h=>(
+          {["","Order","Customer","Courier","Items","Total","Order Placed","Status"].map(h=>(
             <div key={h} style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:.8}}>{h.toUpperCase()}</div>
           ))}
         </div>
@@ -583,8 +583,8 @@ function OrdersTable({rows,allOrders,setOrders}){
                 <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:700,color:T.ink}}>{total>0?`$${total.toFixed(2)}`:"—"}</div>
                 {/* Delivery date + placed time */}
                 <div>
-                  <div style={{fontSize:12,color:T.inkL}}>{o.dueDate||"—"}</div>
-                  {o.placedAt&&<div style={{fontSize:10,color:T.inkL,opacity:.7,marginTop:1}}>{o.placedAt.split(",")[1]?.trim()||""}</div>}
+                  <div style={{fontSize:12,color:T.inkL}}>{o.placedAt||"—"}</div>
+                  {o.dueDate&&<div style={{fontSize:10,color:T.inkL,opacity:.7,marginTop:1}}>Due: {o.dueDate}</div>}
                 </div>
                 {/* Status pill */}
                 <div style={{display:"inline-flex",alignItems:"center",gap:5,background:ss.bg,border:`1px solid ${ss.border}`,borderRadius:20,padding:"4px 10px",width:"fit-content"}}>
