@@ -7,34 +7,45 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/recharts@2/umd/Recharts.js"></script>
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <style>*{box-sizing:border-box;margin:0;padding:0;}body{background:#FAF8F5;}</style>
-</head>
-<body>
-  <div id="root"></div>
-  <script type="text/babel" src="/dashboard.jsx" data-type="module"></script>
   <script>
-    // Override window.storage to use the API
-    const token = () => localStorage.getItem('ws-token');
+    // Wire up window.storage to use the REST API
+    const getToken = () => localStorage.getItem('ws-token');
     window.storage = {
       get: async (key) => {
-        const res = await fetch(`/api/store/${key}`, {headers:{Authorization:`Bearer ${token()}`}});
+        const res = await fetch('/api/store/' + key, {
+          headers: { Authorization: 'Bearer ' + getToken() }
+        });
         if (!res.ok) throw new Error('Not found');
         const d = await res.json();
-        return { value: d.value };
+        return { value: typeof d.value === 'string' ? d.value : JSON.stringify(d.value) };
       },
       set: async (key, value) => {
-        await fetch(`/api/store/${key}`, {method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token()}`},body:JSON.stringify({value: typeof value==='string'?JSON.parse(value):value})});
+        const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+        await fetch('/api/store/' + key, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getToken() },
+          body: JSON.stringify({ value: parsed })
+        });
         return { value };
       },
       delete: async (key) => {
-        await fetch(`/api/store/${key}`, {method:'DELETE',headers:{Authorization:`Bearer ${token()}`}});
+        await fetch('/api/store/' + key, {
+          method: 'DELETE',
+          headers: { Authorization: 'Bearer ' + getToken() }
+        });
         return { deleted: true };
       },
       list: async () => ({ keys: [] })
     };
   </script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" src="/dashboard.jsx"></script>
 </body>
 </html>
