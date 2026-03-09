@@ -272,8 +272,7 @@ function dlZip(files, zipName){
   }).catch(err=>alert("Zip error: "+err.message));
 }
 
-(text){
-  const lines=text.split(/\r?\n/).filter(Boolean);
+function parseCSV(text){
   if(lines.length<2)return[];
   const headers=lines[0].split(",").map(h=>h.replace(/^"|"$/g,"").trim());
   return lines.slice(1).map(line=>{
