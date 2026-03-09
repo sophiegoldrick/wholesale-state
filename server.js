@@ -12,6 +12,7 @@ import { dirname, join } from 'path';
 import 'dotenv/config';
 import { promisify } from 'util';
 import { readFile as _readFile, writeFile as _writeFile, mkdir as _mkdir } from 'fs/promises';
+import { exec as _execSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -42,7 +43,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.static(join(__dirname, 'public')));
 
 // ── Ensure openpyxl is installed ─────────────────────────────────
-import { exec as _execSync } from 'child_process';
 _execSync('python3 -c "import openpyxl" 2>/dev/null || pip3 install openpyxl --break-system-packages -q 2>/dev/null || true', (e)=>{
   if(!e) console.log('✅ openpyxl ready');
   else {
