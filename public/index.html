@@ -668,7 +668,7 @@ function OrdersTable({rows,allOrders,setOrders}){
 /* ══ MAIN APP ══ */
 const REQUIRED_TEMPLATES = ['COLDXPRESS.xlsx','DK_DISTRIBUTIONS.xlsx','COOLCOURIERS.xlsx','Production_Sheet.xlsx','350ml_Fronts.xlsx','350ml_Backs.xlsx','Tea_Fronts.xlsx','Tea_Backs.xlsx','1L_Fronts.xlsx'];
 
-){
+function TemplateUploader({apiFetch,T}){
   const [uploaded,setUploaded]=React.useState([]);
   const [loading,setLoading]=React.useState(true);
   const [uploading,setUploading]=React.useState(false);
