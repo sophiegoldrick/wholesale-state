@@ -409,6 +409,7 @@ app.get('/api/pod/:orderNumber', auth, async (req, res) => {
 });
 
 
+app.post('/api/graph/poll', auth, async (req, res) => {
   try { await pollInbox(); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
