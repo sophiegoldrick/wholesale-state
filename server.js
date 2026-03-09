@@ -6,6 +6,7 @@ import fetch from 'node-fetch';
 import cors from 'cors';
 import cron from 'node-cron';
 import { existsSync } from 'fs';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import 'dotenv/config';
