@@ -943,6 +943,28 @@ function App(){
       const rows=rowsRef.current;
       if(!rows||rows.length===0){alert("No CSV data loaded. Please drop your CSV file first.");setGen(null);return;}
       const d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
+
+      // Server-side generation via Python + openpyxl
+      if(IS_DEPLOYED){
+        const csvText=[Object.keys(rows[0]).join(","),...rows.map(r=>Object.values(r).map(v=>'"'+String(v??'')+'"').join(","))].join("\n");
+        const resp=await apiFetch("/api/generate",{method:"POST",body:JSON.stringify({csvData:csvText,type,dateStr:d})});
+        if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.error||"Generation failed");}
+        const blob=await resp.blob();
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement("a");
+        a.href=url;a.download=type==="all"?d+"_Wholesale_State_Files.zip":d+"_"+type+".xlsx";
+        document.body.appendChild(a);a.click();
+        setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
+        setDone(p=>({...p,[type]:true}));
+        // Record generated files in snap
+        const d2=new Date().toLocaleDateString("en-AU");
+        const fileMap={production:[d+"_Production_Sheet.xlsx"],coldxpress:[d+"_COLDXPRESS.xlsx"],dk:[d+"_DK_DISTRIBUTIONS.xlsx"],coolcouriers:[d+"_COOLCOURIERS.xlsx"],prints:[d+"_350ml_Fronts.xlsx",d+"_350ml_Backs.xlsx",d+"_Tea_Fronts.xlsx",d+"_Tea_Backs.xlsx",d+"_1L_Fronts.xlsx"],all:[d+"_Production_Sheet.xlsx",d+"_COLDXPRESS.xlsx",d+"_DK_DISTRIBUTIONS.xlsx",d+"_COOLCOURIERS.xlsx",d+"_350ml_Fronts.xlsx",d+"_350ml_Backs.xlsx",d+"_Tea_Fronts.xlsx",d+"_Tea_Backs.xlsx",d+"_1L_Fronts.xlsx"]};
+        const nf=fileMap[type]||[];
+        if(nf.length){setSnapshots(prev=>{const up=prev.map(s=>{if(s.dateKey!==d2)return s;const ex=s.generatedFiles||[];return{...s,generatedFiles:[...new Set([...ex,...nf])]};});window.storage.set("ws-snaps",JSON.stringify(up)).catch(()=>{});return up;});}
+        setGen(null);return;
+      }
+
+      // Local browser fallback
       if(type==="production")dlXlsx(genProduction(rows),`${d}_Production_Sheet.xlsx`);
       else if(type==="coldxpress")dlXlsx(genColdXpress(rows,d),`${d}_COLDXPRESS.xlsx`);
       else if(type==="dk")dlXlsx(genDK(rows),`${d}_DK_DISTRIBUTIONS.xlsx`);
@@ -1742,6 +1764,13 @@ function App(){
                     try{await apiFetch('/api/graph/poll',{method:'POST'});alert('Inbox polled — check Orders tab for new orders.');}
                     catch(e){alert('Poll failed: '+e.message);}
                   }} className="btn-o" style={{fontSize:12}}>⟳ Poll Now</button>
+                  <button className="btn-o" style={{fontSize:12,marginLeft:8,borderColor:T.sand,color:T.sand}} onClick={async()=>{
+                    if(!confirm("This will clear parsed email history so the next poll re-processes all emails with the updated parser. Continue?")) return;
+                    const r=await apiFetch("/api/clear-processed",{method:"POST"});
+                    const d=await r.json();
+                    if(d.ok) alert("Cleared — click Poll Now to re-parse all emails.");
+                    else alert("Error: "+d.error);
+                  }}>↺ Re-parse Emails</button>
                 )}
               </div>
 
