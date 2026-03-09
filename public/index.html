@@ -581,8 +581,11 @@ function OrdersTable({rows,allOrders,setOrders}){
                 <div style={{fontSize:12,color:T.inkL}}>{totalItems} items</div>
                 {/* Total */}
                 <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:700,color:T.ink}}>{total>0?`$${total.toFixed(2)}`:"—"}</div>
-                {/* Delivery date */}
-                <div style={{fontSize:12,color:T.inkL}}>{o.dueDate||"—"}</div>
+                {/* Delivery date + placed time */}
+                <div>
+                  <div style={{fontSize:12,color:T.inkL}}>{o.dueDate||"—"}</div>
+                  {o.placedAt&&<div style={{fontSize:10,color:T.inkL,opacity:.7,marginTop:1}}>{o.placedAt.split(",")[1]?.trim()||""}</div>}
+                </div>
                 {/* Status pill */}
                 <div style={{display:"inline-flex",alignItems:"center",gap:5,background:ss.bg,border:`1px solid ${ss.border}`,borderRadius:20,padding:"4px 10px",width:"fit-content"}}>
                   <div style={{width:6,height:6,borderRadius:"50%",background:ss.color,flexShrink:0}}/>
@@ -598,9 +601,12 @@ function OrdersTable({rows,allOrders,setOrders}){
                       <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:6}}>ORDER DETAILS</div>
                       {[
                         ["Order #", o.orderNumber],
-                        ["Payment", o.paymentMethod?PAY_LABEL[o.paymentMethod]||o.paymentMethod:"—"],
+                        ...(o.invoiceNumber?[["Invoice #", o.invoiceNumber]]:[]),
+                        ["Payment", o.paymentStatus||(o.paymentMethod?PAY_LABEL[o.paymentMethod]||o.paymentMethod:"—")],
                         ["Courier", COURIER_LABEL[o.courier]||o.courier||"—"],
                         ["Due Date", o.dueDate||"—"],
+                        ...(o.placedAt?[["Placed", o.placedAt]]:[]),
+                        ...(o.address?[["Address", [o.address, o.suburb, o.state, o.postcode].filter(Boolean).join(", ")]]:[]),
                         ...(o.deliveredAt?[["Delivered", o.deliveredAt]]:[]),
                       ].map(([k,v])=>(
                         <div key={k} style={{display:"flex",gap:8,fontSize:12,marginBottom:4}}>
@@ -622,8 +628,8 @@ function OrdersTable({rows,allOrders,setOrders}){
                       {o.items.map((it,ii)=>(
                         <div key={ii} style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3,color:T.ink}}>
                           <span style={{flex:1,marginRight:8}}>{it.name}</span>
-                          <span style={{color:T.inkL,marginRight:12}}>×{it.qty}</span>
-                          <span style={{fontWeight:600}}>{it.price?`$${(parseFloat(it.price)*parseInt(it.qty)).toFixed(2)}`:"—"}</span>
+                          <span style={{color:T.inkL,marginRight:12}}>×{it.qty}{it.qty&&String(it.qty).includes('.')?'':''}</span>
+                          <span style={{fontWeight:600}}>{it.lineTotal?`$${parseFloat(it.lineTotal).toFixed(2)}`:it.price?`$${(parseFloat(it.price)*parseInt(it.qty)).toFixed(2)}`:"—"}</span>
                         </div>
                       ))}
                       {total>0&&(
@@ -806,14 +812,40 @@ function App(){
         om[r.OrderNumber].isPallet=om[r.OrderNumber].isPallet||isPallet(r);
         om[r.OrderNumber].items.push({name:r.Name,qty:r.Quantity,price:r.UnitPrice,sku:r.SKU});
       });
-      // Merge new orders with existing — CSV always wins on conflict (newest import = source of truth)
+      // Merge CSV orders with existing — preserve email order data, enrich with CSV fields
       const newOrders=Object.values(om);
       setOrders(prev=>{
         const merged={};
-        // Start with existing persisted orders
+        // Start with existing persisted orders (email-sourced etc)
         prev.forEach(o=>{merged[o.orderNumber]=o;});
-        // Overlay new orders from CSV — always overwrite with fresh status
-        newOrders.forEach(o=>{merged[o.orderNumber]=o;});
+        // Overlay/enrich with CSV data
+        newOrders.forEach(csvOrder=>{
+          const existing=merged[csvOrder.orderNumber];
+          if(existing&&existing.source==='email'){
+            // Enrich email order with CSV fields — keep email fields where CSV doesn't have them
+            merged[csvOrder.orderNumber]={
+              ...existing,                         // preserve: placedAt, invoiceNumber, paymentStatus etc
+              // CSV enrichments — all the fields CSV knows that email didn't
+              customer:       csvOrder.customer,   // clean customer name from Ordermentum CSV
+              courier:        csvOrder.courier,
+              dueDate:        csvOrder.dueDate,
+              state:          csvOrder.state,
+              suburb:         csvOrder.suburb,
+              postcode:       csvOrder.postcode,
+              address:        existing.address || csvOrder.address,  // prefer email address (more detailed)
+              items:          csvOrder.items,      // CSV has full SKU/pricing detail
+              isPallet:       csvOrder.isPallet,
+              accountManager: csvOrder.accountManager||existing.accountManager||'',
+              customergroup:  csvOrder.customergroup||existing.customergroup||'',
+              label:          csvOrder.label||existing.label||'',
+              total:          csvOrder.total||existing.total,
+              status:         existing.status==='Order Confirmed' ? 'In Production' : existing.status,
+              source:         'csv',               // upgraded from email to csv
+            };
+          } else {
+            merged[csvOrder.orderNumber]=csvOrder;
+          }
+        });
         const updated=Object.values(merged).sort((a,b)=>a.orderNumber.localeCompare(b.orderNumber));
         ordersRef.current=updated;
         window.storage.set("ws-orders",JSON.stringify(updated)).catch(()=>{});

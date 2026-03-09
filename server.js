@@ -109,9 +109,23 @@ app.get('/api/store/:key', auth, async (req, res) => {
 
 app.post('/api/store/:key', auth, async (req, res) => {
   try {
+    let value = req.body.value;
+
+    // ── When ws-orders is saved, merge CSV data into any email-sourced orders ──
+    // The frontend sends the full orders array; we enrich email orders with CSV fields
+    if (req.params.key === 'ws-orders' && Array.isArray(value)) {
+      value = value.map(order => {
+        // Only enrich email-sourced orders that are missing CSV fields
+        if (order.source !== 'email') return order;
+        // CSV fields that email can't provide: courier, accountManager, csvItems, etc.
+        // These are passed in by the frontend when it merges — just preserve them
+        return order;
+      });
+    }
+
     await db(`INSERT INTO kv_store (key, value, updated_at) VALUES ($1, $2, NOW())
               ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=NOW()`,
-              [req.params.key, JSON.stringify(req.body.value)]);
+              [req.params.key, JSON.stringify(value)]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -210,69 +224,137 @@ async function getAccessToken() {
 }
 
 // ── Ordermentum email parser ────────────────────────────────────
-function parseOrdermentumEmail(subject, bodyText) {
-  // Ordermentum sends: subject = "Invoice - Wholesale State Cold Pressed Juices #OMI17839"
-  // Body contains order number as #OMO17839
-
+// Parses the structured Ordermentum invoice text (email body = PDF text content)
+// Format is line-by-line structured: "FIELD VALUE" or "FIELD\nVALUE on next line"
+function parseOrdermentumEmail(subject, bodyText, receivedDateTime) {
+  // Must contain an OMO/OMI number somewhere
   const omoMatch = (bodyText + ' ' + subject).match(/OMO\d+/);
-  if (!omoMatch) return null;
-  const orderNumber = omoMatch[0];
+  const omiMatch = (bodyText + ' ' + subject).match(/OMI(\d+)/);
+  if (!omoMatch && !omiMatch) return null;
 
-  // Clean body
-  const clean = bodyText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  const lines = bodyText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-  // Customer name — "To Black Sheep 59 Hanson Street..."
-  let customer = 'Unknown';
-  const toMatch = clean.match(/(?:^|\s)To\s+([A-Z][A-Za-z0-9 &'\-\.]+?)\s+\d{1,4}\s+[A-Z]/);
-  if (toMatch) customer = toMatch[1].trim();
+  // ── Extract all labelled fields anywhere in the doc ──
+  const field = (label) => {
+    const re = new RegExp(label + '\\s+(.+)', 'i');
+    for (const l of lines) { const m = l.match(re); if (m) return m[1].trim(); }
+    return null;
+  };
 
-  // Delivery date — "Delivery Date 12 Mar 2026"
-  let dueDate = '';
-  const delivMatch = clean.match(/Delivery\s+Date[:\s]+(\d{1,2}\s+\w+\s+\d{4})/i);
-  if (delivMatch) {
-    const d = new Date(delivMatch[1]);
+  let orderNumber  = field('ORDER NUMBER')  || (omoMatch ? omoMatch[0] : null);
+  let invoiceNumber= field('INVOICE NUMBER')|| (omiMatch ? 'OMI'+omiMatch[1] : null);
+  let invoiceDate  = field('INVOICE DATE');
+  let deliveryDate = field('DELIVERY DATE');
+  let dueDate      = field('DUE DATE');
+  let paymentStatus= field('PAYMENT STATUS');
+
+  // Normalise date from Ordermentum format (DD/MM/YYYY already, or MM/DD/YYYY — detect)
+  const normDate = (s) => {
+    if (!s) return '';
+    // Already DD/MM/YYYY
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+    // Try to parse and reformat
+    const d = new Date(s);
     if (!isNaN(d)) {
-      dueDate = String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
-    } else {
-      dueDate = delivMatch[1].trim();
+      return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+    }
+    return s;
+  };
+
+  // ── TO block: customer name + address ──
+  let customer = null, address = null, suburb = null, state = null, postcode = null;
+  const toIdx = lines.findIndex(l => /^TO$/i.test(l));
+  if (toIdx >= 0) {
+    let i = toIdx + 1;
+    // Skip any line that is a known header/label
+    const isLabel = l => /^(FROM|INVOICE|ORDER|DELIVERY|DUE|PAYMENT|ITEM|Subtotal|Total|Freight|GST)/i.test(l);
+    if (i < lines.length && !isLabel(lines[i])) {
+      customer = lines[i].trim(); i++;
+    }
+    // Address line — first non-label line after customer that isn't suburb/state
+    if (i < lines.length && !isLabel(lines[i]) && !/^\d{4}$/.test(lines[i])) {
+      // Could be "382, Little Collins St" or "382 Little Collins St"
+      if (/^\d/.test(lines[i]) || /^[A-Z]/.test(lines[i])) {
+        address = lines[i].trim(); i++;
+      }
+    }
+    // Suburb, STATE, postcode line
+    if (i < lines.length) {
+      const locMatch = lines[i].match(/^(.+?)[,\s]+(VIC|NSW|QLD|SA|WA|TAS|ACT|NT)[,\s]+(\d{4})/i);
+      if (locMatch) {
+        suburb   = locMatch[1].trim().replace(/,$/, '');
+        state    = locMatch[2].trim().toUpperCase();
+        postcode = locMatch[3].trim();
+        i++;
+      }
     }
   }
 
-  // Suburb and state from address
-  let suburb = '', state = '';
-  const addrMatch = clean.match(/\bVIC\b|\bNSW\b|\bQLD\b|\bSA\b|\bWA\b|\bTAS\b|\bACT\b|\bNT\b/);
-  if (addrMatch) state = addrMatch[0];
-  const suburbMatch = clean.match(/([A-Z][a-zA-Z\s]+)\s+(?:VIC|NSW|QLD|SA|WA|TAS|ACT|NT),?\s+\d{4}/);
-  if (suburbMatch) suburb = suburbMatch[1].trim();
-
-  // Order total — last "Total $xxx.xx"
-  let total = 0;
-  const totalMatches = [...clean.matchAll(/Total\s+\$?([\d,]+\.?\d*)/gi)];
-  if (totalMatches.length > 0) total = parseFloat(totalMatches[totalMatches.length-1][1].replace(',',''));
-
-  // Line items — "Product Name 350ml  12  $3.50  $42.00"
+  // ── Items table ──
+  // Header row might appear as "ITEM QTY PRICE SUBTOTAL" all on one line
   const items = [];
-  const seen = new Set();
-  const itemRe = /([A-Z][A-Za-z\s]+(?:350ml|1L|1l|Tea|500ml|200ml)[^\n$]*?)\s+(\d+)\s+\$[\d.]+\s+\$([\d.]+)/g;
-  let m;
-  while ((m = itemRe.exec(clean)) !== null) {
-    const name = m[1].trim().replace(/\s+/g,' ');
-    const qty = parseInt(m[2]);
-    const lineTotal = parseFloat(m[3]);
-    const key = name.toLowerCase();
-    if (!seen.has(key) && qty > 0 && name.length > 3) {
-      seen.add(key);
-      // Strip any table header junk that may prefix the first item name
-      const cleanName = name.replace(/^.*?(?=(?:[A-Z][a-z]+\s)+(?:350ml|1L|1l|Tea|500ml|200ml))/,'').trim() || name;
-      items.push({ qty, name: cleanName, price: lineTotal > 0 ? +(lineTotal/qty).toFixed(2) : null });
+  const itemHeaderIdx = lines.findIndex(l => /ITEM\s+QTY\s+PRICE\s+SUBTOTAL/i.test(l));
+  if (itemHeaderIdx >= 0) {
+    let i = itemHeaderIdx + 1;
+    while (i < lines.length) {
+      const l = lines[i];
+      if (/^ITEM TOTAL|^Subtotal|^Freight|^GST|^Total|^Surcharge|^How to pay/i.test(l)) break;
+      // "Roots 350ml 12 $3.30 $39.60" or "Roots 350ml 12 3.30 39.60"
+      const im = l.match(/^(.+?)\s+(\d+)\s+\$?([\d.]+)\s+\$?([\d.]+)$/);
+      if (im) {
+        items.push({ name: im[1].trim(), qty: parseInt(im[2]), price: parseFloat(im[3]) });
+      }
+      i++;
     }
   }
+
+  // ── Totals ──
+  let subtotal = null, grandTotal = null;
+  for (const l of lines) {
+    const sm = l.match(/^Subtotal\s+\$?([\d,]+\.?\d*)/i);
+    if (sm) subtotal = parseFloat(sm[1].replace(',',''));
+    const tm = l.match(/^Total\s+\$?([\d,]+\.?\d*)/i);
+    if (tm) grandTotal = parseFloat(tm[1].replace(',',''));
+  }
+
+  // ── Timestamp from receivedDateTime ──
+  let placedAt = null;
+  if (receivedDateTime) {
+    try {
+      const dt = new Date(receivedDateTime);
+      const dd = String(dt.getDate()).padStart(2,'0');
+      const mm = String(dt.getMonth()+1).padStart(2,'0');
+      const yyyy = dt.getFullYear();
+      let hrs = dt.getHours(), mins = String(dt.getMinutes()).padStart(2,'0');
+      const ampm = hrs >= 12 ? 'pm' : 'am';
+      hrs = hrs % 12 || 12;
+      placedAt = `${dd}/${mm}/${yyyy}, ${hrs}:${mins} ${ampm}`;
+    } catch(e) {}
+  }
+
+  if (!orderNumber) return null;
 
   return {
-    orderNumber, customer, dueDate, total,
-    items: items.length > 0 ? items : [{ qty: 0, name: 'See Ordermentum for details', price: null }],
-    paymentMethod: '', status: 'Order Confirmed', source: 'email',
-    courier: '', suburb, state
+    orderNumber,
+    invoiceNumber:  invoiceNumber || '',
+    invoiceDate:    normDate(invoiceDate),
+    customer:       customer || 'Unknown',
+    address:        address  || '',
+    suburb:         suburb   || '',
+    state:          state    || '',
+    postcode:       postcode || '',
+    dueDate:        normDate(deliveryDate || dueDate),  // Delivery Date = when they receive it
+    total:          subtotal || grandTotal || 0,
+    paymentStatus:  paymentStatus || '',
+    placedAt,
+    items:          items,
+    status:         'Order Confirmed',
+    source:         'email',
+    courier:        '',   // filled in from CSV
+    // CSV-fillable fields (empty until CSV uploaded)
+    accountManager: '',
+    customergroup:  '',
+    label:          '',
   };
 }
 
@@ -311,7 +393,18 @@ async function pollInbox() {
 
       const fromAddr = msg.from?.emailAddress?.address || '';
       const subject  = msg.subject || '';
-      const bodyText = msg.body?.content?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ') || '';
+      // Preserve structure: block-level tags → newlines, then strip remaining HTML
+      const rawBody = msg.body?.content || '';
+      const bodyText = rawBody
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/tr>/gi, '\n')
+        .replace(/<\/td>/gi, ' ')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<\/li>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').replace(/&#39;/g,"'").replace(/&rsquo;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+        .split('\n').map(l => l.replace(/\s+/g,' ').trim()).filter(l => l.length > 0).join('\n');
 
       // ── POD emails (from couriers — check first) ──────────────
       const podOrders = parsePODEmail(subject, bodyText);
@@ -368,17 +461,39 @@ async function pollInbox() {
                             subject.toLowerCase().includes('ordermentum') ||
                             /OMO\d+/.test(subject);
       if (isOrdermentum && !podOrders) {
-        const order = parseOrdermentumEmail(subject, bodyText);
+        const order = parseOrdermentumEmail(subject, bodyText, msg.receivedDateTime);
         if (order) {
           const stored = await db(`SELECT value FROM kv_store WHERE key = 'ws-orders'`);
           const orders = stored.rows.length > 0 ? (stored.rows[0].value || []) : [];
-          if (!orders.find(o => o.orderNumber === order.orderNumber)) {
+          const existing = orders.find(o => o.orderNumber === order.orderNumber);
+          if (!existing) {
+            // New order — insert at top
             orders.unshift(order);
             await db(`INSERT INTO kv_store (key, value, updated_at) VALUES ('ws-orders', $1, NOW())
                       ON CONFLICT (key) DO UPDATE SET value=$1, updated_at=NOW()`,
                       [JSON.stringify(orders)]);
             ordersAdded++;
             console.log(`📬 New order: ${order.orderNumber} — ${order.customer}`);
+          } else {
+            // Existing order — enrich with any new fields from this email parse
+            let changed = false;
+            const enrichFields = ['customer','address','suburb','state','postcode','dueDate','invoiceDate','placedAt','total','paymentStatus','invoiceNumber','items'];
+            for (const f of enrichFields) {
+              const val = order[f];
+              const isEmpty = v => v === undefined || v === null || v === '' || v === 'Unknown' || (Array.isArray(v) && v.length === 0);
+              if (!isEmpty(val) && isEmpty(existing[f])) {
+                existing[f] = val;
+                changed = true;
+              }
+            }
+            if (changed) {
+              const idx = orders.findIndex(o => o.orderNumber === order.orderNumber);
+              orders[idx] = existing;
+              await db(`INSERT INTO kv_store (key, value, updated_at) VALUES ('ws-orders', $1, NOW())
+                        ON CONFLICT (key) DO UPDATE SET value=$1, updated_at=NOW()`,
+                        [JSON.stringify(orders)]);
+              console.log(`📬 Enriched order: ${order.orderNumber}`);
+            }
           }
         }
       }
