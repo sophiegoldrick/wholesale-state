@@ -273,6 +273,7 @@ function dlZip(files, zipName){
 }
 
 function parseCSV(text){
+  const lines=text.split(/\r?\n/).filter(Boolean);
   if(lines.length<2)return[];
   const headers=lines[0].split(",").map(h=>h.replace(/^"|"$/g,"").trim());
   return lines.slice(1).map(line=>{
@@ -818,6 +819,17 @@ function App(){
         window.storage.set("ws-orders",JSON.stringify(updated)).catch(()=>{});
         return updated;
       });
+      // Derive the order date early so it's available for pendingDrawdowns and snap
+      const firstRowEarly=rows.find(r=>r.SKU!=="FREIGHT"&&r.DueDate);
+      const orderDateRawEarly=firstRowEarly?.DueDate||"";
+      let orderDateLabel="";
+      if(orderDateRawEarly){
+        const parts=orderDateRawEarly.split("/");
+        if(parts.length===3){
+          const d=new Date(parts[2],parts[1]-1,parts[0]);
+          orderDateLabel=d.toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+        }
+      }
       // Build SKU totals for drawdown queue
       (async()=>{
         const skuTotals={};
@@ -874,17 +886,6 @@ function App(){
       // Build per-manifest order lists
       const allOrderNums=[...new Set(rows.filter(r=>r.SKU!=="FREIGHT"&&r.OrderNumber&&!isPallet(r)).map(r=>r.OrderNumber))];
       const specialOrderNums=[...new Set(rows.filter(r=>r.SKU!=="FREIGHT"&&r.OrderNumber&&isPallet(r)).map(r=>r.OrderNumber))];
-      // Derive the order date from the CSV (DueDate of first non-freight row)
-      const firstRow=rows.find(r=>r.SKU!=="FREIGHT"&&r.DueDate);
-      const orderDateRaw=firstRow?.DueDate||"";
-      let orderDateLabel="";
-      if(orderDateRaw){
-        const parts=orderDateRaw.split("/");
-        if(parts.length===3){
-          const d=new Date(parts[2],parts[1]-1,parts[0]);
-          orderDateLabel=d.toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
-        }
-      }
       setCsvOrderDate(orderDateLabel||file.name);
       const dk=new Date().toLocaleDateString("en-AU");
       const byCourier={};

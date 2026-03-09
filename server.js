@@ -211,56 +211,68 @@ async function getAccessToken() {
 
 // ── Ordermentum email parser ────────────────────────────────────
 function parseOrdermentumEmail(subject, bodyText) {
-  // Must contain OMO order number
+  // Ordermentum sends: subject = "Invoice - Wholesale State Cold Pressed Juices #OMI17839"
+  // Body contains order number as #OMO17839
+
   const omoMatch = (bodyText + ' ' + subject).match(/OMO\d+/);
   if (!omoMatch) return null;
   const orderNumber = omoMatch[0];
 
-  // Customer name — "from <Name>" in subject, or "Customer: <Name>" in body
-  const customerMatch =
-    subject.match(/(?:from|by)\s+(.+?)(?:\s*[-–|]|\s*#|\s*$)/i) ||
-    bodyText.match(/Customer[:\s]+([^\n\r]+)/i);
-  const customer = customerMatch ? customerMatch[1].trim() : 'Unknown';
+  // Clean body
+  const clean = bodyText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 
-  // Delivery / due date
-  const dateMatch = bodyText.match(/(?:delivery date|due date|deliver by|required by)[:\s]+([^\n\r<]+)/i);
-  const dueDate = dateMatch ? dateMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+  // Customer name — "To Black Sheep 59 Hanson Street..."
+  let customer = 'Unknown';
+  const toMatch = clean.match(/(?:^|\s)To\s+([A-Z][A-Za-z0-9 &'\-\.]+?)\s+\d{1,4}\s+[A-Z]/);
+  if (toMatch) customer = toMatch[1].trim();
 
-  // Order total
-  const totalMatch = bodyText.match(/(?:order total|total)[:\s]*\$?([\d,]+\.?\d*)/i);
-  const total = totalMatch ? parseFloat(totalMatch[1].replace(',', '')) : 0;
+  // Delivery date — "Delivery Date 12 Mar 2026"
+  let dueDate = '';
+  const delivMatch = clean.match(/Delivery\s+Date[:\s]+(\d{1,2}\s+\w+\s+\d{4})/i);
+  if (delivMatch) {
+    const d = new Date(delivMatch[1]);
+    if (!isNaN(d)) {
+      dueDate = String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+    } else {
+      dueDate = delivMatch[1].trim();
+    }
+  }
 
-  // Payment method
-  const payMatch = bodyText.match(/(?:payment method|payment)[:\s]+([^\n\r<]+)/i);
-  const paymentMethod = payMatch ? payMatch[1].trim() : '';
+  // Suburb and state from address
+  let suburb = '', state = '';
+  const addrMatch = clean.match(/\bVIC\b|\bNSW\b|\bQLD\b|\bSA\b|\bWA\b|\bTAS\b|\bACT\b|\bNT\b/);
+  if (addrMatch) state = addrMatch[0];
+  const suburbMatch = clean.match(/([A-Z][a-zA-Z\s]+)\s+(?:VIC|NSW|QLD|SA|WA|TAS|ACT|NT),?\s+\d{4}/);
+  if (suburbMatch) suburb = suburbMatch[1].trim();
 
-  // Line items — "12 x Cloudy Apple 350ml" or "Cloudy Apple 350ml x12"
+  // Order total — last "Total $xxx.xx"
+  let total = 0;
+  const totalMatches = [...clean.matchAll(/Total\s+\$?([\d,]+\.?\d*)/gi)];
+  if (totalMatches.length > 0) total = parseFloat(totalMatches[totalMatches.length-1][1].replace(',',''));
+
+  // Line items — "Product Name 350ml  12  $3.50  $42.00"
   const items = [];
-  const patterns = [
-    /(\d+)\s*[x×]\s*([A-Za-z][^\n\r$<(]{2,50?)(?:\s*\(|\s*\$|\s*$)/gim,
-    /([A-Za-z][^\n\r$<(]{2,50?})\s*[x×]\s*(\d+)/gim
-  ];
   const seen = new Set();
-  for (const [m] of [...(bodyText.matchAll(patterns[0]))]) {
-    const match = m.match(/(\d+)\s*[x×]\s*(.+)/i);
-    if (match) {
-      const key = match[2].trim().toLowerCase();
-      if (!seen.has(key)) { seen.add(key); items.push({ qty: parseInt(match[1]), name: match[2].trim(), price: null }); }
+  const itemRe = /([A-Z][A-Za-z\s]+(?:350ml|1L|1l|Tea|500ml|200ml)[^\n$]*?)\s+(\d+)\s+\$[\d.]+\s+\$([\d.]+)/g;
+  let m;
+  while ((m = itemRe.exec(clean)) !== null) {
+    const name = m[1].trim().replace(/\s+/g,' ');
+    const qty = parseInt(m[2]);
+    const lineTotal = parseFloat(m[3]);
+    const key = name.toLowerCase();
+    if (!seen.has(key) && qty > 0 && name.length > 3) {
+      seen.add(key);
+      // Strip any table header junk that may prefix the first item name
+      const cleanName = name.replace(/^.*?(?=(?:[A-Z][a-z]+\s)+(?:350ml|1L|1l|Tea|500ml|200ml))/,'').trim() || name;
+      items.push({ qty, name: cleanName, price: lineTotal > 0 ? +(lineTotal/qty).toFixed(2) : null });
     }
   }
 
   return {
-    orderNumber,
-    customer,
-    dueDate,
-    total,
+    orderNumber, customer, dueDate, total,
     items: items.length > 0 ? items : [{ qty: 0, name: 'See Ordermentum for details', price: null }],
-    paymentMethod,
-    status: 'Order Confirmed',  // CSV upload will move to In Production
-    source: 'email',
-    courier: '',
-    suburb: '',
-    state: ''
+    paymentMethod: '', status: 'Order Confirmed', source: 'email',
+    courier: '', suburb, state
   };
 }
 
