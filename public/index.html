@@ -1847,17 +1847,19 @@ function App(){
               <div style={{marginBottom:20,display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
                 <div><div className="sc">Email Hub</div><div className="ss">ORDERMENTUM ORDERS VIA OUTLOOK · AUTO-SYNC EVERY 3 MIN</div></div>
                 {graphConnected&&(
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                   <button onClick={async()=>{
                     try{await apiFetch('/api/graph/poll',{method:'POST'});alert('Inbox polled — check Orders tab for new orders.');}
                     catch(e){alert('Poll failed: '+e.message);}
                   }} className="btn-o" style={{fontSize:12}}>⟳ Poll Now</button>
-                  <button className="btn-o" style={{fontSize:12,marginLeft:8,borderColor:T.sand,color:T.sand}} onClick={async()=>{
+                  <button className="btn-o" style={{fontSize:12,borderColor:T.sand,color:T.sand}} onClick={async()=>{
                     if(!confirm("This will clear parsed email history so the next poll re-processes all emails with the updated parser. Continue?")) return;
                     const r=await apiFetch("/api/clear-processed",{method:"POST"});
                     const d=await r.json();
                     if(d.ok) alert("Cleared — click Poll Now to re-parse all emails.");
                     else alert("Error: "+d.error);
                   }}>↺ Re-parse Emails</button>
+                  </div>
                 )}
               </div>
 
@@ -1976,7 +1978,6 @@ function App(){
 
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
-
-  </script>
+</script>
 </body>
 </html>

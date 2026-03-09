@@ -572,271 +572,360 @@ const execAsync = promisify(_execSync);
 
 const TPL_DIR = join(process.cwd(), 'templates');
 
-const GEN_SCRIPT = `
-import csv, shutil, math, datetime, zipfile, json, sys, os
+const GEN_SCRIPT = `import csv, shutil, math, datetime, zipfile, json, sys, os
 from collections import defaultdict
 from openpyxl import load_workbook, Workbook
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import Font, PatternFill, Alignment
 
-CSV_PATH, OUT_DIR, DATE_STR, GEN_TYPE, TPL_DIR = sys.argv[1:6]
+CSV_PATH = sys.argv[1] if len(sys.argv) > 1 else '/mnt/user-data/uploads/ORDER_ITEMS_MASTER_SHEET.csv'
+OUT_DIR  = sys.argv[2] if len(sys.argv) > 2 else '/tmp/gen_out'
+DATE_STR = sys.argv[3] if len(sys.argv) > 3 else datetime.date.today().strftime('%d-%m-%Y')
+GEN_TYPE = sys.argv[4] if len(sys.argv) > 4 else 'all'
+TPL_DIR  = sys.argv[5] if len(sys.argv) > 5 else '/mnt/user-data/uploads'
+
+os.makedirs(OUT_DIR, exist_ok=True)
 
 with open(CSV_PATH, newline='', encoding='utf-8-sig') as f:
     ALL = list(csv.DictReader(f))
 rows = [r for r in ALL if r.get('SKU','') != 'FREIGHT']
 today = datetime.date.today().strftime('%d/%m/%Y')
+
 by_order = defaultdict(list)
 for r in rows:
     by_order[r['OrderNumber']].append(r)
 
-def cartons(ords):
-    total = 0
+def total_cartons(ords):
+    t = 0
     for r in ords:
-        p = r.get('Product',''); q = int(r.get('Quantity',0))
-        if p == '350': total += math.ceil(q/24)
-        elif p == 'TEA': total += math.ceil(q/18)
-        elif p == '1L':  total += math.ceil(q/12)
-    return total
+        p = r.get('Product',''); qty = int(r.get('Quantity',0) or 0)
+        if p=='350': t += math.ceil(qty/24)
+        elif p=='TEA': t += math.ceil(qty/18)
+        elif p=='1L': t += math.ceil(qty/12)
+    return t
 
-def inv_val(ords):
-    return sum(float(r.get('UnitPrice',0))*int(r.get('Quantity',0)) for r in ords if r.get('Product'))
+def inv_value(ords):
+    return sum(float(r.get('UnitPrice',0) or 0)*int(r.get('Quantity',0) or 0) for r in ords if r.get('Product'))
 
-def cx_orders():
-    return {k:v for k,v in by_order.items() if v[0].get('Courier','')=='COLDXPRESS'}
-def dk_orders():
-    return {k:v for k,v in by_order.items() if v[0].get('Courier','')=='DKDISTRIBUTION'}
-def cc_orders():
-    return {k:v for k,v in by_order.items() if v[0].get('Courier','')=='COOLCOURIERS'}
+def courier_orders(courier):
+    return {k:v for k,v in by_order.items() if v[0].get('Courier','')==courier}
 
-BOLD = Font(bold=True, name='Calibri', size=11)
 GREY = PatternFill('solid', fgColor='D3D3D3')
-
-def tpl(name):
-    p = os.path.join(TPL_DIR, name)
-    if os.path.exists(p): return p
-    return None
-
+BOLD = Font(bold=True, name='Calibri', size=11)
 generated = []
 
-# ── 1. COLDXPRESS ──────────────────────────────────────
+# ══════════════════════════════════════════════
+# 1. COLDXPRESS
+# ══════════════════════════════════════════════
 if GEN_TYPE in ('coldxpress','all'):
-    t = tpl('COLDXPRESS.xlsx')
-    out = os.path.join(OUT_DIR, DATE_STR + '_COLDXPRESS.xlsx')
-    if t:
-        shutil.copy(t, out)
-        wb = load_workbook(out)
-        ws = wb.active
-        ws['B4'] = today
-        for ri, onum in enumerate(sorted(cx_orders().keys()), 6):
-            ords = cx_orders()[onum]; r0 = ords[0]
-            ws.cell(ri,1).value = onum
-            ws.cell(ri,2).value = r0.get('DueDate','')
-            ws.cell(ri,4).value = r0.get('Customer','')
-            ws.cell(ri,5).value = r0.get('CustomerAddress1','')
-            ws.cell(ri,6).value = r0.get('CustomerSuburb','')
-            ws.cell(ri,7).value = r0.get('CustomerState','')
-            try: ws.cell(ri,8).value = int(r0.get('Postcode',0))
-            except: ws.cell(ri,8).value = r0.get('Postcode','')
-            ws.cell(ri,9).value = cartons(ords)
-            ws.cell(ri,12).value = round(inv_val(ords),2)
-            ws.cell(ri,14).value = 'chilled'
-            ws.cell(ri,15).value = r0.get('Notes','')
-    else:
-        wb = Workbook(); ws = wb.active
-        headers = ['INV NO.','DELIVERY DATE','STORE NO','STORE NAME','ADDRESS','SUBURB','STATE','POSTCODE','CARTONS','PALLETS','WEIGHT (KG)','INV. VALUE','COD','TEMP','COMMENT']
-        for ci,h in enumerate(headers,1): c=ws.cell(1,ci,h); c.font=BOLD; c.fill=GREY
-        for ri, onum in enumerate(sorted(cx_orders().keys()), 2):
-            ords = cx_orders()[onum]; r0 = ords[0]
-            ws.cell(ri,1).value=onum; ws.cell(ri,2).value=r0.get('DueDate','')
-            ws.cell(ri,4).value=r0.get('Customer',''); ws.cell(ri,5).value=r0.get('CustomerAddress1','')
-            ws.cell(ri,6).value=r0.get('CustomerSuburb',''); ws.cell(ri,7).value=r0.get('CustomerState','')
-            try: ws.cell(ri,8).value=int(r0.get('Postcode',0))
-            except: ws.cell(ri,8).value=r0.get('Postcode','')
-            ws.cell(ri,9).value=cartons(ords); ws.cell(ri,12).value=round(inv_val(ords),2)
-            ws.cell(ri,14).value='chilled'; ws.cell(ri,15).value=r0.get('Notes','')
-    wb.save(out); generated.append(out)
+    src = f'{TPL_DIR}/COLDXPRESS.xlsx'
+    dst = f'{OUT_DIR}/{DATE_STR}_COLDXPRESS.xlsx'
+    shutil.copy(src, dst)
+    wb = load_workbook(dst)
+    ws = wb.active
+    ws['B4'] = today
+    cx = courier_orders('COLDXPRESS')
+    for ri, onum in enumerate(sorted(cx.keys()), 6):
+        ords = cx[onum]; r0 = ords[0]
+        ws.cell(ri,1).value = onum
+        ws.cell(ri,2).value = r0.get('DueDate','')
+        ws.cell(ri,4).value = r0.get('Customer','')
+        ws.cell(ri,5).value = r0.get('CustomerAddress1','')
+        ws.cell(ri,6).value = r0.get('CustomerSuburb','')
+        ws.cell(ri,7).value = r0.get('CustomerState','')
+        try: ws.cell(ri,8).value = int(r0.get('Postcode',0))
+        except: ws.cell(ri,8).value = r0.get('Postcode','')
+        ws.cell(ri,9).value  = total_cartons(ords)
+        ws.cell(ri,12).value = round(inv_value(ords),2)
+        ws.cell(ri,14).value = 'chilled'
+        ws.cell(ri,15).value = r0.get('Notes','')
+    wb.save(dst); generated.append(dst)
+    print(f'✅ COLDXPRESS — {len(cx)} orders', file=sys.stderr)
 
-# ── 2. DK DISTRIBUTIONS ────────────────────────────────
+# ══════════════════════════════════════════════
+# 2. DK DISTRIBUTIONS
+# ══════════════════════════════════════════════
 if GEN_TYPE in ('dk','all'):
-    t = tpl('DK_DISTRIBUTIONS.xlsx')
-    out = os.path.join(OUT_DIR, DATE_STR + '_DK_DISTRIBUTIONS.xlsx')
-    if t:
-        shutil.copy(t, out)
-        wb = load_workbook(out)
-        ws = wb['jobs']
-        # Clear existing data rows (keep header)
-        for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
-            for cell in row: cell.value = None
-    else:
-        wb = Workbook(); ws = wb.active; ws.title = 'jobs'
-        hdrs=['Order ID','Date','Order Type','Notes','Address 1','Address 2','Address 3','Postal Code','City','State','Country','Location','Last Name','Phone','Delivery Instructions','Email','GROUP','Volume']
-        for ci,h in enumerate(hdrs,1): c=ws.cell(1,ci,h); c.font=BOLD; c.fill=GREY
-    for ri, onum in enumerate(sorted(dk_orders().keys()), 2):
-        ords = dk_orders()[onum]; r0 = ords[0]
-        ws.cell(ri,1).value=onum; ws.cell(ri,2).value=today; ws.cell(ri,3).value='Business'
-        ws.cell(ri,4).value=r0.get('Customer',''); ws.cell(ri,5).value=r0.get('CustomerAddress1','')
-        ws.cell(ri,6).value=r0.get('CustomerAddress2','')
-        try: ws.cell(ri,8).value=int(r0.get('Postcode',0))
-        except: ws.cell(ri,8).value=r0.get('Postcode','')
-        ws.cell(ri,9).value=r0.get('CustomerSuburb',''); ws.cell(ri,10).value=r0.get('CustomerState','')
-        ws.cell(ri,15).value=r0.get('Notes',''); ws.cell(ri,17).value='WS'; ws.cell(ri,18).value=cartons(ords)
-    wb.save(out); generated.append(out)
+    src = f'{TPL_DIR}/DK_DISTRIBUTIONS.xlsx'
+    dst = f'{OUT_DIR}/{DATE_STR}_DK_DISTRIBUTIONS.xlsx'
+    shutil.copy(src, dst)
+    wb = load_workbook(dst)
+    ws = wb['jobs']
+    dk = courier_orders('DKDISTRIBUTION')
+    for ri, onum in enumerate(sorted(dk.keys()), 2):
+        ords = dk[onum]; r0 = ords[0]
+        ws.cell(ri,1).value  = onum
+        ws.cell(ri,2).value  = today
+        ws.cell(ri,3).value  = 'Business'
+        ws.cell(ri,4).value  = r0.get('Customer','')
+        ws.cell(ri,5).value  = r0.get('CustomerAddress1','')
+        ws.cell(ri,6).value  = r0.get('CustomerAddress2','')
+        try: ws.cell(ri,8).value = int(r0.get('Postcode',0))
+        except: ws.cell(ri,8).value = r0.get('Postcode','')
+        ws.cell(ri,9).value  = r0.get('CustomerSuburb','')
+        ws.cell(ri,10).value = r0.get('CustomerState','')
+        ws.cell(ri,15).value = r0.get('Notes','')
+        ws.cell(ri,17).value = 'WS'
+        ws.cell(ri,18).value = total_cartons(ords)
+    wb.save(dst); generated.append(dst)
+    print(f'✅ DK_DISTRIBUTIONS — {len(dk)} orders', file=sys.stderr)
 
-# ── 3. COOLCOURIERS ─────────────────────────────────────
+# ══════════════════════════════════════════════
+# 3. COOLCOURIERS
+# ══════════════════════════════════════════════
 if GEN_TYPE in ('coolcouriers','all'):
-    t = tpl('COOLCOURIERS.xlsx')
-    out = os.path.join(OUT_DIR, DATE_STR + '_COOLCOURIERS.xlsx')
-    if t:
-        shutil.copy(t, out)
-        wb = load_workbook(out)
-        ws = wb['jobs']
-        for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
-            for cell in row: cell.value = None
-    else:
-        wb = Workbook(); ws = wb.active; ws.title='jobs'
-        hdrs=['Order ID','Date','Order Type','Customer','Address 1','Address 2','Postcode','Suburb','State','Notes','Group','Cartons']
-        for ci,h in enumerate(hdrs,1): c=ws.cell(1,ci,h); c.font=BOLD; c.fill=GREY
-    for ri, onum in enumerate(sorted(cc_orders().keys()), 2):
-        ords = cc_orders()[onum]; r0 = ords[0]
-        ws.cell(ri,1).value=onum; ws.cell(ri,2).value=today; ws.cell(ri,3).value='Business'
-        ws.cell(ri,4).value=r0.get('Customer',''); ws.cell(ri,5).value=r0.get('CustomerAddress1','')
-        ws.cell(ri,6).value=r0.get('CustomerAddress2','')
-        try: ws.cell(ri,7).value=int(r0.get('Postcode',0))
-        except: ws.cell(ri,7).value=r0.get('Postcode','')
-        ws.cell(ri,8).value=r0.get('CustomerSuburb',''); ws.cell(ri,9).value=r0.get('CustomerState','')
-        ws.cell(ri,10).value=r0.get('Notes',''); ws.cell(ri,11).value='WS'; ws.cell(ri,12).value=cartons(ords)
-    wb.save(out); generated.append(out)
+    src = f'{TPL_DIR}/COOLCOURIERS.xlsx'
+    dst = f'{OUT_DIR}/{DATE_STR}_COOLCOURIERS.xlsx'
+    shutil.copy(src, dst)
+    wb = load_workbook(dst)
+    ws = wb['jobs']
+    cc = courier_orders('COOLCOURIERS')
+    for ri, onum in enumerate(sorted(cc.keys()), 2):
+        ords = cc[onum]; r0 = ords[0]
+        ws.cell(ri,1).value  = onum
+        ws.cell(ri,2).value  = today
+        ws.cell(ri,3).value  = 'Business'
+        ws.cell(ri,4).value  = r0.get('Customer','')
+        ws.cell(ri,5).value  = r0.get('CustomerAddress1','')
+        ws.cell(ri,6).value  = r0.get('CustomerAddress2','')
+        try: ws.cell(ri,7).value = int(r0.get('Postcode',0))
+        except: ws.cell(ri,7).value = r0.get('Postcode','')
+        ws.cell(ri,8).value  = r0.get('CustomerSuburb','')
+        ws.cell(ri,9).value  = r0.get('CustomerState','')
+        ws.cell(ri,10).value = r0.get('Notes','')
+        ws.cell(ri,11).value = 'WS'
+        ws.cell(ri,12).value = total_cartons(ords)
+    wb.save(dst); generated.append(dst)
+    print(f'✅ COOLCOURIERS — {len(cc)} orders', file=sys.stderr)
 
-# ── 4. PRODUCTION SHEET ─────────────────────────────────
+# ══════════════════════════════════════════════
+# 4. PRODUCTION SHEET
+# Uses insert_rows() to make space — handles any volume
+# ══════════════════════════════════════════════
 if GEN_TYPE in ('production','all'):
-    t = tpl('Production_Sheet.xlsx')
-    out = os.path.join(OUT_DIR, DATE_STR + '_Production_Sheet.xlsx')
-    SKUS_350=['Antiox 350ml','Blueberry Glow 350ml','Botanical 350ml','Cloudy Apple 350ml','Energise 350ml','Immunity 350ml','Pure Orange 350ml','Refresh 350ml','Roots 350ml','Tropical Bliss 350ml']
-    SKUS_TEA=['Organic Lemon Iced Tea 350ml','Organic Peach Iced Tea 350ml','Organic Raspberry Iced Tea 350ml']
-    SKUS_1L=['Botanical 1L','Immunity 1L','Tropical Bliss 1L']
-    wb = Workbook(); ws = wb.active
-    def write_section(sr, skus, pf, lv, pv):
-        ws.cell(sr,1).value=f'{pv} Orders'; ws.cell(sr,1).font=Font(bold=True,name='Calibri',size=16)
-        ws.cell(sr,15).value='LABELS'; ws.cell(sr,16).value=lv
-        ws.cell(sr+1,15).value='CUSTOMERGROUP'; ws.cell(sr+1,16).value='REGULAR'
-        ws.cell(sr+2,1).value='Labelling Date:'; ws.cell(sr+2,4).value='Staff Working:'
-        ws.cell(sr+2,15).value='PRODUCT'; ws.cell(sr+2,16).value=pv
-        ws.cell(sr+4,4).value='Batch Number:'
-        hrow=sr+5; hdrs=['Courier','Order Number','Customer ID','Customer']+skus+['Grand Total','Cartons']
-        for ci,h in enumerate(hdrs,1): c=ws.cell(hrow,ci,h); c.font=BOLD; c.fill=GREY
-        cd=defaultdict(list)
-        for onum,ords in sorted(by_order.items()):
-            pr=[r for r in ords if r.get('Product')==pf]
-            if not pr: continue
-            r0=ords[0]; sq={r['Name']:int(r.get('Quantity',0)) for r in pr}
-            tq=sum(sq.values()); tc=math.ceil(tq/(24 if pf=='350' else 18 if pf=='TEA' else 12))
-            cd[r0.get('Courier','')].append((r0.get('Courier',''),onum,r0.get('CustomerId',''),r0.get('Customer',''),sq,tq,tc))
-        dr=hrow+1; gt=defaultdict(int); gc=0
-        for cour in sorted(cd.keys()):
-            items=cd[cour]; cst=defaultdict(int); cqt=0; cct=0
-            for (_,onum,cid,cust,sq,tq,tc) in items:
-                ws.cell(dr,1).value=cour; ws.cell(dr,2).value=onum; ws.cell(dr,3).value=cid; ws.cell(dr,4).value=cust
-                for ci,sku in enumerate(skus,5):
-                    q=sq.get(sku,0)
-                    if q: ws.cell(dr,ci).value=q; cst[sku]+=q; gt[sku]+=q
-                ws.cell(dr,5+len(skus)).value=tq; ws.cell(dr,6+len(skus)).value=tc
-                cqt+=tq; cct+=tc; gc+=tc; dr+=1
-            ws.cell(dr,4).value=f'{cour} TOTAL'; ws.cell(dr,4).font=BOLD
-            for ci,sku in enumerate(skus,5):
-                if cst[sku]: c=ws.cell(dr,ci,cst[sku]); c.font=BOLD
-            ws.cell(dr,5+len(skus)).value=cqt; ws.cell(dr,5+len(skus)).font=BOLD
-            ws.cell(dr,6+len(skus)).value=cct; ws.cell(dr,6+len(skus)).font=BOLD; dr+=1
-        ws.cell(dr,4).value='Grand Total'; ws.cell(dr,4).font=BOLD; ws.cell(dr,4).fill=GREY
-        for ci,sku in enumerate(skus,5):
-            if gt[sku]: c=ws.cell(dr,ci,gt[sku]); c.font=BOLD; c.fill=GREY
-        s=sum(gt.values()); c1=ws.cell(dr,5+len(skus),s); c1.font=BOLD; c1.fill=GREY
-        c2=ws.cell(dr,6+len(skus),gc); c2.font=BOLD; c2.fill=GREY; dr+=1
-        ws.cell(dr,1).value='Discrepancies:'; ws.cell(dr+1,1).value='Discrepancies Sent to Sophie?'; ws.cell(dr+1,4).value=False
-        return dr+3
-    nr=write_section(3,SKUS_350,'350','WHITE','350ml')
-    nr=write_section(nr,SKUS_TEA,'TEA','CLEAR','Tea')
-    nr=write_section(nr,SKUS_1L,'1L','WHITE','1L')
-    wb.save(out); generated.append(out)
+    src = f'{TPL_DIR}/Production_Sheet.xlsx'
+    dst = f'{OUT_DIR}/{DATE_STR}_Production_Sheet.xlsx'
+    shutil.copy(src, dst)
+    wb = load_workbook(dst)
+    ws = wb['Sheet1']
 
-# ── 5. PRINT FILES (clone templates, write only data cols) ───────
+    # Update date row 1
+    from datetime import date as _date
+    d = _date.today()
+    suffix = 'th' if 11<=d.day<=13 else {1:'st',2:'nd',3:'rd'}.get(d.day%10,'th')
+    ws.cell(1,1).value = f"{d.strftime('%A')} - {d.day}{suffix} {d.strftime('%B %Y')}"
+
+    SKUS_350 = ['Antiox 350ml','Blueberry Glow 350ml','Botanical 350ml','Cloudy Apple 350ml',
+                'Energise 350ml','Immunity 350ml','Pure Orange 350ml','Refresh 350ml',
+                'Roots 350ml','Tropical Bliss 350ml']
+    SKUS_TEA = ['Organic Lemon Iced Tea 350ml','Organic Peach Iced Tea 350ml','Organic Raspberry Iced Tea 350ml']
+    SKUS_1L  = ['Botanical 1L','Immunity 1L','Tropical Bliss 1L']
+
+    def build_section_rows(skus, product_filter):
+        """Build list of row dicts for this product section — couriers sorted, with subtotals + grand total."""
+        couriers_data = defaultdict(list)
+        for onum, ords in sorted(by_order.items()):
+            pr = [r for r in ords if r.get('Product') == product_filter]
+            if not pr: continue
+            r0 = ords[0]
+            sq = defaultdict(int)
+            for r in pr: sq[r['Name']] += int(r.get('Quantity', 0) or 0)
+            total_qty = sum(sq.values())
+            tot_crt = math.ceil(total_qty / (24 if product_filter=='350' else 18 if product_filter=='TEA' else 12))
+            couriers_data[r0.get('Courier','')].append({
+                'courier': r0.get('Courier',''), 'onum': onum,
+                'cid': r0.get('CustomerId',''), 'cust': r0.get('Customer',''),
+                'sq': dict(sq), 'tq': total_qty, 'tc': tot_crt
+            })
+
+        out_rows = []  # list of (is_subtotal, is_grandtotal, data_dict)
+        grand_totals = defaultdict(int)
+        grand_cartons = 0
+
+        for courier in sorted(couriers_data.keys()):
+            items = couriers_data[courier]
+            cst = defaultdict(int); cqt = 0; cct = 0
+            for it in items:
+                out_rows.append(('data', it))
+                for sku in skus: cst[sku] += it['sq'].get(sku, 0); grand_totals[sku] += it['sq'].get(sku, 0)
+                cqt += it['tq']; cct += it['tc']; grand_cartons += it['tc']
+            out_rows.append(('subtotal', {'courier': courier, 'cst': dict(cst), 'cqt': cqt, 'cct': cct}))
+
+        out_rows.append(('grandtotal', {'grand_totals': dict(grand_totals), 'grand_cartons': grand_cartons}))
+        return out_rows
+
+    def write_section(ws, hrow, skus, product_filter):
+        """
+        Find existing data rows between hrow+1 and Discrepancies row.
+        Delete them all, insert exactly as many as needed, then write data.
+        This handles any volume correctly.
+        """
+        # Find the Discrepancies row for THIS section (first one after hrow)
+        disc_row = None
+        for r in range(hrow + 1, ws.max_row + 2):
+            v = ws.cell(r, 1).value
+            if v == 'Discrepancies:':
+                disc_row = r; break
+
+        if disc_row is None:
+            print(f'  WARNING: no Discrepancies row found after row {hrow}', file=sys.stderr)
+            return
+
+        # Build the data we need to write
+        section_rows = build_section_rows(skus, product_filter)
+        rows_needed = len(section_rows)
+
+        # How many data rows exist currently between header and Discrepancies?
+        existing_data_rows = disc_row - hrow - 1  # rows hrow+1 .. disc_row-1
+
+        print(f'  Section at row {hrow}: {existing_data_rows} existing rows, need {rows_needed}', file=sys.stderr)
+
+        if rows_needed > existing_data_rows:
+            # Need to insert rows — insert at disc_row to push Discrepancies (and everything below) down
+            insert_count = rows_needed - existing_data_rows
+            ws.insert_rows(disc_row, insert_count)
+            print(f'  Inserted {insert_count} rows before row {disc_row}', file=sys.stderr)
+            disc_row += insert_count  # disc_row has moved down
+        elif rows_needed < existing_data_rows:
+            # Delete surplus rows
+            delete_count = existing_data_rows - rows_needed
+            ws.delete_rows(hrow + 1, delete_count)
+            print(f'  Deleted {delete_count} surplus rows', file=sys.stderr)
+            disc_row -= delete_count
+
+        # Now write exactly rows_needed rows starting at hrow+1
+        for i, (rtype, rdata) in enumerate(section_rows):
+            r = hrow + 1 + i
+            # Clear the row first
+            for c in range(1, 17): ws.cell(r, c).value = None
+
+            if rtype == 'data':
+                ws.cell(r, 1).value = rdata['courier']
+                ws.cell(r, 2).value = rdata['onum']
+                ws.cell(r, 3).value = rdata['cid']
+                ws.cell(r, 4).value = rdata['cust']
+                for ci, sku in enumerate(skus, 5):
+                    q = rdata['sq'].get(sku, 0)
+                    if q: ws.cell(r, ci).value = q
+                ws.cell(r, 5 + len(skus)).value = rdata['tq']
+                ws.cell(r, 6 + len(skus)).value = rdata['tc']
+
+            elif rtype == 'subtotal':
+                ws.cell(r, 4).value = 'Total'; ws.cell(r, 4).font = BOLD
+                for ci, sku in enumerate(skus, 5):
+                    v = rdata['cst'].get(sku, 0)
+                    if v: ws.cell(r, ci).value = v; ws.cell(r, ci).font = BOLD
+                ws.cell(r, 5 + len(skus)).value = rdata['cqt']; ws.cell(r, 5 + len(skus)).font = BOLD
+                ws.cell(r, 6 + len(skus)).value = rdata['cct']; ws.cell(r, 6 + len(skus)).font = BOLD
+
+            elif rtype == 'grandtotal':
+                ws.cell(r, 4).value = 'Grand Total'; ws.cell(r, 4).font = BOLD; ws.cell(r, 4).fill = GREY
+                for ci, sku in enumerate(skus, 5):
+                    v = rdata['grand_totals'].get(sku, 0)
+                    if v: ws.cell(r, ci).value = v; ws.cell(r, ci).font = BOLD; ws.cell(r, ci).fill = GREY
+                gt = sum(rdata['grand_totals'].values())
+                ws.cell(r, 5 + len(skus)).value = gt; ws.cell(r, 5 + len(skus)).font = BOLD; ws.cell(r, 5 + len(skus)).fill = GREY
+                ws.cell(r, 6 + len(skus)).value = rdata['grand_cartons']; ws.cell(r, 6 + len(skus)).font = BOLD; ws.cell(r, 6 + len(skus)).fill = GREY
+
+    # Find section headers dynamically
+    courier_rows = []
+    for row in ws.iter_rows(min_row=1, max_row=ws.max_row):
+        if row[0].value == 'Courier': courier_rows.append(row[0].row)
+
+    if len(courier_rows) >= 3:
+        # Write sections in REVERSE order so insert_rows doesn't shift subsequent section positions
+        write_section(ws, courier_rows[2], SKUS_1L,  '1L')
+        write_section(ws, courier_rows[1], SKUS_TEA, 'TEA')
+        write_section(ws, courier_rows[0], SKUS_350, '350')
+    else:
+        print(f'  ERROR: only found {len(courier_rows)} Courier header rows', file=sys.stderr)
+
+    wb.save(dst); generated.append(dst)
+    print(f'✅ Production_Sheet', file=sys.stderr)
+
+# ══════════════════════════════════════════════
+# 5 & 6. PRINT FILES — clone templates, write only cols A,C,D,E,F
+#         Col B has formulas — DO NOT TOUCH
+#         Use insert_rows to handle any volume
+# ══════════════════════════════════════════════
 if GEN_TYPE in ('prints','all'):
     sr = sorted(rows, key=lambda r:(r.get('Courier',''),r.get('Customer',''),r.get('OrderNumber',''),r.get('SKU','')))
-    r350=[r for r in sr if r.get('Product')=='350']
-    rtea=[r for r in sr if r.get('Product')=='TEA']
-    r1l =[r for r in sr if r.get('Product')=='1L']
+    r350 = [r for r in sr if r.get('Product')=='350']
+    rtea = [r for r in sr if r.get('Product')=='TEA']
+    r1l  = [r for r in sr if r.get('Product')=='1L']
 
-    def fill_fronts(tpl_name, data, out_name, blank_copies):
-        t = tpl(tpl_name); out = os.path.join(OUT_DIR, DATE_STR + '_' + out_name)
-        if t:
-            shutil.copy(t, out)
-            wb = load_workbook(out); ws = wb['FRONTS']
-            # Clear existing data rows (keep row 1 headers, row 2 blank, leave formulas)
-            # We only update: col A (order#), col C (SKU), col D (copies), col E (customer), col F (cust ID)
-            # Row 2 = top BLANK
-            ws.cell(2,1).value = 1; ws.cell(2,3).value = 'BLANK'; ws.cell(2,4).value = blank_copies; ws.cell(2,5).value = None; ws.cell(2,6).value = 'BLANK'
-            n = 2
-            for di, r in enumerate(data, 3):
-                n += 1
-                ws.cell(di,1).value = n; ws.cell(di,3).value = r.get('SKU','')
-                ws.cell(di,4).value = int(r.get('Quantity',0))
-                ws.cell(di,5).value = r.get('Customer',''); ws.cell(di,6).value = r.get('CustomerId','')
-            # Final BLANK row
-            n += 1; last = len(data)+3
-            ws.cell(last,1).value = n; ws.cell(last,3).value = 'BLANK'; ws.cell(last,4).value = blank_copies; ws.cell(last,5).value = None; ws.cell(last,6).value = 'BLANK'
-            # Clear any extra rows beyond our data
-            for ri in range(len(data)+4, ws.max_row+1):
-                for ci in [1,3,4,5,6]: ws.cell(ri,ci).value = None
+    def write_print(tpl_name, sheet_name, data_rows, is_backs):
+        src = f'{TPL_DIR}/{tpl_name}'
+        dst = f'{OUT_DIR}/{DATE_STR}_{tpl_name}'
+        shutil.copy(src, dst)
+        wb = load_workbook(dst)
+        ws = wb[sheet_name]
+
+        copies_blank = 24 if '350' in tpl_name else 18 if 'Tea' in tpl_name else 12
+
+        # How many data rows currently exist (row 2 onwards, before the final blank row)
+        # Template has: row1=headers, row2=top BLANK, rows 3..N-1=data, rowN=bottom BLANK
+        existing_total = ws.max_row - 1  # excluding header row 1
+        # We need: 1 top blank + len(data_rows) data rows + 1 bottom blank
+        rows_needed = len(data_rows) + 2
+
+        if rows_needed > existing_total:
+            # Insert rows after row 2 (after top blank), pushing everything down
+            insert_count = rows_needed - existing_total
+            ws.insert_rows(3, insert_count)
+            print(f'  {tpl_name}: inserted {insert_count} rows ({existing_total}→{rows_needed})', file=sys.stderr)
+        elif rows_needed < existing_total:
+            delete_count = existing_total - rows_needed
+            ws.delete_rows(3, delete_count)
+            print(f'  {tpl_name}: deleted {delete_count} rows ({existing_total}→{rows_needed})', file=sys.stderr)
+
+        # Clear all data cols (not col B — formula) from row 2 to end
+        for r in range(2, ws.max_row + 1):
+            for c in [1, 3, 4, 5, 6]:
+                ws.cell(r, c).value = None
+
+        if is_backs:
+            n = rows_needed
+            # Top blank
+            ws.cell(2,1).value=n; ws.cell(2,3).value='BLANK'; ws.cell(2,4).value=copies_blank; ws.cell(2,5).value=''; ws.cell(2,6).value='BLANK'; n-=1
+            # Data rows
+            for di, r in enumerate(data_rows, 3):
+                bl = r.get('BackLabels','BACKS')
+                ws.cell(di,1).value=n; ws.cell(di,3).value=r['SKU']
+                ws.cell(di,4).value=int(r.get('Quantity',0) or 0)
+                ws.cell(di,5).value=r.get('Customer',''); ws.cell(di,6).value=bl; n-=1
+            # Bottom blank
+            last = 2 + len(data_rows) + 1
+            ws.cell(last,1).value=n; ws.cell(last,3).value='BLANK'; ws.cell(last,4).value=copies_blank; ws.cell(last,5).value=''; ws.cell(last,6).value='BLANK'
         else:
-            wb = Workbook(); ws = wb.active; ws.title='FRONTS'
-            hdrs=['Order','#file','SKU','#copies','Customer','Customer ID','.PDF','CODE','#pages','#papersize','#duplex','#orientation','#trayname']
-            for ci,h in enumerate(hdrs,1): c=ws.cell(1,ci,h); c.font=BOLD; c.fill=GREY
-            n=1; ws.cell(2,1).value=n; ws.cell(2,3).value='BLANK'; ws.cell(2,4).value=blank_copies; ws.cell(2,6).value='BLANK'; n+=1
-            for di,r in enumerate(data,3):
-                ws.cell(di,1).value=n; ws.cell(di,3).value=r.get('SKU','')
-                ws.cell(di,4).value=int(r.get('Quantity',0)); ws.cell(di,5).value=r.get('Customer','')
-                ws.cell(di,6).value=r.get('CustomerId',''); ws.cell(di,7).value='.PDF'; n+=1
-            last=len(data)+3; ws.cell(last,1).value=n; ws.cell(last,3).value='BLANK'; ws.cell(last,4).value=blank_copies; ws.cell(last,6).value='BLANK'
-        wb.save(out); generated.append(out)
+            n = 1
+            # Top blank
+            ws.cell(2,1).value=n; ws.cell(2,3).value='BLANK'; ws.cell(2,4).value=copies_blank; ws.cell(2,5).value=''; ws.cell(2,6).value='BLANK'; n+=1
+            # Data rows
+            for di, r in enumerate(data_rows, 3):
+                ws.cell(di,1).value=n; ws.cell(di,3).value=r['SKU']
+                ws.cell(di,4).value=int(r.get('Quantity',0) or 0)
+                ws.cell(di,5).value=r.get('Customer',''); ws.cell(di,6).value=r.get('CustomerId',''); n+=1
+            # Bottom blank
+            last = 2 + len(data_rows) + 1
+            ws.cell(last,1).value=n; ws.cell(last,3).value='BLANK'; ws.cell(last,4).value=copies_blank; ws.cell(last,5).value=''; ws.cell(last,6).value='BLANK'
 
-    def fill_backs(tpl_name, data, out_name, blank_copies):
-        t = tpl(tpl_name); out = os.path.join(OUT_DIR, DATE_STR + '_' + out_name)
-        total = len(data) + 2
-        if t:
-            shutil.copy(t, out)
-            wb = load_workbook(out); ws = wb['BACKS']
-            n = total
-            ws.cell(2,1).value=n; ws.cell(2,3).value='BLANK'; ws.cell(2,4).value=blank_copies; ws.cell(2,5).value=None; ws.cell(2,6).value='BLANK'; n-=1
-            for di,r in enumerate(data,3):
-                bl=r.get('BackLabels','BACKS')
-                ws.cell(di,1).value=n; ws.cell(di,3).value=r.get('SKU','')
-                ws.cell(di,4).value=int(r.get('Quantity',0)); ws.cell(di,5).value=r.get('Customer','')
-                ws.cell(di,6).value=bl; n-=1
-            last=len(data)+3; ws.cell(last,1).value=n; ws.cell(last,3).value='BLANK'; ws.cell(last,4).value=blank_copies; ws.cell(last,5).value=None; ws.cell(last,6).value='BLANK'
-            for ri in range(len(data)+4, ws.max_row+1):
-                for ci in [1,3,4,5,6]: ws.cell(ri,ci).value = None
-        else:
-            wb = Workbook(); ws = wb.active; ws.title='BACKS'
-            hdrs=['Order','#file','SKU','#copies','Customer','Customer ID','.PDF','CODE','#pages','#papersize','#duplex','#orientation','#trayname']
-            for ci,h in enumerate(hdrs,1): c=ws.cell(1,ci,h); c.font=BOLD; c.fill=GREY
-            n=total; ws.cell(2,1).value=n; ws.cell(2,3).value='BLANK'; ws.cell(2,4).value=blank_copies; ws.cell(2,6).value='BLANK'; n-=1
-            for di,r in enumerate(data,3):
-                bl=r.get('BackLabels','BACKS'); ws.cell(di,1).value=n; ws.cell(di,3).value=r.get('SKU','')
-                ws.cell(di,4).value=int(r.get('Quantity',0)); ws.cell(di,5).value=r.get('Customer','')
-                ws.cell(di,6).value=bl; ws.cell(di,7).value='.PDF'; n-=1
-            last=len(data)+3; ws.cell(last,1).value=n; ws.cell(last,3).value='BLANK'; ws.cell(last,4).value=blank_copies; ws.cell(last,6).value='BLANK'
-        wb.save(out); generated.append(out)
+        wb.save(dst); generated.append(dst)
+        print(f'✅ {tpl_name} — {len(data_rows)} lines', file=sys.stderr)
 
-    fill_fronts('350ml_Fronts.xlsx', r350, '350ml_Fronts.xlsx', 24)
-    fill_backs ('350ml_Backs.xlsx',  r350, '350ml_Backs.xlsx',  24)
-    fill_fronts('Tea_Fronts.xlsx',   rtea, 'Tea_Fronts.xlsx',   18)
-    fill_backs ('Tea_Backs.xlsx',    rtea, 'Tea_Backs.xlsx',    18)
-    fill_fronts('1L_Fronts.xlsx',    r1l,  '1L_Fronts.xlsx',    12)
+    write_print('350ml_Fronts.xlsx', 'FRONTS', r350, False)
+    write_print('350ml_Backs.xlsx',  'BACKS',  r350, True)
+    write_print('Tea_Fronts.xlsx',   'FRONTS', rtea, False)
+    write_print('Tea_Backs.xlsx',    'BACKS',  rtea, True)
+    write_print('1L_Fronts.xlsx',    'FRONTS', r1l,  False)
 
-# ── ZIP ──────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════
+# ZIP
+# ══════════════════════════════════════════════
 if GEN_TYPE == 'all':
-    zp = os.path.join(OUT_DIR, DATE_STR + '_Wholesale_State_Files.zip')
-    with zipfile.ZipFile(zp,'w',zipfile.ZIP_DEFLATED) as z:
+    zip_path = f'{OUT_DIR}/{DATE_STR}_Wholesale_State_Files.zip'
+    with zipfile.ZipFile(zip_path,'w',zipfile.ZIP_DEFLATED) as z:
         for fp in generated: z.write(fp, os.path.basename(fp))
-    print(json.dumps({'zip': zp, 'files': [os.path.basename(f) for f in generated]}))
+    print(json.dumps({'zip': zip_path, 'files': [os.path.basename(f) for f in generated]}))
 else:
     print(json.dumps({'files': [os.path.basename(f) for f in generated], 'paths': generated}))
 `;
