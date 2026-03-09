@@ -4,6 +4,8 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Wholesale State</title>
+  <!-- JSZip for client-side ZIP extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- React -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1005,10 +1007,29 @@ function App(){
         totalOrders:allOrderNums.length,
         specialOrders:specialOrderNums.length,
         manifests,
+        hasCsv:true,
       };
       const updated=[...snapshots.filter(s=>s.dateKey!==dk),snap].sort((a,b)=>new Date(b.uploadedAt)-new Date(a.uploadedAt)).slice(0,90);
       setSnapshots(updated);
       try{await window.storage.set("ws-snaps",JSON.stringify(updated));}catch(e){}
+      // Store raw CSV text separately keyed by dateKey (small, ~100KB each)
+      try{await window.storage.set("ws-csv-"+dk, e.target.result);}catch(err){console.warn("CSV store failed:",err);}
+      // Silent background: generate full ZIP and store as base64
+      (async()=>{
+        try{
+          const d2=dk.split("/").reverse().join("-");
+          const res=await apiFetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({csvData:e.target.result,type:"all",dateStr:d2})});
+          if(!res.ok) return;
+          const blob=await res.blob();
+          const ab=await blob.arrayBuffer();
+          const ua=new Uint8Array(ab);
+          let b64="";
+          for(let i=0;i<ua.length;i+=8192){b64+=String.fromCharCode(...ua.subarray(i,i+8192));}
+          b64=btoa(b64);
+          await window.storage.set("ws-zip-"+dk, b64);
+          console.log("Background ZIP stored for",dk);
+        }catch(err){console.warn("Background ZIP failed:",err);}
+      })();
     };
     r.readAsText(file);
   },[snapshots]);
@@ -1271,7 +1292,7 @@ function App(){
                   const totalBottles=Object.values(pd.skuTotals).reduce((s,q)=>s+q,0);
                   return(
                     <div key={pd.id} style={{marginTop:14,background:T.amberL,border:`1.5px solid ${T.amberB}`,borderRadius:12,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-                      <div>
+                      <div style={{flex:1,minWidth:0}}>
                         <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:12,color:T.amber,letterSpacing:.3,marginBottom:2}}>📦 PENDING STOCK DRAWDOWN</div>
                         <div style={{fontSize:12,color:T.inkM}}>{pd.orderDateLabel||pd.csvName} · <strong>{totalBottles.toLocaleString()} bottles</strong></div>
                       </div>
@@ -1279,6 +1300,9 @@ function App(){
                         style={{flexShrink:0,padding:"8px 16px",borderRadius:9,border:"none",background:T.amber,color:"#fff",fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:11,cursor:"pointer",whiteSpace:"nowrap"}}>
                         ✅ Apply Drawdown
                       </button>
+                      <button onClick={()=>{setPendingDrawdowns(prev=>{const updated=prev.filter(p=>p.id!==pd.id);window.storage.set("ws-pending-drawdowns",JSON.stringify(updated)).catch(()=>{});return updated;});}}
+                        style={{flexShrink:0,width:28,height:28,borderRadius:7,border:`1.5px solid ${T.amberB}`,background:"none",color:T.amber,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}
+                        title="Dismiss">✕</button>
                     </div>
                   );
                 })}
@@ -1429,44 +1453,75 @@ function App(){
                                   style={{flexShrink:0,padding:"9px 20px",borderRadius:10,border:`2px solid ${m.dispatched?T.sage:T.terra}`,background:m.dispatched?T.sage:T.white,color:m.dispatched?"#fff":T.terra,fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"all .15s",letterSpacing:.3,whiteSpace:"nowrap"}}>
                                   {m.dispatched?"✓  Manifest Sent":"Mark as Sent"}
                                 </button>
+                              
                               </div>
                             ))}
                           </div>
                         ):(
                           <div style={{padding:"16px 22px",fontSize:12,color:T.inkL,fontStyle:"italic"}}>
-                            Re-upload this CSV to enable manifest tracking.
+                            Re-upload this CSV on the Generate tab to re-enable manifest downloads.
                           </div>
                         )}
 
-                        {/* ── Generated files archive ── */}
-                        {(snap.generatedFiles||[]).length>0&&(()=>{
-                          const gf=snap.generatedFiles;
-                          const prod=gf.filter(f=>f.includes("Production_Sheet"));
-                          const courier=gf.filter(f=>f.includes("COLDXPRESS")||f.includes("DK_DIST")||f.includes("COOLCOURIERS"));
-                          const prints=gf.filter(f=>f.includes("Fronts")||f.includes("Backs"));
+                        {/* ── Re-download archive ── */}
+                        {snap.hasCsv&&(()=>{
+                          const d2=snap.dateKey?snap.dateKey.split("/").reverse().join("-"):"";
+                          const b64ToU8=(b64)=>{const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;};
+                          const dlFromZip=async(zipFilename,outFilename)=>{
+                            try{
+                              const stored=await window.storage.get("ws-zip-"+snap.dateKey);
+                              if(!stored){alert("Files not ready yet — please wait a moment after uploading, then try again.");return;}
+                              const zip=await JSZip.loadAsync(b64ToU8(stored.value));
+                              const file=zip.file(zipFilename);
+                              if(!file){alert(`${zipFilename} not found in archive.`);return;}
+                              const blob=new Blob([await file.async("uint8array")],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+                              const url=URL.createObjectURL(blob);
+                              const a=document.createElement("a");a.href=url;a.download=outFilename||zipFilename;
+                              document.body.appendChild(a);a.click();
+                              setTimeout(()=>{URL.revokeObjectURL(url);document.body.removeChild(a);},1000);
+                            }catch(e){alert("Download failed: "+e.message);}
+                          };
+                          const dlFullZip=async()=>{
+                            try{
+                              const stored=await window.storage.get("ws-zip-"+snap.dateKey);
+                              if(!stored){alert("Files not ready yet — please wait a moment after uploading, then try again.");return;}
+                              const blob=new Blob([b64ToU8(stored.value)],{type:"application/zip"});
+                              const url=URL.createObjectURL(blob);
+                              const a=document.createElement("a");a.href=url;a.download=`${d2}_Wholesale_State_Files.zip`;
+                              document.body.appendChild(a);a.click();
+                              setTimeout(()=>{URL.revokeObjectURL(url);document.body.removeChild(a);},1000);
+                            }catch(e){alert("Download failed: "+e.message);}
+                          };
+                          const dlCsv=async()=>{
+                            try{
+                              const stored=await window.storage.get("ws-csv-"+snap.dateKey);
+                              if(!stored){alert("CSV not found.");return;}
+                              const blob=new Blob([stored.value],{type:"text/csv"});
+                              const url=URL.createObjectURL(blob);
+                              const a=document.createElement("a");a.href=url;a.download=snap.fileName||"orders.csv";
+                              document.body.appendChild(a);a.click();
+                              setTimeout(()=>{URL.revokeObjectURL(url);document.body.removeChild(a);},1000);
+                            }catch(e){alert("Download failed: "+e.message);}
+                          };
+                          const couriers=(snap.manifests||[]);
+                          const COURIER_FILE={'COLDXPRESS':`${d2}_COLDXPRESS.xlsx`,'DKDISTRIBUTION':`${d2}_DK_DISTRIBUTIONS.xlsx`,'COOLCOURIERS':`${d2}_COOLCOURIERS.xlsx`};
+                          const btn=(onClick,icon,label)=>(
+                            <button onClick={onClick} style={{padding:"5px 12px",borderRadius:7,border:`1px solid ${T.border}`,background:T.white,color:T.inkM,fontSize:11,cursor:"pointer",fontFamily:"'Montserrat',sans-serif",fontWeight:600,display:"flex",alignItems:"center",gap:5,transition:"border-color .15s,color .15s"}}
+                              onMouseEnter={e=>{e.currentTarget.style.borderColor=T.terra;e.currentTarget.style.color=T.terra;}}
+                              onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.inkM;}}>
+                              {icon} {label}
+                            </button>
+                          );
                           return(
-                            <div style={{borderTop:`1px solid ${T.creamD}`,padding:"14px 22px",background:T.cream}}>
-                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:10}}>📁 GENERATED FILES</div>
-                              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                                {prod.map(f=>(
-                                  <div key={f} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 11px",borderRadius:8,background:T.white,border:`1px solid ${T.border}`,fontSize:11}}>
-                                    <span>🏭</span><span style={{fontFamily:"monospace",fontSize:10,color:T.ink}}>{f.replace(/^\d{2}-\d{2}-\d{4}_/,"")}</span>
-                                  </div>
-                                ))}
-                                {courier.map(f=>(
-                                  <div key={f} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 11px",borderRadius:8,background:T.white,border:`1px solid ${T.border}`,fontSize:11}}>
-                                    <span>{f.includes("COLD")?"❄️":f.includes("DK")?"🚚":"🧊"}</span><span style={{fontFamily:"monospace",fontSize:10,color:T.ink}}>{f.replace(/^\d{2}-\d{2}-\d{4}_/,"")}</span>
-                                  </div>
-                                ))}
-                                {prints.length>0&&(
-                                  <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 11px",borderRadius:8,background:T.white,border:`1px solid ${T.border}`,fontSize:11}}>
-                                    <span>🖨️</span>
-                                    <span style={{fontSize:11,color:T.inkM}}>{prints.length} print file{prints.length!==1?"s":""}</span>
-                                    <span style={{fontSize:10,color:T.inkL,fontFamily:"monospace"}}>({prints.map(f=>f.replace(/^\d{2}-\d{2}-\d{4}_/,"").replace(".xlsx","")).join(", ")})</span>
-                                  </div>
-                                )}
-                              </div>
-                              <div style={{marginTop:8,fontSize:11,color:T.inkL}}>Files generated on this date · re-download from the Generate tab</div>
+                            <div style={{borderTop:`1px solid ${T.creamD}`,padding:"11px 22px",background:T.cream,display:"flex",flexWrap:"wrap",alignItems:"center",gap:7}}>
+                              <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:.8,marginRight:2,flexShrink:0}}>↓ FILES</span>
+                              {couriers.map(m=>btn(()=>dlFromZip(COURIER_FILE[m.courier],COURIER_FILE[m.courier]),m.icon,m.label.replace(" Manifest","").replace(" Distributions","")))}
+                              {btn(()=>dlFromZip(`${d2}_Production_Sheet.xlsx`,`${d2}_Production_Sheet.xlsx`),"🏭","Production")}
+                              {btn(()=>dlFromZip(`${d2}_350ml_Fronts.xlsx`,`${d2}_350ml_Fronts.xlsx`),"🖨️","350ml")}
+                              {(snap.generatedFiles||[]).some(f=>f.includes("Tea_Fronts"))&&btn(()=>dlFromZip(`${d2}_Tea_Fronts.xlsx`,`${d2}_Tea_Fronts.xlsx`),"🍵","Tea")}
+                              {(snap.generatedFiles||[]).some(f=>f.includes("1L_Fronts"))&&btn(()=>dlFromZip(`${d2}_1L_Fronts.xlsx`,`${d2}_1L_Fronts.xlsx`),"🫙","1L")}
+                              {btn(dlCsv,"📄","CSV")}
+                              {btn(dlFullZip,"📦","All")}
                             </div>
                           );
                         })()}
