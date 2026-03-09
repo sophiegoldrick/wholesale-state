@@ -4,31 +4,39 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Wholesale State</title>
+  <!-- React -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Babel (JSX transpiler) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Recharts -->
   <script src="https://unpkg.com/recharts@2/umd/Recharts.js"></script>
+  <!-- XLSX -->
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <style>*{box-sizing:border-box;margin:0;padding:0;}body{background:#FAF8F5;}</style>
+  <!-- Storage API bridge: window.storage → REST API -->
   <script>
-    // Wire up window.storage to use the REST API
-    const getToken = () => localStorage.getItem('ws-token');
+    const _getToken = () => localStorage.getItem('ws-token');
     window.storage = {
       get: async (key) => {
         const res = await fetch('/api/store/' + key, {
-          headers: { Authorization: 'Bearer ' + getToken() }
+          headers: { Authorization: 'Bearer ' + _getToken() }
         });
         if (!res.ok) throw new Error('Not found');
         const d = await res.json();
+        // Always return value as a JSON string (matching original window.storage contract)
         return { value: typeof d.value === 'string' ? d.value : JSON.stringify(d.value) };
       },
       set: async (key, value) => {
-        const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+        let parsed;
+        try { parsed = typeof value === 'string' ? JSON.parse(value) : value; }
+        catch(e) { parsed = value; }
         await fetch('/api/store/' + key, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getToken() },
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _getToken() },
           body: JSON.stringify({ value: parsed })
         });
         return { value };
@@ -36,7 +44,7 @@
       delete: async (key) => {
         await fetch('/api/store/' + key, {
           method: 'DELETE',
-          headers: { Authorization: 'Bearer ' + getToken() }
+          headers: { Authorization: 'Bearer ' + _getToken() }
         });
         return { deleted: true };
       },
@@ -46,6 +54,1783 @@
 </head>
 <body>
   <div id="root"></div>
-  <script type="text/babel" src="/dashboard.jsx"></script>
+  <script type="text/babel">
+const { useState, useCallback, useRef, useEffect } = React;
+const { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } = window.Recharts || {};
+
+/* ── FONTS ── */
+if (!document.getElementById("ws-fonts")) {
+  const fl = document.createElement("link");
+  fl.id = "ws-fonts";
+  fl.rel = "stylesheet";
+  fl.href = "https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap";
+  document.head.appendChild(fl);
+}
+
+/* ── TOKENS ── */
+const T = {
+  cream:"#FEF9F5", creamD:"#FDF4EE", creamDD:"#F5EBE0",
+  terra:"#E07A5F", terraD:"#C4614A", terraL:"#FCEAE5",
+  sage:"#7BB87A",  sageD:"#5A9A59",  sageL:"#EDF7ED",
+  sand:"#C4A882",  sandL:"#F5EDE0",
+  ink:"#2D1B14",   inkM:"#6B4A3E",   inkL:"#A07A6E",
+  white:"#FFFFFF",
+  border:"#F0E4D8", borderM:"#E0C8B4",
+  amber:"#D97706", amberL:"#FFFBEB", amberB:"#FDE68A",
+  red:"#DC2626",   redL:"#FEF2F2",   redB:"#FECACA",
+  blue:"#2563EB",  blueL:"#EFF6FF",
+  teal:"#0D9488",  tealL:"#F0FDFA",
+};
+
+const CHART_COLORS = ["#E07A5F","#7BB87A","#C4A882","#6B9EC9","#D4749F","#A8C5DA","#F4C07A","#9BB87A","#E0A87A","#7ABFB8"];
+
+/* ── CSS ── */
+const CSS = `
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:${T.cream};color:${T.ink};font-family:'DM Sans',sans-serif;-webkit-font-smoothing:antialiased;font-size:14px}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:${T.creamD}}::-webkit-scrollbar-thumb{background:${T.border};border-radius:4px}
+.pf{font-family:'Montserrat',sans-serif;font-weight:800;letter-spacing:-.3px}
+.mt{font-family:'Montserrat',sans-serif}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spinA{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.fu{animation:fadeUp .35s cubic-bezier(.22,1,.36,1) both}
+.spin{display:inline-block;animation:spinA .7s linear infinite}
+.pulse{animation:pulse 2s ease infinite}
+@media print{
+  body{background:#fff!important}
+  #ws-app-shell{display:none!important}
+  #ws-print-stocktake{display:block!important}
+}
+#ws-print-stocktake{display:none}
+.card{background:${T.white};border:1px solid ${T.border};border-radius:16px;padding:24px}
+.card-sm{background:${T.white};border:1px solid ${T.border};border-radius:12px;padding:16px 18px}
+.tab-btn{background:none;border:none;cursor:pointer;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:600;padding:9px 14px;border-radius:8px;color:${T.inkL};transition:all .15s;letter-spacing:.4px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.tab-btn:hover{color:${T.ink};background:${T.creamDD}}
+.tab-btn.active{background:${T.terra};color:#fff}
+.btn-t{background:${T.terra};color:#fff;border:none;border-radius:10px;padding:10px 20px;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:7px;letter-spacing:.3px}
+.btn-t:hover{background:${T.terraD};transform:translateY(-1px);box-shadow:0 5px 16px rgba(224,122,95,.28)}
+.btn-t:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-o{background:none;border:1.5px solid ${T.border};border-radius:9px;padding:7px 15px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:600;cursor:pointer;color:${T.inkM};transition:all .15s}
+.btn-o:hover{border-color:${T.terra};color:${T.terra}}
+.btn-full{width:100%;padding:15px;border:none;border-radius:12px;background:linear-gradient(135deg,${T.terra},${T.terraD});color:#fff;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800;cursor:pointer;transition:all .18s;letter-spacing:.4px;display:flex;align-items:center;justify-content:center;gap:10px}
+.btn-full:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(224,122,95,.3)}
+.btn-full:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.upload-zone{border:2px dashed ${T.border};border-radius:18px;padding:48px 40px;text-align:center;cursor:pointer;transition:all .2s;background:${T.white}}
+.upload-zone:hover,.upload-zone.drag{border-color:${T.terra};background:${T.terraL}}
+input[type=file]{display:none}
+.gen-card{background:${T.white};border:1.5px solid ${T.border};border-radius:14px;padding:16px 18px;cursor:pointer;transition:all .17s;display:flex;align-items:center;gap:14px;width:100%;text-align:left}
+.gen-card:hover{border-color:${T.terra};box-shadow:0 4px 14px rgba(224,122,95,.1);transform:translateY(-1px)}
+.gen-card.done{border-color:${T.sage};background:${T.sageL}}
+.gen-card:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.tbl-head{display:grid;padding:10px 20px;background:${T.creamD};border-bottom:1px solid ${T.border}}
+.tbl-row{display:grid;padding:13px 20px;border-bottom:1px solid ${T.creamD};align-items:center;transition:background .1s}
+.tbl-row:hover{background:${T.creamD}}
+.tbl-row:last-child{border-bottom:none}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.2px;white-space:nowrap}
+.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.inp{background:${T.creamD};border:1px solid ${T.border};border-radius:8px;padding:8px 13px;font-family:'DM Sans',sans-serif;font-size:13px;color:${T.ink};outline:none;transition:border-color .15s}
+.inp:focus{border-color:${T.terra}}
+.inp::placeholder{color:${T.inkL}}
+.sel{background:${T.creamD};border:1px solid ${T.border};border-radius:7px;padding:4px 8px;font-size:12px;color:${T.ink};cursor:pointer;font-family:'DM Sans',sans-serif;outline:none}
+.chip{padding:5px 13px;border-radius:40px;border:1px solid ${T.border};background:${T.white};color:${T.inkL};font-size:11px;font-weight:600;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .12s;letter-spacing:.3px;white-space:nowrap}
+.chip:hover{border-color:${T.terra};color:${T.terra}}
+.chip.active{border-color:${T.terra};background:${T.terra};color:#fff}
+.modal-overlay{position:fixed;inset:0;background:rgba(45,27,20,.5);display:flex;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(5px)}
+.modal{background:${T.white};border-radius:20px;width:100%;max-width:620px;max-height:84vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(45,27,20,.2)}
+.sc{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:800;letter-spacing:-.5px;color:${T.ink};margin-bottom:5px}
+.ss{font-family:'Montserrat',sans-serif;font-size:11px;color:${T.inkL};letter-spacing:.5px}
+.rt{font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;color:${T.inkL};letter-spacing:1.4px;margin-bottom:14px}
+.stat-card{background:${T.white};border:1px solid ${T.border};border-radius:16px;padding:20px 22px;transition:all .15s;position:relative;overflow:hidden}
+.stat-card:hover{border-color:${T.terra}55;box-shadow:0 5px 18px rgba(224,122,95,.09);transform:translateY(-2px)}
+.rc{background:${T.white};border:1px solid ${T.border};border-radius:14px;padding:20px 22px;margin-bottom:16px}
+.ebadge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.7px;font-family:'Montserrat',sans-serif}
+`;
+
+/* ── XLSX ── */
+function ex(s){if(s==null)return"";return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+function cl(n){let s="";while(n>0){n--;s=String.fromCharCode(65+(n%26))+s;n=Math.floor(n/26)}return s}
+function buildXlsx(sheets){
+  const ss=[],sm={};const si=s=>{const k=String(s??'');if(sm[k]==null){sm[k]=ss.length;ss.push(k)}return sm[k]};
+  const st=[],stm={};const gs=(b,bg,a,w)=>{const k=`${b}|${bg}|${a}|${w}`;if(stm[k]==null){stm[k]=st.length;st.push({b,bg,a,w})}return stm[k]};
+  const sxml=sheets.map(sheet=>{
+    let x=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetData>`;
+    (sheet.rows||[]).forEach((row,ri)=>{
+      if(!row?.length)return;x+=`<row r="${ri+1}">`;
+      row.forEach((cell,ci)=>{
+        if(cell==null||(cell.v==null&&cell.v!==0))return;
+        const addr=cl(ci+1)+(ri+1),s=gs(cell.bold,cell.bg,cell.align,cell.wrap);
+        if(cell.t==='n'||typeof cell.v==='number')x+=`<c r="${addr}" s="${s}" t="n"><v>${cell.v}</v></c>`;
+        else if(cell.t==='f')x+=`<c r="${addr}" s="${s}"><f>${ex(cell.v)}</f></c>`;
+        else x+=`<c r="${addr}" s="${s}" t="s"><v>${si(cell.v)}</v></c>`;
+      });x+=`</row>`;
+    });
+    x+=`</sheetData>`;
+    if(sheet.colWidths){x+=`<cols>`;sheet.colWidths.forEach((w,i)=>{if(w)x+=`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`});x+=`</cols>`}
+    x+=`</worksheet>`;return x;
+  });
+  const sty=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="${st.length+1}"><font><sz val="11"/><name val="Arial"/></font>${st.map(s=>`<font>${s.b?'<b/>':''}<sz val="11"/><name val="Arial"/></font>`).join('')}</fonts><fills count="${st.length+2}"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>${st.map(s=>s.bg?`<fill><patternFill patternType="solid"><fgColor rgb="${s.bg}"/></patternFill></fill>`:`<fill><patternFill patternType="none"/></fill>`).join('')}</fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellXfs count="${st.length+1}"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>${st.map((s,i)=>{const aa=(s.a||s.w)?`<alignment horizontal="${s.a||'general'}" wrapText="${s.w?'1':'0'}"/>`:'';return`<xf numFmtId="0" fontId="${i+1}" fillId="${i+2}" borderId="0" applyFont="1" applyFill="1"${(s.a||s.w)?' applyAlignment="1"':''}>${aa}</xf>`}).join('')}</cellXfs></styleSheet>`;
+  const ssX=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${ss.length}" uniqueCount="${ss.length}">${ss.map(s=>`<si><t xml:space="preserve">${ex(s)}</t></si>`).join('')}</sst>`;
+  const wb=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s,i)=>`<sheet name="${ex(s.name)}" sheetId="${i+1}" r:id="rId${i+2}"/>`).join('')}</sheets></workbook>`;
+  const wbR=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId${sheets.length+2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>${sheets.map((s,i)=>`<Relationship Id="rId${i+2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}</Relationships>`;
+  const rR=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+  const ct=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/></Types>`;
+  return{wb,wbR,rR,ct,sty,ssX,sxml};
+}
+/* ── ZIP + XLSX (pure JS, no external deps) ── */
+function u8(s){return new TextEncoder().encode(s)}
+function mkZip(files){
+  // files: [{name:string, data:Uint8Array}]
+  function w16(b,o,v){b[o]=v&255;b[o+1]=(v>>8)&255}
+  function w32(b,o,v){b[o]=v&255;b[o+1]=(v>>8)&255;b[o+2]=(v>>16)&255;b[o+3]=(v>>24)&255}
+  function crc32(d){
+    if(!crc32.t){crc32.t=new Int32Array(256);for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=c&1?(c>>>1)^0xEDB88320:(c>>>1);crc32.t[i]=c}}
+    let c=-1;for(let i=0;i<d.length;i++)c=(c>>>8)^crc32.t[(c^d[i])&255];return(c^-1)>>>0;
+  }
+  const parts=[];
+  const entries=[];
+  let offset=0;
+  for(const f of files){
+    const nb=u8(f.name);
+    const crc=crc32(f.data);
+    const sz=f.data.length;
+    const lh=new Uint8Array(30+nb.length);
+    lh[0]=0x50;lh[1]=0x4B;lh[2]=0x03;lh[3]=0x04;
+    w16(lh,4,20);w16(lh,6,0);w16(lh,8,0);w32(lh,10,0);
+    w32(lh,14,crc);w32(lh,18,sz);w32(lh,22,sz);
+    w16(lh,26,nb.length);w16(lh,28,0);
+    lh.set(nb,30);
+    entries.push({nb,crc,sz,offset});
+    parts.push(lh);parts.push(f.data);
+    offset+=lh.length+sz;
+  }
+  const cdStart=offset;
+  for(const e of entries){
+    const ch=new Uint8Array(46+e.nb.length);
+    ch[0]=0x50;ch[1]=0x4B;ch[2]=0x01;ch[3]=0x02;
+    w16(ch,4,20);w16(ch,6,20);w16(ch,8,0);w16(ch,10,0);w32(ch,12,0);
+    w32(ch,16,e.crc);w32(ch,20,e.sz);w32(ch,24,e.sz);
+    w16(ch,28,e.nb.length);w16(ch,30,0);w16(ch,32,0);w16(ch,34,0);w16(ch,36,0);
+    w32(ch,38,0);w32(ch,42,e.offset);
+    ch.set(e.nb,46);
+    parts.push(ch);offset+=ch.length;
+  }
+  const cdSize=offset-cdStart;
+  const eocd=new Uint8Array(22);
+  eocd[0]=0x50;eocd[1]=0x4B;eocd[2]=0x05;eocd[3]=0x06;
+  w16(eocd,4,0);w16(eocd,6,0);
+  w16(eocd,8,files.length);w16(eocd,10,files.length);
+  w32(eocd,12,cdSize);w32(eocd,16,cdStart);
+  w16(eocd,20,0);
+  parts.push(eocd);
+  return new Blob(parts,{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+function dlXlsx(sheets,filename){
+  try{
+    const{wb,wbR,rR,ct,sty,ssX,sxml}=buildXlsx(sheets);
+    const blob=mkZip([
+      {name:"[Content_Types].xml",       data:u8(ct)},
+      {name:"_rels/.rels",               data:u8(rR)},
+      {name:"xl/workbook.xml",           data:u8(wb)},
+      {name:"xl/_rels/workbook.xml.rels",data:u8(wbR)},
+      {name:"xl/styles.xml",             data:u8(sty)},
+      {name:"xl/sharedStrings.xml",      data:u8(ssX)},
+      ...sxml.map((x,i)=>({name:`xl/worksheets/sheet${i+1}.xml`,data:u8(x)})),
+    ]);
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download=filename;
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
+  }catch(err){
+    alert("Export error: "+err.message);
+    console.error(err);
+  }
+}
+/* ── CSV ── */
+function parseCSV(text){
+  const lines=text.split(/\r?\n/).filter(Boolean);
+  if(lines.length<2)return[];
+  const headers=lines[0].split(",").map(h=>h.replace(/^"|"$/g,"").trim());
+  return lines.slice(1).map(line=>{
+    const vals=[];let inQ=false,cur="";
+    for(const ch of line){if(ch==='"'){inQ=!inQ}else if(ch===','&&!inQ){vals.push(cur);cur=""}else cur+=ch}
+    vals.push(cur);
+    const obj={};headers.forEach((h,i)=>obj[h]=(vals[i]||"").replace(/^"|"$/g,"").trim());
+    return obj;
+  });
+}
+const packSize=p=>p==="TEA"?18:p==="1L"?12:24;
+const cartons=(qty,p)=>Math.ceil((parseInt(qty)||0)/packSize(p));
+const totalC=rows=>rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product).reduce((s,r)=>s+cartons(r.Quantity,r.Product),0);
+const isPallet=r=>(r.CustomerVisibilityGroup&&r.CustomerVisibilityGroup.toUpperCase()!=="REGULAR"&&r.CustomerVisibilityGroup!=="")||(r.CustomerPriceGroup&&r.CustomerPriceGroup.toUpperCase()!=="REGULAR"&&r.CustomerPriceGroup!=="")||(r.Customergroup&&r.Customergroup.toUpperCase()!=="REGULAR"&&r.Customergroup!=="");
+
+/* ── ANALYTICS ── */
+function buildAnalytics(rows,prevIds=[]){
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Name&&r.Product);
+  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
+  const totalRevenue=nf.reduce((s,r)=>s+(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0),0);
+  const totalBottles=nf.reduce((s,r)=>s+(parseInt(r.Quantity)||0),0);
+  const totalOrders=Object.keys(om).length;
+  const avgOrderValue=totalOrders>0?totalRevenue/totalOrders:0;
+  const productTotals={};nf.forEach(r=>{productTotals[r.Name]=(productTotals[r.Name]||0)+(parseInt(r.Quantity)||0)});
+  const courierTotals={};
+  Object.values(om).forEach(or_=>{
+    const c=or_[0].Courier||"Unknown",st=or_[0].CustomerState||"?";
+    if(!courierTotals[c])courierTotals[c]={orders:0,bottles:0,revenue:0,states:new Set()};
+    courierTotals[c].orders++;courierTotals[c].states.add(st);
+    or_.forEach(r=>{courierTotals[c].bottles+=(parseInt(r.Quantity)||0);courierTotals[c].revenue+=(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0)});
+  });
+  const staffTotals={};
+  Object.values(om).forEach(or_=>{
+    const am=or_[0].AccountManager||"Unknown";
+    if(!staffTotals[am])staffTotals[am]={orders:0,revenue:0,customers:new Set()};
+    staffTotals[am].orders++;staffTotals[am].customers.add(or_[0].CustomerId);
+    or_.forEach(r=>staffTotals[am].revenue+=(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0));
+  });
+  const stateTotals={};
+  Object.values(om).forEach(or_=>{
+    const st=or_[0].CustomerState||"?";
+    if(!stateTotals[st])stateTotals[st]={orders:0,revenue:0};
+    stateTotals[st].orders++;
+    or_.forEach(r=>stateTotals[st].revenue+=(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0));
+  });
+  const allCustomerIds=[...new Set(nf.map(r=>r.CustomerId))];
+  const newCustomers=allCustomerIds.filter(id=>!prevIds.includes(id));
+  const returningCustomers=allCustomerIds.filter(id=>prevIds.includes(id));
+  return{totalRevenue,totalBottles,totalOrders,avgOrderValue,productTotals,courierTotals,staffTotals,stateTotals,allCustomerIds,newCustomers,returningCustomers,date:new Date().toLocaleDateString("en-AU")};
+}
+
+/* ── VALIDATION ── */
+function validate(rows){
+  const issues=[];
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT");
+  const pr=nf.filter(r=>r.Product);
+  const allONs=[...new Set(nf.map(r=>r.OrderNumber).filter(Boolean))];
+  const withProd=[...new Set(pr.map(r=>r.OrderNumber))];
+  allONs.forEach(on=>{if(!withProd.includes(on))issues.push({severity:"error",message:`Order ${on} has no product lines.`,rule:"MISSING_PRODUCTS"})});
+  const om={};pr.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
+  Object.entries(om).forEach(([on,or_])=>{
+    const r=or_[0];
+    if(!r.Customer?.trim())issues.push({severity:"error",message:`Order ${on}: Customer name missing.`,rule:"NO_CUSTOMER"});
+    if(!r.Courier?.trim())issues.push({severity:"error",message:`Order ${on} (${r.Customer}): No courier assigned.`,rule:"NO_COURIER"});
+    if(!r.CustomerAddress1?.trim())issues.push({severity:"error",message:`Order ${on} (${r.Customer}): Delivery address missing.`,rule:"NO_ADDRESS"});
+    if(!r.CustomerSuburb?.trim())issues.push({severity:"warning",message:`Order ${on} (${r.Customer}): Suburb missing.`,rule:"NO_SUBURB"});
+    if(!r.Postcode?.trim())issues.push({severity:"warning",message:`Order ${on} (${r.Customer}): Postcode missing.`,rule:"NO_POSTCODE"});
+  });
+  pr.forEach(r=>{const q=parseInt(r.Quantity);if(isNaN(q)||q<=0)issues.push({severity:"error",message:`Order ${r.OrderNumber}: "${r.Name}" invalid qty.`,rule:"BAD_QTY"})});
+  const omc={};pr.forEach(r=>{if(!omc[r.OrderNumber])omc[r.OrderNumber]=new Set();omc[r.OrderNumber].add(r.Customer)});
+  Object.entries(omc).forEach(([on,cs])=>{if(cs.size>1)issues.push({severity:"error",message:`Order ${on} linked to multiple customers.`,rule:"DUPE_ORDER"})});
+  return{issues,errors:issues.filter(i=>i.severity==="error"),warnings:issues.filter(i=>i.severity==="warning"),totalOrders:allONs.length,coveredOrders:withProd.length,canProceed:issues.filter(i=>i.severity==="error").length===0};
+}
+
+/* ── CELL HELPERS ── */
+const H=(v,b=true,bg="FFD3D3D3",a="center")=>({v,bold:b,bg,align:a});
+const Cv=(v,b=false,bg=null,a=null)=>({v,bold:b,bg,align:a});
+const N=(v,b=false)=>({v,t:'n',bold:b});
+const E=null;
+
+/* ── SHEET GENERATORS ── */
+function genProduction(rows,palletOnly=false){
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(palletOnly?isPallet(r):!isPallet(r)));
+  function section(sr,title,lc,prod){
+    if(!sr.length)return[];
+    const skus=[...new Set(sr.map(r=>r.Name))].sort();
+    const couriers=[...new Set(sr.map(r=>r.Courier))].sort();
+    const out=[];
+    out.push([{v:title,bold:true,bg:"FF1F4E79",align:"left"},E,E,E,E,E,E,E,E,E,E,E,E,E,{v:"LABELS",bold:true},{v:lc,bold:true}]);
+    out.push([E,E,E,E,E,E,E,E,E,E,E,E,E,E,{v:"CUSTOMERGROUP",bold:true},{v:palletOnly?"PALLET":"REGULAR",bold:true}]);
+    out.push([{v:"Labelling Date:",bold:true},E,E,{v:"Staff Working:",bold:true},E,E,E,E,E,E,E,E,E,E,{v:"PRODUCT",bold:true},{v:prod==="TEA"?"TEAS":prod,bold:true}]);
+    out.push([E]);out.push([E,E,E,{v:"Batch Number:",bold:true}]);
+    out.push([H("Courier"),H("OrderNumber"),H("CustomerId"),H("Customer"),...skus.map(s=>H(s)),H("Grand Total"),H("Cartons")]);
+    let gt={};skus.forEach(s=>gt[s]=0);let gtB=0,gtC=0;
+    couriers.forEach(c=>{
+      const cr=sr.filter(r=>r.Courier===c),omap={};
+      cr.forEach(r=>{if(!omap[r.OrderNumber])omap[r.OrderNumber]=[];omap[r.OrderNumber].push(r)});
+      let cB=0,cC=0,cT={};skus.forEach(s=>cT[s]=0);let first=true;
+      Object.entries(omap).forEach(([on,or_])=>{
+        const r=or_[0],sm={};or_.forEach(r=>sm[r.Name]=parseInt(r.Quantity)||0);
+        const rB=skus.reduce((s,k)=>s+(sm[k]||0),0),rC=totalC(or_);
+        out.push([first?{v:c,bold:true}:E,Cv(on),N(parseInt(r.CustomerId)),Cv(r.Customer),...skus.map(s=>sm[s]?N(sm[s]):E),N(rB),N(rC)]);
+        first=false;skus.forEach(s=>{cT[s]+=sm[s]||0;gt[s]+=sm[s]||0});cB+=rB;cC+=rC;gtB+=rB;gtC+=rC;
+      });
+      out.push([E,E,E,{v:"Total",bold:true,bg:"FFFFF2CC"},...skus.map(s=>({v:cT[s],t:'n',bold:true,bg:"FFFFF2CC"})),{v:cB,t:'n',bold:true,bg:"FFFFF2CC"},{v:cC,t:'n',bold:true,bg:"FFFFF2CC"}]);
+      out.push([E]);
+    });
+    out.push([{v:"Grand Total",bold:true,bg:"FF1F4E79",align:"left"},E,E,E,...skus.map(s=>({v:gt[s],t:'n',bold:true,bg:"FFBDD7EE"})),{v:gtB,t:'n',bold:true,bg:"FFBDD7EE"},{v:gtC,t:'n',bold:true,bg:"FFBDD7EE"}]);
+    out.push([E],[{v:"Discrepancies:",bold:true}],[E],[{v:"Discrepancies Sent?",bold:true}],[E],[E]);
+    return out;
+  }
+  const today=new Date().toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  return[{name:palletOnly?"Pallet Production":"Production",rows:[[{v:today.toUpperCase(),bold:true,bg:"FF1F4E79",align:"left"}],[E],...section(nf.filter(r=>r.Product==="350"),"350ml Orders","WHITE","350"),...section(nf.filter(r=>r.Product==="TEA"),"Tea Orders","CLEAR","TEA"),...section(nf.filter(r=>r.Product==="1L"),"1L Orders","WHITE","1L")],colWidths:[18,14,13,28,...Array(20).fill(16),13,10]}];
+}
+function genColdXpress(rows,date){
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="COLDXPRESS"&&!isPallet(r));
+  if(!nf.length)return[{name:"Sheet1",rows:[[Cv("No COLDXPRESS orders")]]}];
+  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
+  const sr=[];
+  sr.push([{v:"COLD XPRESS MANIFEST",bold:true,bg:"FF002060",align:"left"}]);
+  sr.push([{v:"PLEASE EMAIL TO MANIFESTS@COLDXPRESS.COM.AU"}]);
+  sr.push([{v:"SUPPLIER NAME:",bold:true},{v:"Wholesale State"}]);
+  sr.push([{v:"MANIFEST REFERENCE:",bold:true},{v:date||new Date().toLocaleDateString("en-AU")}]);
+  sr.push([E]);
+  sr.push(["INV NO.","DELIVERY DATE","STORE NO","STORE NAME","ADDRESS","SUBURB","STATE","POSTCODE","CARTONS","PALLETS","WEIGHT (KG)","INV. VALUE","COD","TEMP","COMMENT"].map(h=>H(h,true,"FFD9E1F2","center")));
+  Object.entries(om).forEach(([on,or_])=>{const r=or_[0];sr.push([Cv(on),Cv(r.DeliveryDate||r.DueDate||""),E,Cv(r.Customer),Cv(r.CustomerAddress1),Cv(r.CustomerSuburb),Cv(r.CustomerState),N(parseInt(r.Postcode)),N(totalC(or_)),E,E,E,E,Cv("chilled"),E])});
+  return[{name:"Sheet1",rows:sr,colWidths:[14,16,10,28,28,18,8,10,10,10,13,12,10,10,20]}];
+}
+function genDK(rows){
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="DKDISTRIBUTION"&&!isPallet(r));
+  if(!nf.length)return[{name:"jobs",rows:[[Cv("No DK orders")]]}];
+  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
+  const sr=[["Order ID","Date","Order Type","Notes","Address 1","Address 2","Address 3","Postal Code","City","State","Country","Location","Last Name","Phone","Delivery Instructions","Email","GROUP","Volume"].map(h=>H(h,true,"FFBDD7EE","center"))];
+  Object.entries(om).forEach(([on,or_])=>{const r=or_[0];sr.push([Cv(on),E,Cv("Business"),Cv(r.Customer),Cv(r.CustomerAddress1),Cv(r.CustomerAddress2||""),E,N(parseInt(r.Postcode)),Cv(r.CustomerSuburb),Cv(r.CustomerState),E,E,E,E,Cv(r.Notes||""),E,Cv("WS"),N(totalC(or_))])});
+  return[{name:"jobs",rows:sr,colWidths:[14,12,12,28,28,20,12,12,18,8,10,12,14,14,28,20,8,10]}];
+}
+function genCoolCouriers(rows){
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="COOLCOURIERS"&&!isPallet(r));
+  if(!nf.length)return[{name:"Manifest",rows:[[Cv("No COOLCOURIERS orders")]]}];
+  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
+  const sr=[];
+  sr.push([{v:"COOL COURIERS MANIFEST",bold:true,bg:"FF1A3C5E",align:"left"}]);
+  sr.push([{v:"Wholesale State Cold Pressed Juices",bold:true}]);
+  sr.push([{v:"Manifest Date:",bold:true},{v:new Date().toLocaleDateString("en-AU")}]);sr.push([E]);
+  sr.push(["Order No.","Customer Name","Address","Suburb","State","Postcode","Special Instructions","Items","Total Cartons","Delivery Date"].map(h=>H(h,true,"FFD6E4F0","center")));
+  Object.entries(om).forEach(([on,or_])=>{const r=or_[0];const items=or_.filter(x=>x.SKU!=="FREIGHT"&&x.Product).map(x=>`${x.Name} x${x.Quantity}`).join(", ");sr.push([Cv(on),Cv(r.Customer),Cv(r.CustomerAddress1+(r.CustomerAddress2?", "+r.CustomerAddress2:"")),Cv(r.CustomerSuburb),Cv(r.CustomerState),N(parseInt(r.Postcode)),Cv(r.Notes||""),Cv(items),N(totalC(or_)),Cv(r.DeliveryDate||r.DueDate||"")])});
+  return[{name:"Manifest",rows:sr,colWidths:[14,28,30,18,8,10,24,50,14,14]}];
+}
+function buildPrint(rows,isBacks,sheetName){
+  const hdrRow=["Order","#file","SKU","#copies","Customer","Customer ID",".PDF","CODE","#pages","#papersize","#duplex","#orientation","#trayname"].map(h=>H(h,true,"FFBDD7EE","center"));
+  const dr=[];
+  if(isBacks){
+    const t=rows.length;
+    dr.push([N(t+1),Cv(""),Cv("BLANK"),N(24),E,Cv("BLANK"),Cv(".PDF"),Cv("BLANK.PDF"),E,E,E,E,E]);
+    [...rows].reverse().forEach((r,i)=>{const rn=t-i,row=dr.length+2;dr.push([N(rn),{v:`=IF(D${row}>0,CONCATENATE('File address'!$B$1,"\\",F${row},"\\",H${row}),"")`,t:'f'},Cv(r.SKU),N(parseInt(r.Quantity)),Cv(r.Customer),Cv("BACKS"),Cv(".PDF"),{v:`=CONCATENATE(C${row},G${row})`,t:'f'},{v:`=IF(D${row}>0,"all","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},{v:`=IF(D${row}>0,"Portrait","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'}])});
+  }else{
+    dr.push([N(1),Cv(""),Cv("BLANK"),N(24),E,Cv("BLANK"),Cv(".PDF"),Cv("BLANK.PDF"),E,E,E,E,E,E]);
+    rows.forEach((r,i)=>{const on=i+2,row=on+1;dr.push([N(on),{v:`=IF(D${row}>0,CONCATENATE('File address'!$B$1,"\\",F${row},"\\",H${row}),"")`,t:'f'},Cv(r.SKU),N(parseInt(r.Quantity)),Cv(r.Customer),Cv(String(r.CustomerId)),Cv(".PDF"),{v:`=CONCATENATE(C${row},G${row})`,t:'f'},{v:`=IF(D${row}>0,"all","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},{v:`=IF(D${row}>0,"Portrait","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},E])});
+  }
+  return[{name:sheetName,rows:[hdrRow,...dr],colWidths:[8,60,18,10,28,14,8,22,8,16,16,12,16]},{name:"File address",rows:[[{v:"Place your file address here",bold:true},Cv("J:\\My Drive\\Print Files")]],colWidths:[30,40]}];
+}
+function genPrints(rows,palletOnly=false){
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(palletOnly?isPallet(r):!isPallet(r)));
+  const sort=pr=>[...pr].sort((a,b)=>{for(const k of['Courier','Customer','OrderNumber','SKU']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
+  const r350=sort(nf.filter(r=>r.Product==="350")),rT=sort(nf.filter(r=>r.Product==="TEA")),r1=sort(nf.filter(r=>r.Product==="1L"));
+  return{f350:buildPrint(r350,false,"FRONTS"),b350:buildPrint(r350,true,"BACKS"),fT:buildPrint(rT,false,"FRONTS"),bT:buildPrint(rT,true,"BACKS"),f1:buildPrint(r1,false,"FRONTS")};
+}
+
+/* ── STATUS ── */
+const ST={
+  "Order Confirmed":    {color:T.sage,  bg:T.sageL, border:"#B8E6B8"},
+  "In Production":      {color:T.blue,  bg:T.blueL, border:"#BFDBFE"},
+  "With Courier":       {color:T.amber, bg:T.amberL,border:T.amberB},
+  "Delivered":          {color:T.teal,  bg:T.tealL, border:"#99F6E4"},
+};
+const ALL_ST=Object.keys(ST);
+
+const MOCK_LOG=[
+  {id:1,from:"notifications@ordermentum.com",subject:"Invoice - Wholesale State Cold Pressed Juices #OMI17714",time:"2:39 PM",type:"order",ref:"OMO17714",action:"Confirmed"},
+  {id:2,from:"notifications@ordermentum.com",subject:"Invoice - Wholesale State Cold Pressed Juices #OMI17707",time:"12:34 PM",type:"order",ref:"OMO17707",action:"Confirmed"},
+  {id:3,from:"manifests@coldxpress.com.au",  subject:"Manifest Confirmed – Wholesale State 04/03/2026",time:"11:14 AM",type:"manifest",ref:null,action:"In Transit (CX)"},
+  {id:4,from:"noreply@dkdistributions.com.au",subject:"POD Confirmed – OMO17701 The Bower Cafe",time:"2:47 PM",type:"pod",ref:"OMO17701",action:"Delivered"},
+  {id:5,from:"noreply@dkdistributions.com.au",subject:"POD Confirmed – OMO17704 Staple Bakery",time:"3:12 PM",type:"pod",ref:"OMO17704",action:"Delivered"},
+];
+
+/* ── SMALL COMPONENTS ── */
+function Pill({status}){const s=ST[status]||ST["Confirmed"];return<span className="pill" style={{background:s.bg,color:s.color,border:`1px solid ${s.border}`}}><span className="dot" style={{background:s.color}}/>{status}</span>}
+function EBadge({type}){const cfg={order:{c:T.sage,bg:T.sageL,l:"ORDER"},manifest:{c:T.blue,bg:T.blueL,l:"MANIFEST"},pod:{c:T.teal,bg:T.tealL,l:"POD"}}[type]||{c:T.inkL,bg:T.creamD,l:"EMAIL"};return<span className="ebadge" style={{background:cfg.bg,color:cfg.c}}>{cfg.l}</span>}
+const f$=v=>`$${(v||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",")}`;
+const fN=v=>(v||0).toLocaleString();
+
+/* ── VAL MODAL ── */
+function ValModal({result,label,onProceed,onCancel}){
+  const{errors,warnings,totalOrders,coveredOrders,canProceed}=result;
+  return(
+    <div className="modal-overlay">
+      <div className="modal fu">
+        <div style={{padding:"20px 26px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:38,height:38,borderRadius:10,background:errors.length?T.redL:T.amberL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{errors.length?"🚫":"⚠️"}</div>
+          <div style={{flex:1}}>
+            <div className="mt" style={{fontSize:14,fontWeight:700,color:T.ink}}>{errors.length?"Cannot Generate — Errors Found":"Warnings — Review Before Proceeding"}</div>
+            <div style={{fontSize:12,color:T.inkL,marginTop:2}}>Generating: <strong>{label}</strong></div>
+          </div>
+          <button className="btn-o" onClick={onCancel}>✕</button>
+        </div>
+        <div style={{padding:"12px 26px",background:T.creamD,borderBottom:`1px solid ${T.border}`,display:"flex",gap:24}}>
+          {[["Orders",totalOrders,T.ink],["With products",coveredOrders,T.sage],errors.length&&["Errors",errors.length,T.red],warnings.length&&["Warnings",warnings.length,T.amber]].filter(Boolean).map(([l,v,c])=>(
+            <div key={l} style={{display:"flex",alignItems:"baseline",gap:7}}><span className="pf" style={{fontSize:22,fontWeight:700,color:c}}>{v}</span><span style={{fontSize:12,color:T.inkL}}>{l}</span></div>
+          ))}
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"14px 26px",display:"flex",flexDirection:"column",gap:8}}>
+          {errors.map((e,i)=><div key={i} style={{display:"flex",gap:10,padding:"10px 13px",background:T.redL,border:`1px solid ${T.redB}`,borderRadius:9}}><span style={{flexShrink:0}}>🚫</span><div><div style={{fontSize:13,color:T.red,fontWeight:600}}>{e.message}</div><div style={{fontSize:11,color:T.inkL,marginTop:1}}>{e.rule}</div></div></div>)}
+          {warnings.map((w,i)=><div key={i} style={{display:"flex",gap:10,padding:"10px 13px",background:T.amberL,border:`1px solid ${T.amberB}`,borderRadius:9}}><span style={{flexShrink:0}}>⚠️</span><div><div style={{fontSize:13,color:T.amber,fontWeight:600}}>{w.message}</div><div style={{fontSize:11,color:T.inkL,marginTop:1}}>{w.rule}</div></div></div>)}
+          {!errors.length&&!warnings.length&&<div style={{textAlign:"center",padding:28,color:T.sage,fontWeight:600}}>✅ All checks passed.</div>}
+        </div>
+        <div style={{padding:"16px 26px",borderTop:`1px solid ${T.border}`,display:"flex",gap:10,justifyContent:"flex-end",background:T.creamD}}>
+          <button className="btn-o" onClick={onCancel}>Cancel</button>
+          {canProceed?<button className="btn-t" onClick={onProceed}>{warnings.length?"⚠️ Proceed anyway":"✅ Generate files"}</button>:<button className="btn-t" disabled style={{background:T.red}}>🚫 Fix errors first</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── ORDERS TABLE ── */
+function OrdersTable({rows,allOrders,setOrders}){
+  const[filterSt,setFilterSt]=useState("All");
+  const[search,setSearch]=useState("");
+  const[expanded,setExpanded]=useState(null);
+  const stCounts=ALL_ST.reduce((a,s)=>{a[s]=rows.filter(o=>o.status===s).length;return a},{});
+  const filtered=rows.filter(o=>{
+    const ms=filterSt==="All"||o.status===filterSt;
+    const q=search.toLowerCase();
+    return ms&&(!q||o.orderNumber.toLowerCase().includes(q)||o.customer.toLowerCase().includes(q)||(o.courier||"").toLowerCase().includes(q));
+  }).sort((a,b)=>b.orderNumber.localeCompare(a.orderNumber));
+
+  const COURIER_LABEL={"COLDXPRESS":"Cold Xpress","DKDISTRIBUTION":"DK Distributions","COOLCOURIERS":"Cool Couriers"};
+  const PAY_LABEL={"Credit / Debit Card":"card","Direct Debit":"direct","Other":"other"};
+
+  const updateStatus=(orderNumber,status)=>{
+    setOrders(p=>{
+      const updated=p.map(x=>x.orderNumber===orderNumber?{...x,status}:x);
+      window.storage.set("ws-orders",JSON.stringify(updated)).catch(()=>{});
+      return updated;
+    });
+  };
+
+  if(rows.length===0)return(
+    <div style={{textAlign:"center",padding:"70px 0",color:T.inkL}}>
+      <div style={{fontSize:48,marginBottom:12}}>📦</div>
+      <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:18,fontWeight:700,color:T.ink,marginBottom:6}}>No orders yet</div>
+      <div style={{fontSize:13}}>Upload a CSV on the Generate tab — orders will appear here automatically.</div>
+    </div>
+  );
+
+  return(
+    <>
+      {/* Filter chips + search */}
+      <div style={{display:"flex",gap:7,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
+        {["All",...ALL_ST].map(s=>(
+          <button key={s} className={`chip${filterSt===s?" active":""}`} onClick={()=>setFilterSt(s)}>
+            {s}<span style={{marginLeft:5,opacity:.65,fontSize:10}}>{s==="All"?rows.length:stCounts[s]||0}</span>
+          </button>
+        ))}
+        <input className="inp" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search order, customer, courier…" style={{marginLeft:"auto",width:220}}/>
+      </div>
+
+      {/* Table */}
+      <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
+        {/* Header */}
+        <div style={{display:"grid",gridTemplateColumns:"24px 110px 1fr 120px 80px 90px 130px 100px",gap:0,padding:"10px 18px",background:T.creamD,borderBottom:`1px solid ${T.border}`}}>
+          {["","Order","Customer","Courier","Items","Total","Delivery Date","Status"].map(h=>(
+            <div key={h} style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:.8}}>{h.toUpperCase()}</div>
+          ))}
+        </div>
+
+        {filtered.length===0&&(
+          <div style={{textAlign:"center",padding:36,fontSize:13,color:T.inkL}}>No orders match your filter.</div>
+        )}
+
+        {filtered.map((o,i)=>{
+          const isExp=expanded===o.orderNumber;
+          const total=o.items.reduce((s,it)=>s+(parseFloat(it.price||0)*parseInt(it.qty||0)),0);
+          const totalItems=o.items.reduce((s,it)=>s+parseInt(it.qty||0),0);
+          const ss=ST[o.status]||ST["Order Confirmed"];
+          return(
+            <div key={o.orderNumber} style={{borderBottom:i<filtered.length-1?`1px solid ${T.creamD}`:"none"}}>
+              {/* Main row */}
+              <div style={{display:"grid",gridTemplateColumns:"24px 110px 1fr 120px 80px 90px 130px 100px",padding:"13px 18px",alignItems:"center",cursor:"pointer",transition:"background .1s"}}
+                onMouseEnter={e=>e.currentTarget.style.background=T.creamD}
+                onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+                onClick={()=>setExpanded(isExp?null:o.orderNumber)}>
+                {/* Expand chevron */}
+                <div style={{fontSize:10,color:T.inkL,transform:isExp?"rotate(90deg)":"none",transition:"transform .15s"}}>▶</div>
+                {/* Order # */}
+                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:800,color:T.terra}}>{o.orderNumber}</div>
+                {/* Customer */}
+                <div>
+                  <div style={{fontSize:13,fontWeight:500,color:T.ink}}>{o.customer}</div>
+                  <div style={{fontSize:11,color:T.inkL,marginTop:1}}>{o.suburb}{o.suburb&&o.state?", ":""}{o.state}</div>
+                </div>
+                {/* Courier */}
+                <div style={{fontSize:12,color:T.inkM}}>{COURIER_LABEL[o.courier]||o.courier||"—"}</div>
+                {/* Items */}
+                <div style={{fontSize:12,color:T.inkL}}>{totalItems} items</div>
+                {/* Total */}
+                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:700,color:T.ink}}>{total>0?`$${total.toFixed(2)}`:"—"}</div>
+                {/* Delivery date */}
+                <div style={{fontSize:12,color:T.inkL}}>{o.dueDate||"—"}</div>
+                {/* Status pill */}
+                <div style={{display:"inline-flex",alignItems:"center",gap:5,background:ss.bg,border:`1px solid ${ss.border}`,borderRadius:20,padding:"4px 10px",width:"fit-content"}}>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:ss.color,flexShrink:0}}/>
+                  <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:ss.color,letterSpacing:.5,whiteSpace:"nowrap"}}>{o.status.toUpperCase()}</span>
+                </div>
+              </div>
+
+              {/* Expanded detail */}
+              {isExp&&(
+                <div style={{background:T.creamD,borderTop:`1px solid ${T.border}`,padding:"16px 18px 16px 52px"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16,marginBottom:14}}>
+                    <div>
+                      <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:6}}>ORDER DETAILS</div>
+                      {[
+                        ["Order #", o.orderNumber],
+                        ["Payment", o.paymentMethod?PAY_LABEL[o.paymentMethod]||o.paymentMethod:"—"],
+                        ["Courier", COURIER_LABEL[o.courier]||o.courier||"—"],
+                        ["Due Date", o.dueDate||"—"],
+                        ...(o.deliveredAt?[["Delivered", o.deliveredAt]]:[]),
+                      ].map(([k,v])=>(
+                        <div key={k} style={{display:"flex",gap:8,fontSize:12,marginBottom:4}}>
+                          <span style={{color:T.inkL,width:70,flexShrink:0}}>{k}</span>
+                          <span style={{color:T.ink,fontWeight:500}}>{v}</span>
+                        </div>
+                      ))}
+                      {o.podFile&&(
+                        <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${T.creamD}`}}>
+                          <a href={`/api/pod/${o.orderNumber}`} target="_blank" rel="noreferrer"
+                            style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,background:T.terraL,border:`1px solid ${T.terra}44`,color:T.terra,fontSize:11,fontFamily:"'Montserrat',sans-serif",fontWeight:700,textDecoration:"none"}}>
+                            📄 View POD — {o.podFile}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:6}}>LINE ITEMS</div>
+                      {o.items.map((it,ii)=>(
+                        <div key={ii} style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3,color:T.ink}}>
+                          <span style={{flex:1,marginRight:8}}>{it.name}</span>
+                          <span style={{color:T.inkL,marginRight:12}}>×{it.qty}</span>
+                          <span style={{fontWeight:600}}>{it.price?`$${(parseFloat(it.price)*parseInt(it.qty)).toFixed(2)}`:"—"}</span>
+                        </div>
+                      ))}
+                      {total>0&&(
+                        <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginTop:6,paddingTop:6,borderTop:`1px solid ${T.border}`,fontWeight:700,color:T.ink}}>
+                          <span>Total</span><span>${total.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:6}}>UPDATE STATUS</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        {ALL_ST.map(s=>(
+                          <button key={s} onClick={e=>{e.stopPropagation();updateStatus(o.orderNumber,s);}}
+                            style={{padding:"7px 12px",borderRadius:8,border:`1.5px solid ${o.status===s?ST[s].color:T.border}`,background:o.status===s?ST[s].bg:"transparent",fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:o.status===s?ST[s].color:T.inkL,cursor:"pointer",textAlign:"left",transition:"all .1s"}}>
+                            {o.status===s?"✓ ":""}{s}
+                          </button>
+                        ))}
+                        <button onClick={e=>{e.stopPropagation();if(!window.confirm(`Delete order ${o.orderNumber}?`))return;setOrders(prev=>{const updated=prev.filter(x=>x.orderNumber!==o.orderNumber);window.storage.set("ws-orders",JSON.stringify(updated)).catch(()=>{});return updated;});setExpanded(null);}}
+                          style={{marginTop:4,padding:"7px 12px",borderRadius:8,border:`1.5px solid ${T.red}`,background:"transparent",fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:T.red,cursor:"pointer",textAlign:"left",transition:"all .1s"}}>
+                          ✕ Delete Order
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{marginTop:10,fontSize:11,color:T.inkL,textAlign:"right"}}>{filtered.length} of {rows.length} orders</div>
+    </>
+  );
+}
+
+/* ══ MAIN APP ══ */
+function App(){
+  // ── Auth ──────────────────────────────────────────────────────
+  const[token,setToken]=useState(()=>localStorage.getItem('ws-token')||null);
+  const[loginPw,setLoginPw]=useState('');
+  const[loginErr,setLoginErr]=useState('');
+  const[loginLoading,setLoginLoading]=useState(false);
+
+  const IS_DEPLOYED = window.location.hostname !== 'localhost' && !window.location.hostname.includes('claudeusercontent');
+
+  async function apiFetch(path, opts={}){
+    const res = await fetch(path, {
+      ...opts,
+      headers:{ 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}), ...(opts.headers||{}) }
+    });
+    if(res.status===401){ setToken(null); localStorage.removeItem('ws-token'); throw new Error('Session expired'); }
+    return res;
+  }
+
+  async function handleLogin(e){
+    e.preventDefault();
+    setLoginLoading(true); setLoginErr('');
+    try{
+      const res = await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:loginPw})});
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error||'Login failed');
+      localStorage.setItem('ws-token', data.token);
+      setToken(data.token);
+    } catch(e){ setLoginErr(e.message); }
+    finally{ setLoginLoading(false); }
+  }
+
+  // Show login screen when deployed and not authenticated
+  if(IS_DEPLOYED && !token) return(
+    <div style={{minHeight:'100vh',background:T.cream,display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{background:T.white,borderRadius:20,padding:'40px 36px',width:340,boxShadow:'0 4px 32px rgba(0,0,0,.08)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:28}}>
+          <div style={{width:40,height:40,borderRadius:11,background:T.terra,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>🌿</div>
+          <div>
+            <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:16,color:T.ink}}>WHOLESALE STATE</div>
+            <div style={{fontSize:11,color:T.inkL,letterSpacing:.5}}>ORDER MANAGEMENT</div>
+          </div>
+        </div>
+        <form onSubmit={handleLogin}>
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:12,fontWeight:600,color:T.inkM,marginBottom:6}}>Password</div>
+            <input type="password" value={loginPw} onChange={e=>setLoginPw(e.target.value)}
+              className="inp" style={{width:'100%',fontSize:14}} placeholder="Enter team password" autoFocus/>
+          </div>
+          {loginErr&&<div style={{fontSize:12,color:T.red,marginBottom:10}}>⚠ {loginErr}</div>}
+          <button type="submit" className="btn-t" style={{width:'100%',justifyContent:'center'}} disabled={loginLoading}>
+            {loginLoading?'Signing in…':'Sign In'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+
+  const[tab,setTab]=useState("generate");
+  const[csvName,setCsvName]=useState(null);
+  const[csvOrderDate,setCsvOrderDate]=useState(null);
+  const[csvRows,setCsvRows]=useState([]);
+  const[orders,setOrders]=useState([]);
+  const[graphConnected,setGraphConnected]=useState(false);
+  const[graphConnectedAt,setGraphConnectedAt]=useState(null);
+  const[specialDelivered,setSpecialDelivered]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem('ws-special-delivered')||'{}');}catch{return {};}
+  });
+  const ordersRef=useRef([]);
+
+  const approveDrawdown=(pd)=>{
+    setStock(prev=>{
+      const updated={...prev};
+      Object.entries(pd.skuTotals).forEach(([sku,qty])=>{updated[sku]=(updated[sku]||0)-qty;});
+      window.storage.set("ws-stock",JSON.stringify(updated)).catch(()=>{});
+      return updated;
+    });
+    const approved={...pd,approvedAt:new Date().toLocaleString("en-AU")};
+    setApprovedDrawdowns(prev=>{
+      const updated=[approved,...prev].slice(0,50);
+      window.storage.set("ws-approved-drawdowns",JSON.stringify(updated)).catch(()=>{});
+      return updated;
+    });
+    setPendingDrawdowns(prev=>{
+      const updated=prev.filter(p=>p.id!==pd.id);
+      window.storage.set("ws-pending-drawdowns",JSON.stringify(updated)).catch(()=>{});
+      return updated;
+    });
+  };
+  const[gen,setGen]=useState(null);
+  const[done,setDone]=useState({});
+  const[drag,setDrag]=useState(false);
+  const[valModal,setValModal]=useState(null);
+  const[snapshots,setSnapshots]=useState([]);
+  const[analytics,setAnalytics]=useState(null);
+  const[reportTab,setReportTab]=useState("revenue");
+  const[connected,setConnected]=useState(false);
+  const[efilt,setEfilt]=useState("all");
+  const[customers,setCustomers]=useState([]);
+  const[custSearch,setCustSearch]=useState("");
+  const[custSort,setCustSort]=useState("name");
+  const[custFilter,setCustFilter]=useState("all");
+  const[selectedCust,setSelectedCust]=useState(null);
+
+  const[stock,setStock]=useState({});         // {SKU: bottle_count}
+  const[stockEdit,setStockEdit]=useState({}); // editing state for stocktake inputs
+  const[pendingDrawdowns,setPendingDrawdowns]=useState([]); // [{csvName, date, skuTotals, id}]
+  const[approvedDrawdowns,setApprovedDrawdowns]=useState([]); // history
+  const[quickAdd,setQuickAdd]=useState({}); // {sku: delta string} for quick +/- inputs
+  const fileRef=useRef();
+  const rowsRef=useRef([]);  // always holds latest parsed rows, safe for async doGen
+
+  useEffect(()=>{(async()=>{
+    // Check Graph/Outlook connection status
+    if(IS_DEPLOYED && token){
+      try{
+        const r=await apiFetch('/api/graph/status');
+        const d=await r.json();
+        if(d.connected){setGraphConnected(true);setGraphConnectedAt(d.connectedAt);}
+      }catch(e){}
+    }
+    // Check if redirected back after OAuth connect
+    if(window.location.search.includes('connected=true')){
+      setGraphConnected(true);
+      window.history.replaceState({},'','/');
+    }
+    try{const r=await window.storage.get("ws-snaps");if(r){const all=JSON.parse(r.value);const valid=all.filter(s=>Array.isArray(s.manifests)&&s.manifests.length>0);setSnapshots(valid);if(valid.length!==all.length)window.storage.set("ws-snaps",JSON.stringify(valid)).catch(()=>{});}}catch(e){}
+    try{const r=await window.storage.get("ws-orders");if(r){const o=JSON.parse(r.value);setOrders(o);ordersRef.current=o;}}catch(e){}
+    try{const r=await window.storage.get("ws-customers");if(r)setCustomers(JSON.parse(r.value));}catch(e){}
+    try{const r=await window.storage.get("ws-stock");if(r)setStock(JSON.parse(r.value));}catch(e){}
+    try{const r=await window.storage.get("ws-pending-drawdowns");if(r)setPendingDrawdowns(JSON.parse(r.value));}catch(e){}
+    try{const r=await window.storage.get("ws-approved-drawdowns");if(r)setApprovedDrawdowns(JSON.parse(r.value));}catch(e){}
+  })();},[]);
+
+  const loadFile=useCallback((file)=>{
+    if(!file)return;
+    const r=new FileReader();
+    r.onload=async(e)=>{
+      const rows=parseCSV(e.target.result);
+      rowsRef.current=rows;
+      setCsvRows(rows);setCsvName(file.name);setDone({});
+      const om={};
+      rows.filter(r=>r.SKU!=="FREIGHT").forEach(r=>{
+        if(!om[r.OrderNumber])om[r.OrderNumber]={orderNumber:r.OrderNumber,customer:r.Customer,courier:r.Courier,dueDate:r.DueDate,deliveryDate:r.DeliveryDate,state:r.CustomerState,suburb:r.CustomerSuburb,paymentMethod:r.PaymentMethod||"",status:"In Production",items:[],isPallet:false};
+        om[r.OrderNumber].isPallet=om[r.OrderNumber].isPallet||isPallet(r);
+        om[r.OrderNumber].items.push({name:r.Name,qty:r.Quantity,price:r.UnitPrice,sku:r.SKU});
+      });
+      // Merge new orders with existing — CSV always wins on conflict (newest import = source of truth)
+      const newOrders=Object.values(om);
+      setOrders(prev=>{
+        const merged={};
+        // Start with existing persisted orders
+        prev.forEach(o=>{merged[o.orderNumber]=o;});
+        // Overlay new orders from CSV — always overwrite with fresh status
+        newOrders.forEach(o=>{merged[o.orderNumber]=o;});
+        const updated=Object.values(merged).sort((a,b)=>a.orderNumber.localeCompare(b.orderNumber));
+        ordersRef.current=updated;
+        window.storage.set("ws-orders",JSON.stringify(updated)).catch(()=>{});
+        return updated;
+      });
+      // Build SKU totals for drawdown queue
+      (async()=>{
+        const skuTotals={};
+        rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product).forEach(r=>{
+          const qty=parseInt(r.Quantity)||0;
+          if(qty>0) skuTotals[r.Name]=(skuTotals[r.Name]||0)+qty;
+        });
+        const newEntry={id:file.name+"-"+Date.now(),csvName:file.name,orderDateLabel,date:new Date().toLocaleDateString("en-AU"),skuTotals};
+        setPendingDrawdowns(prev=>{
+          // Replace existing entry with same csvName (dedup — keep newest)
+          const filtered=prev.filter(p=>p.csvName!==file.name);
+          const updated=[...filtered,newEntry];
+          window.storage.set("ws-pending-drawdowns",JSON.stringify(updated)).catch(()=>{});
+          return updated;
+        });
+      })();
+      // Merge customers from this CSV into the persistent customer database
+      setCustomers(prev=>{
+        const db={};
+        prev.forEach(c=>{db[c.id]=c});
+        rows.filter(r=>r.SKU!=="FREIGHT"&&r.CustomerId).forEach(r=>{
+          const id=r.CustomerId;
+          const existing=db[id]||{id,name:r.Customer,suburb:r.CustomerSuburb,state:r.CustomerState,postcode:r.Postcode,address:r.CustomerAddress1,courier:r.Courier,accountManager:r.AccountManager||"",type:isPallet(r)?"Pallet":"Regular",firstSeen:new Date().toLocaleDateString("en-AU"),totalOrders:0,totalRevenue:0,totalBottles:0,lastOrderDate:"",lastOrderNum:""};
+          existing.name=r.Customer||existing.name;
+          existing.suburb=r.CustomerSuburb||existing.suburb;
+          existing.state=r.CustomerState||existing.state;
+          existing.postcode=r.Postcode||existing.postcode;
+          existing.address=r.CustomerAddress1||existing.address;
+          existing.courier=r.Courier||existing.courier;
+          existing.accountManager=r.AccountManager||existing.accountManager;
+          existing.type=isPallet(r)?"Pallet":existing.type;
+          db[id]=existing;
+        });
+        // Tally order stats per customer from this CSV
+        Object.values(om).forEach(o=>{
+          const r0=rows.find(r=>r.OrderNumber===o.orderNumber&&r.CustomerId);
+          if(!r0||!db[r0.CustomerId])return;
+          const c=db[r0.CustomerId];
+          c.totalOrders=(c.totalOrders||0)+1;
+          const rev=rows.filter(r=>r.OrderNumber===o.orderNumber&&r.SKU!=="FREIGHT"&&r.Product).reduce((s,r)=>s+(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0),0);
+          c.totalRevenue=(c.totalRevenue||0)+rev;
+          const btl=rows.filter(r=>r.OrderNumber===o.orderNumber&&r.SKU!=="FREIGHT"&&r.Product).reduce((s,r)=>s+(parseInt(r.Quantity)||0),0);
+          c.totalBottles=(c.totalBottles||0)+btl;
+          c.lastOrderDate=new Date().toLocaleDateString("en-AU");
+          c.lastOrderNum=o.orderNumber;
+        });
+        const updated=Object.values(db);
+        window.storage.set("ws-customers",JSON.stringify(updated)).catch(()=>{});
+        return updated;
+      });
+      const prevIds=snapshots.flatMap(s=>s.allCustomerIds||[]);
+      const a=buildAnalytics(rows,prevIds);
+      setAnalytics(a);
+      // Build per-manifest order lists
+      const allOrderNums=[...new Set(rows.filter(r=>r.SKU!=="FREIGHT"&&r.OrderNumber&&!isPallet(r)).map(r=>r.OrderNumber))];
+      const specialOrderNums=[...new Set(rows.filter(r=>r.SKU!=="FREIGHT"&&r.OrderNumber&&isPallet(r)).map(r=>r.OrderNumber))];
+      // Derive the order date from the CSV (DueDate of first non-freight row)
+      const firstRow=rows.find(r=>r.SKU!=="FREIGHT"&&r.DueDate);
+      const orderDateRaw=firstRow?.DueDate||"";
+      let orderDateLabel="";
+      if(orderDateRaw){
+        const parts=orderDateRaw.split("/");
+        if(parts.length===3){
+          const d=new Date(parts[2],parts[1]-1,parts[0]);
+          orderDateLabel=d.toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+        }
+      }
+      setCsvOrderDate(orderDateLabel||file.name);
+      const dk=new Date().toLocaleDateString("en-AU");
+      const byCourier={};
+      rows.filter(r=>r.SKU!=="FREIGHT"&&r.Courier&&r.OrderNumber&&!isPallet(r)).forEach(r=>{
+        if(!byCourier[r.Courier]) byCourier[r.Courier]=new Set();
+        byCourier[r.Courier].add(r.OrderNumber);
+      });
+      // Map courier keys to manifest file names
+      const MANIFEST_FILES={
+        "COLDXPRESS":    {file:"COLDXPRESS.xlsx",      icon:"❄️", label:"Cold Xpress Manifest"},
+        "DKDISTRIBUTION":{file:"DK_DISTRIBUTIONS.xlsx",icon:"🚚", label:"DK Distributions Manifest"},
+        "COOLCOURIERS":  {file:"COOLCOURIERS.xlsx",    icon:"🧊", label:"Cool Couriers Manifest"},
+      };
+      const manifests=Object.entries(byCourier).map(([courier,orderSet])=>{
+        const m=MANIFEST_FILES[courier]||{file:`${courier}.xlsx`,icon:"🚛",label:`${courier} Manifest`};
+        // If this courier's manifest was already marked sent today, preserve that — but update the order list
+        const existingSnap=snapshots.find(s=>s.dateKey===dk);
+        const existingManifest=existingSnap?.manifests?.find(em=>em.courier===courier);
+        return{
+          ...m,
+          courier,
+          orders:[...orderSet], // always fresh from new CSV
+          dispatched:existingManifest?.dispatched||false,
+          sentAt:existingManifest?.sentAt||null,
+        };
+      }).sort((a,b)=>a.label.localeCompare(b.label));
+      const snap={
+        fileName:file.name,
+        orderDateLabel,
+        dateKey:dk,
+        uploadedAt:new Date().toISOString(),
+        totalOrders:allOrderNums.length,
+        specialOrders:specialOrderNums.length,
+        manifests,
+      };
+      const updated=[...snapshots.filter(s=>s.dateKey!==dk),snap].sort((a,b)=>new Date(b.uploadedAt)-new Date(a.uploadedAt)).slice(0,90);
+      setSnapshots(updated);
+      try{await window.storage.set("ws-snaps",JSON.stringify(updated));}catch(e){}
+    };
+    r.readAsText(file);
+  },[snapshots]);
+
+  const onDrop=useCallback((e)=>{e.preventDefault();setDrag(false);loadFile(e.dataTransfer.files[0]);},[loadFile]);
+
+  const triggerGen=(type,label)=>{
+    const result=validate(rowsRef.current);
+    if(result.errors.length||result.warnings.length)setValModal({result,type,label});
+    else doGen(type);
+  };
+
+  const doGen=async(type)=>{
+    setValModal(null);setGen(type);
+    await new Promise(r=>setTimeout(r,80));
+    try{
+      const rows=rowsRef.current;
+      if(!rows||rows.length===0){alert("No CSV data loaded. Please drop your CSV file first.");setGen(null);return;}
+      const d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
+      if(type==="production")dlXlsx(genProduction(rows),`${d}_Production_Sheet.xlsx`);
+      else if(type==="coldxpress")dlXlsx(genColdXpress(rows,d),`${d}_COLDXPRESS.xlsx`);
+      else if(type==="dk")dlXlsx(genDK(rows),`${d}_DK_DISTRIBUTIONS.xlsx`);
+      else if(type==="coolcouriers")dlXlsx(genCoolCouriers(rows),`${d}_COOLCOURIERS.xlsx`);
+      else if(type==="prints"){const{f350,b350,fT,bT,f1}=genPrints(rows);for(const[s,n]of[[f350,`${d}_350ml_Fronts.xlsx`],[b350,`${d}_350ml_Backs.xlsx`],[fT,`${d}_Tea_Fronts.xlsx`],[bT,`${d}_Tea_Backs.xlsx`],[f1,`${d}_1L_Fronts.xlsx`]])dlXlsx(s,n);}
+      else if(type==="pallet-prod")dlXlsx(genProduction(rows,true),`${d}_Pallet_Production.xlsx`);
+      else if(type==="pallet-prints"){const{f350,b350,fT,bT,f1}=genPrints(rows,true);for(const[s,n]of[[f350,`${d}_Pallet_350ml_Fronts.xlsx`],[b350,`${d}_Pallet_350ml_Backs.xlsx`],[fT,`${d}_Pallet_Tea_Fronts.xlsx`],[bT,`${d}_Pallet_Tea_Backs.xlsx`],[f1,`${d}_Pallet_1L_Fronts.xlsx`]])dlXlsx(s,n);}
+      else if(type==="all"){
+        dlXlsx(genProduction(rows),`${d}_Production_Sheet.xlsx`);
+        dlXlsx(genColdXpress(rows,d),`${d}_COLDXPRESS.xlsx`);
+        dlXlsx(genDK(rows),`${d}_DK_DISTRIBUTIONS.xlsx`);
+        dlXlsx(genCoolCouriers(rows),`${d}_COOLCOURIERS.xlsx`);
+        const{f350,b350,fT,bT,f1}=genPrints(rows);
+        for(const[s,n]of[[f350,`${d}_350ml_Fronts.xlsx`],[b350,`${d}_350ml_Backs.xlsx`],[fT,`${d}_Tea_Fronts.xlsx`],[bT,`${d}_Tea_Backs.xlsx`],[f1,`${d}_1L_Fronts.xlsx`]])dlXlsx(s,n);
+      }
+      setDone(p=>({...p,[type]:true}));
+      // Record this file in the current snap's generatedFiles registry
+      const d2=new Date().toLocaleDateString("en-AU");
+      const fileMap={
+        production:[`${d}_Production_Sheet.xlsx`],
+        coldxpress:[`${d}_COLDXPRESS.xlsx`],
+        dk:[`${d}_DK_DISTRIBUTIONS.xlsx`],
+        coolcouriers:[`${d}_COOLCOURIERS.xlsx`],
+        prints:[`${d}_350ml_Fronts.xlsx`,`${d}_350ml_Backs.xlsx`,`${d}_Tea_Fronts.xlsx`,`${d}_Tea_Backs.xlsx`,`${d}_1L_Fronts.xlsx`],
+        all:[`${d}_Production_Sheet.xlsx`,`${d}_COLDXPRESS.xlsx`,`${d}_DK_DISTRIBUTIONS.xlsx`,`${d}_COOLCOURIERS.xlsx`,`${d}_350ml_Fronts.xlsx`,`${d}_350ml_Backs.xlsx`,`${d}_Tea_Fronts.xlsx`,`${d}_Tea_Backs.xlsx`,`${d}_1L_Fronts.xlsx`],
+      };
+      const newFiles=fileMap[type]||[];
+      if(newFiles.length){
+        setSnapshots(prev=>{
+          const updated=prev.map(s=>{
+            if(s.dateKey!==d2) return s;
+            const existing=s.generatedFiles||[];
+            const merged=[...new Set([...existing,...newFiles])];
+            return{...s,generatedFiles:merged};
+          });
+          window.storage.set("ws-snaps",JSON.stringify(updated)).catch(()=>{});
+          return updated;
+        });
+      }
+    }catch(err){alert("Error: "+err.message);}
+    setGen(null);
+  };
+
+  const vStats=csvRows.length?(()=>{
+    const nf=csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.Product);
+    const v=validate(csvRows);
+    return{orders:[...new Set(nf.map(r=>r.OrderNumber))].length,bottles:nf.reduce((s,r)=>s+(parseInt(r.Quantity)||0),0),revenue:nf.reduce((s,r)=>s+(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0),0),pallets:new Set(nf.filter(r=>isPallet(r)).map(r=>r.OrderNumber)).size,errors:v.errors.length,warnings:v.warnings.length};
+  })():null;
+
+  const regularOrders=orders.filter(o=>!o.isPallet);
+  const palletOrders=orders.filter(o=>o.isPallet);
+
+  const productChartData=analytics?Object.entries(analytics.productTotals).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([name,qty])=>({name:name.length>14?name.slice(0,13)+"…":name,qty})):[];
+  const courierChartData=analytics?Object.entries(analytics.courierTotals).map(([name,d])=>({name,orders:d.orders,revenue:Math.round(d.revenue)})):[];
+  const staffChartData=analytics?Object.entries(analytics.staffTotals).map(([name,d])=>({name,orders:d.orders,revenue:Math.round(d.revenue),customers:d.customers.size})):[];
+  const stateChartData=analytics?Object.entries(analytics.stateTotals).sort((a,b)=>b[1].orders-a[1].orders).map(([state,d])=>({state,orders:d.orders})):[];
+  const revHistory=snapshots.slice(-30).map(s=>({date:s.dateKey,revenue:Math.round(s.totalRevenue||0),orders:s.totalOrders||0}));
+  const piData=analytics?Object.entries(analytics.productTotals).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([name,value])=>({name:name.replace(" 350ml","").replace(" 1L","").slice(0,12),value})):[];
+  const TT={contentStyle:{background:T.white,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 13px",fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.ink}};
+
+  const TABS=[{id:"generate",icon:"⚡",label:"Generate"},{id:"tracker",icon:"📦",label:"Orders"},{id:"pallets",icon:"🏗️",label:"Pallets"},{id:"dashboard",icon:"📊",label:"Dashboard"},{id:"reports",icon:"📈",label:"Reports"},{id:"history",icon:"📋",label:"Manifests"},{id:"customers",icon:"🏪",label:"Customers"},{id:"stocktake",icon:"📋",label:"Stocktake"},{id:"email",icon:"✉️",label:"Email Hub"}];
+  const SKUS_350=['Antiox 350ml','Blueberry Glow 350ml','Botanical 350ml','Cloudy Apple 350ml','Energise 350ml','Immunity 350ml','Pure Orange 350ml','Refresh 350ml','Roots 350ml','Tropical Bliss 350ml'];
+  const SKUS_TEA=['Organic Lemon Iced Tea 350ml','Organic Peach Iced Tea 350ml','Organic Raspberry Iced Tea 350ml'];
+  const SKUS_1L=['Antiox 1L','Blueberry Glow 1L','Botanical 1L','Cloudy Apple 1L','Energise 1L','Immunity 1L','Pure Orange 1L','Refresh 1L','Roots 1L','Tropical Bliss 1L'];
+  const ALL_TRACKED_SKUS=[...SKUS_350,...SKUS_TEA,...SKUS_1L];
+  const BTNS=[{id:"production",label:"Production Sheet",sub:"350ml · Tea · 1L by courier",icon:"🏭"},{id:"coldxpress",label:"ColdXpress Manifest",sub:"Exact import format",icon:"❄️"},{id:"dk",label:"DK Distributions",sub:"Jobs sheet format",icon:"🚛"},{id:"coolcouriers",label:"Cool Couriers",sub:"Standard manifest template",icon:"🟢"},{id:"prints",label:"Print Files (5)",sub:"350ml · Tea · 1L Fronts & Backs",icon:"🖨️"}];
+
+  return(
+    <>
+      <style>{CSS}</style>
+      {valModal&&<ValModal result={valModal.result} label={valModal.label} onProceed={()=>doGen(valModal.type)} onCancel={()=>setValModal(null)}/>}
+      <div style={{minHeight:"100vh",background:T.cream,display:"flex",flexDirection:"column"}}>
+
+        {/* HEADER */}
+        <header style={{background:T.white,borderBottom:`1px solid ${T.border}`,position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 10px rgba(45,27,20,.05)"}}>
+          <div style={{maxWidth:1200,margin:"0 auto",padding:"0 24px",height:60,display:"flex",alignItems:"center",justifyContent:"space-between",gap:14}}>
+            <div style={{display:"flex",alignItems:"center",gap:11,flexShrink:0}}>
+              <div style={{width:32,height:32,borderRadius:9,background:`linear-gradient(135deg,${T.terra},${T.terraD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🧃</div>
+              <div>
+                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:800,color:T.ink,letterSpacing:1.5}}>WHOLESALE STATE</div>
+                <div className="mt" style={{fontSize:8,fontWeight:700,color:T.sand,letterSpacing:2.5,marginTop:1}}>ORDER MANAGEMENT</div>
+              </div>
+            </div>
+            <nav style={{display:"flex",gap:2,background:T.creamD,padding:3,borderRadius:10,border:`1px solid ${T.border}`}}>
+              {TABS.map(t=><button key={t.id} className={`tab-btn${tab===t.id?" active":""}`} onClick={()=>setTab(t.id)}><span>{t.icon}</span>{t.label}</button>)}
+            </nav>
+            <div style={{display:"flex",alignItems:"center",gap:7}}>
+              {vStats&&vStats.errors>0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:T.redL,border:`1px solid ${T.redB}`,borderRadius:20}}><span style={{fontSize:11}}>🚫</span><span className="mt" style={{fontSize:11,color:T.red,fontWeight:700}}>{vStats.errors} error{vStats.errors>1?"s":""}</span></div>}
+              {vStats&&vStats.warnings>0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:T.amberL,border:`1px solid ${T.amberB}`,borderRadius:20}}><span style={{fontSize:11}}>⚠️</span><span className="mt" style={{fontSize:11,color:T.amber,fontWeight:700}}>{vStats.warnings}</span></div>}
+              <div style={{display:"flex",alignItems:"center",gap:7,padding:"5px 11px",background:T.creamD,border:`1px solid ${T.border}`,borderRadius:8}}>
+                <div className="dot" style={{background:csvName?T.sage:T.sand}}/>
+                <span style={{fontSize:12,color:csvName?T.inkM:T.inkL,maxWidth:170,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'Montserrat',sans-serif",fontWeight:500}}>{csvName||"No file loaded"}</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main style={{flex:1,padding:"26px 24px",maxWidth:1200,margin:"0 auto",width:"100%"}}>
+
+          {/* ═══ GENERATE ═══ */}
+          {tab==="generate"&&(
+            <div className="fu">
+              <div style={{marginBottom:28}}>
+                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:28,fontWeight:800,color:T.ink,letterSpacing:'-1px',marginBottom:4}}>
+                  Good {new Date().getHours()<12?"morning":new Date().getHours()<17?"afternoon":"evening"} ☀️
+                </div>
+                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:600,color:T.sand,letterSpacing:3}}>
+                  {new Date().toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase()}
+                </div>
+              </div>
+
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:22}}>
+
+                {/* LEFT — Upload + Stats */}
+                <div>
+                  <div className={`upload-zone${drag?" drag":""}`}
+                    style={{marginBottom:18,borderRadius:16,padding:"36px 28px"}}
+                    onDrop={onDrop} onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)}
+                    onClick={()=>fileRef.current.click()}>
+                    <input ref={fileRef} type="file" accept=".csv" onChange={e=>loadFile(e.target.files[0])} style={{display:"none"}}/>
+                    {csvName?(
+                      <div>
+                        <div style={{width:52,height:52,borderRadius:14,background:T.sageL,border:`2px solid ${T.sageD}55`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,margin:"0 auto 14px"}}>✅</div>
+                        <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:19,fontWeight:800,color:T.ink,marginBottom:5}}>{csvOrderDate||csvName}</div>
+                        <div style={{color:T.inkL,fontSize:12}}>{csvRows.length} rows loaded · click or drop to replace</div>
+                        <button onClick={e=>{e.stopPropagation();if(!window.confirm("Clear this CSV? Orders already saved to the feed will remain."))return;setCsvName(null);setCsvOrderDate(null);setCsvRows([]);rowsRef.current=[];setDone({});setAnalytics(null);}}
+                          style={{marginTop:10,padding:"5px 14px",borderRadius:8,border:`1.5px solid ${T.border}`,background:"none",fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:600,color:T.inkL,cursor:"pointer"}}>✕ Clear</button>
+                      </div>
+                    ):(
+                      <div>
+                        <div style={{width:58,height:58,borderRadius:16,background:T.creamDD,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,margin:"0 auto 16px"}}>📂</div>
+                        <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:20,fontWeight:800,color:T.ink,letterSpacing:'-0.5px',marginBottom:7}}>Drop your Master CSV</div>
+                        <div style={{color:T.inkL,fontSize:13}}>ORDER_ITEMS_MASTER_SHEET.csv</div>
+                        <div style={{color:T.terra,fontSize:12,fontWeight:600,fontFamily:"'Montserrat',sans-serif",marginTop:5,letterSpacing:.3}}>or click to browse</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {vStats?(
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                      {[
+                        [vStats.orders,"Orders","🛒",T.terra],
+                        [fN(vStats.bottles),"Total Bottles","🧃",T.sage],
+                        [f$(vStats.revenue),"Daily Revenue","💰",T.sand],
+                        [vStats.pallets,"Pallet Orders","🏗️",T.inkM],
+                      ].map(([v,l,icon,ac])=>(
+                        <div key={l} style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px",transition:"all .15s"}}
+                          onMouseEnter={e=>{e.currentTarget.style.boxShadow=`0 4px 16px ${ac}18`;e.currentTarget.style.borderColor=`${ac}55`;e.currentTarget.style.transform="translateY(-2px)"}}
+                          onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none"}}>
+                          <div style={{fontSize:22,marginBottom:10}}>{icon}</div>
+                          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:26,fontWeight:700,color:ac,lineHeight:1}}>{v}</div>
+                          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:T.inkL,marginTop:6,letterSpacing:.5,fontWeight:600}}>{l}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ):(
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                      {[["Orders","🛒",T.terra],["Total Bottles","🧃",T.sage],["Daily Revenue","💰",T.sand],["Pallet Orders","🏗️",T.inkM]].map(([l,icon,ac])=>(
+                        <div key={l} style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px",opacity:.45}}>
+                          <div style={{fontSize:22,marginBottom:10}}>{icon}</div>
+                          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:26,fontWeight:700,color:ac,lineHeight:1}}>—</div>
+                          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:T.inkL,marginTop:6,letterSpacing:.5,fontWeight:600}}>{l}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {vStats&&(
+                    <div style={{marginTop:14,padding:"11px 16px",background:vStats.errors>0?T.redL:vStats.warnings>0?T.amberL:T.sageL,border:`1px solid ${vStats.errors>0?T.redB:vStats.warnings>0?T.amberB:T.sageD+"44"}`,borderRadius:11,display:"flex",alignItems:"center",gap:9}}>
+                      <span style={{fontSize:15}}>{vStats.errors>0?"🚫":vStats.warnings>0?"⚠️":"✅"}</span>
+                      <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:600,color:vStats.errors>0?T.red:vStats.warnings>0?T.amber:T.sageD}}>
+                        {vStats.errors>0?`${vStats.errors} blocking errors — fix before generating`:vStats.warnings>0?`${vStats.warnings} warnings — review before generating`:`All ${vStats.orders} orders validated ✓`}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* RIGHT — Generate buttons */}
+                <div style={{display:"flex",flexDirection:"column",gap:11}}>
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:2,marginBottom:2}}>GENERATE FILES</div>
+                  {BTNS.map(btn=>(
+                    <button key={btn.id} className={`gen-card${done[btn.id]?" done":""}`}
+                      onClick={()=>triggerGen(btn.id,btn.label)}
+                      disabled={!!gen||!csvName}
+                      style={{opacity:csvName?1:0.8}}>
+                      <div style={{width:42,height:42,borderRadius:11,background:done[btn.id]?T.sageL:T.creamDD,border:`1px solid ${done[btn.id]?T.sageD+"55":T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,flexShrink:0}}>
+                        {gen===btn.id?<span className="spin" style={{fontSize:15,color:T.inkL}}>⟳</span>:done[btn.id]?"✅":btn.icon}
+                      </div>
+                      <div style={{flex:1}}>
+                        <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:13,color:T.ink}}>{btn.label}</div>
+                        <div style={{fontSize:11,color:T.inkL,marginTop:3}}>{btn.sub}</div>
+                      </div>
+                      {done[btn.id]
+                        ?<span style={{fontSize:11,color:T.sage,fontWeight:600,fontFamily:"'Montserrat',sans-serif",whiteSpace:"nowrap"}}>Downloaded ✓</span>
+                        :<span style={{fontSize:16,color:T.sand,fontWeight:300}}>↓</span>}
+                    </button>
+                  ))}
+                  <button className="btn-full" onClick={()=>triggerGen("all","All Files")} disabled={!!gen||!csvName}
+                    style={{marginTop:4,opacity:csvName?1:0.7}}>
+                    {gen==="all"?<><span className="spin">⟳</span>Generating…</>:<>⚡ GENERATE ALL FILES — 9 downloads</>}
+                  </button>
+                  {!csvName&&(
+                    <div style={{textAlign:"center",padding:"10px 0 2px",fontFamily:"'Montserrat',sans-serif",fontSize:11,color:T.inkL,letterSpacing:.3}}>
+                      Upload a CSV to unlock file generation
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Pending Drawdown Summary ── */}
+                {pendingDrawdowns.length>0&&pendingDrawdowns.map(pd=>{
+                  const totalBottles=Object.values(pd.skuTotals).reduce((s,q)=>s+q,0);
+                  return(
+                    <div key={pd.id} style={{marginTop:14,background:T.amberL,border:`1.5px solid ${T.amberB}`,borderRadius:12,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                      <div>
+                        <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:12,color:T.amber,letterSpacing:.3,marginBottom:2}}>📦 PENDING STOCK DRAWDOWN</div>
+                        <div style={{fontSize:12,color:T.inkM}}>{pd.orderDateLabel||pd.csvName} · <strong>{totalBottles.toLocaleString()} bottles</strong></div>
+                      </div>
+                      <button onClick={()=>approveDrawdown(pd)}
+                        style={{flexShrink:0,padding:"8px 16px",borderRadius:9,border:"none",background:T.amber,color:"#fff",fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:11,cursor:"pointer",whiteSpace:"nowrap"}}>
+                        ✅ Apply Drawdown
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ═══ ORDERS ═══ */}
+          {tab==="tracker"&&(
+            <div className="fu">
+              <div style={{marginBottom:18}}><div className="sc">Order Tracker</div><div className="ss">REGULAR WHOLESALE · {regularOrders.length} ORDERS</div></div>
+              <OrdersTable rows={regularOrders} allOrders={orders} setOrders={setOrders}/>
+            </div>
+          )}
+
+          {/* ═══ DASHBOARD ═══ */}
+          {tab==="dashboard"&&(
+            <div className="fu">
+              <div style={{marginBottom:20,display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
+                <div><div className="sc">Today's Snapshot</div><div className="ss">{analytics?`LOADED: ${analytics.date}`:"UPLOAD A CSV TO POPULATE"}</div></div>
+                {analytics&&<div className="mt" style={{fontSize:11,color:T.sageD,background:T.sageL,padding:"5px 13px",borderRadius:20,border:`1px solid ${T.sageD}33`,fontWeight:600}}>✅ Auto-saved</div>}
+              </div>
+              {!analytics?(
+                <div style={{textAlign:"center",padding:"70px 0",color:T.inkL}}><div style={{fontSize:48,marginBottom:12}}>📊</div><div className="pf" style={{fontSize:20,fontWeight:600,color:T.ink,marginBottom:6}}>No data yet</div><div style={{fontSize:13}}>Upload your master CSV to see today's dashboard.</div></div>
+              ):(
+                <>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:18}}>
+                    {[[f$(analytics.totalRevenue),"Revenue","💰",T.terra],[analytics.totalOrders,"Orders","🛒",T.sage],[fN(analytics.totalBottles),"Bottles","🧃",T.sand],[f$(analytics.avgOrderValue),"Avg Order","📊",T.inkM],[analytics.newCustomers.length,"New Customers","🌟",T.teal]].map(([v,l,icon,ac])=>(
+                      <div key={l} className="stat-card"><div style={{fontSize:18,marginBottom:8}}>{icon}</div><div className="pf" style={{fontSize:24,fontWeight:700,color:ac,lineHeight:1}}>{v}</div><div className="mt" style={{fontSize:10,color:T.inkL,marginTop:5,letterSpacing:.4,fontWeight:600}}>{l}</div></div>
+                    ))}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1.6fr 1fr",gap:16,marginBottom:16}}>
+                    <div className="rc"><div className="rt">UNITS BY PRODUCT</div>
+                      <ResponsiveContainer width="100%" height={210}><BarChart data={productChartData} margin={{top:0,right:0,left:-20,bottom:38}}><CartesianGrid strokeDasharray="3 3" stroke={T.border}/><XAxis dataKey="name" tick={{fontSize:9,fontFamily:"'Montserrat',sans-serif",fill:T.inkL}} angle={-35} textAnchor="end" interval={0}/><YAxis tick={{fontSize:9,fontFamily:"'Montserrat',sans-serif",fill:T.inkL}}/><Tooltip {...TT}/><Bar dataKey="qty" fill={T.terra} radius={[4,4,0,0]} name="Bottles"/></BarChart></ResponsiveContainer>
+                    </div>
+                    <div className="rc"><div className="rt">PRODUCT MIX</div>
+                      <ResponsiveContainer width="100%" height={210}><PieChart><Pie data={piData} cx="50%" cy="46%" innerRadius={45} outerRadius={78} paddingAngle={3} dataKey="value">{piData.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}</Pie><Tooltip {...TT} formatter={(v,n)=>[fN(v)+" btl",n]}/><Legend iconSize={7} wrapperStyle={{fontSize:9,fontFamily:"'Montserrat',sans-serif"}}/></PieChart></ResponsiveContainer>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+                    <div className="rc"><div className="rt">ORDERS BY COURIER</div>
+                      <ResponsiveContainer width="100%" height={170}><BarChart data={courierChartData} margin={{top:0,right:0,left:-20,bottom:0}}><CartesianGrid strokeDasharray="3 3" stroke={T.border}/><XAxis dataKey="name" tick={{fontSize:10,fontFamily:"'Montserrat',sans-serif",fill:T.inkL}}/><YAxis tick={{fontSize:9,fill:T.inkL}}/><Tooltip {...TT}/><Bar dataKey="orders" fill={T.sage} radius={[4,4,0,0]} name="Orders"/></BarChart></ResponsiveContainer>
+                    </div>
+                    <div className="rc"><div className="rt">ORDERS BY STATE</div>
+                      <ResponsiveContainer width="100%" height={170}><BarChart data={stateChartData} margin={{top:0,right:0,left:-20,bottom:0}}><CartesianGrid strokeDasharray="3 3" stroke={T.border}/><XAxis dataKey="state" tick={{fontSize:10,fontFamily:"'Montserrat',sans-serif",fill:T.inkL}}/><YAxis tick={{fontSize:9,fill:T.inkL}}/><Tooltip {...TT}/><Bar dataKey="orders" fill={T.sand} radius={[4,4,0,0]} name="Orders"/></BarChart></ResponsiveContainer>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ═══ REPORTS ═══ */}
+          {tab==="reports"&&(
+            <div className="fu">
+              <div style={{marginBottom:22,display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+                <div><div className="sc">Reports</div><div className="ss">BUSINESS INTELLIGENCE · COMING SOON</div></div>
+              </div>
+              <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:16,padding:"48px",textAlign:"center"}}>
+                <div style={{fontSize:40,marginBottom:12}}>📈</div>
+                <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:18,color:T.ink,marginBottom:8}}>Reports & Analytics</div>
+                <div style={{fontSize:13,color:T.inkL,maxWidth:400,margin:"0 auto"}}>Revenue trends, customer retention, account manager performance and more will live here.</div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ HISTORY ═══ */}
+          {tab==="history"&&(
+            <div className="fu">
+              <div style={{marginBottom:20,display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
+                <div><div className="sc">Manifests</div><div className="ss">{snapshots.length} UPLOAD{snapshots.length!==1?"S":""} · DEDUPLICATED BY FILENAME · MANIFEST DISPATCH TRACKING</div></div>
+                {snapshots.length>0&&<button className="btn-o" onClick={async()=>{if(window.confirm("Clear all manifest history? This cannot be undone.")){try{await window.storage.delete("ws-snaps");setSnapshots([]);}catch(e){}}}}>Clear All</button>}
+              </div>
+
+              {snapshots.length===0?(
+                <div style={{textAlign:"center",padding:"70px 0",color:T.inkL}}>
+                  <div style={{fontSize:48,marginBottom:12}}>🗓️</div>
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:16,fontWeight:700,color:T.inkM,marginBottom:6}}>No uploads yet</div>
+                  <div style={{fontSize:13}}>Drop a CSV on the Generate tab — it will appear here automatically.</div>
+                </div>
+              ):(
+                <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                  {snapshots.map(snap=>{
+                    const manifests=snap.manifests||[];
+                    const allSent=manifests.length>0&&manifests.every(m=>m.dispatched);
+                    const sentCount=manifests.filter(m=>m.dispatched).length;
+                    const markSent=(mi)=>{
+                      setSnapshots(prev=>{
+                        const updated=prev.map(s=>{
+                          if(s.fileName!==snap.fileName) return s;
+                          const nowStr=new Date().toLocaleString("en-AU",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                          const newManifests=(s.manifests||[]).map((m,i)=>i===mi?{...m,dispatched:!m.dispatched,sentAt:!m.dispatched?nowStr:null}:m);
+                          return{...s,manifests:newManifests};
+                        });
+                        window.storage.set("ws-snaps",JSON.stringify(updated)).catch(()=>{});
+                        return updated;
+                      });
+                      const manifest=manifests[mi];
+                      if(!manifest.dispatched){
+                        setOrders(prev=>{
+                          const updated=prev.map(o=>manifest.orders.includes(o.orderNumber)?{...o,status:"With Courier"}:o);
+                          window.storage.set("ws-orders",JSON.stringify(updated)).catch(()=>{});
+                          return updated;
+                        });
+                      }
+                    };
+                    return(
+                      <div key={snap.fileName} style={{background:T.white,border:`1.5px solid ${allSent?T.sage+"66":T.border}`,borderRadius:16,overflow:"hidden"}}>
+                        {/* Header */}
+                        <div style={{padding:"15px 22px",borderBottom:`1px solid ${T.creamD}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:allSent?T.sageL:"transparent"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:12}}>
+                            <div style={{width:36,height:36,borderRadius:10,background:allSent?T.sage:T.terraL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>
+                              {allSent?"✅":"📋"}
+                            </div>
+                            <div>
+                              <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:14,color:T.ink}}>{snap.orderDateLabel||snap.fileName}</div>
+                              <div style={{fontSize:11,color:T.inkL,marginTop:2}}>
+                                {snap.dateKey} · {snap.totalOrders} orders · {manifests.length} manifest{manifests.length!==1?"s":""}
+                                {snap.specialOrders>0&&<span style={{marginLeft:8,padding:"1px 7px",borderRadius:10,background:T.amberL,color:T.amber,fontSize:10,fontWeight:700}}>{snap.specialOrders} special</span>}
+                                {sentCount>0&&!allSent&&<span style={{color:T.amber,fontWeight:600,marginLeft:8}}>· {sentCount}/{manifests.length} sent</span>}
+                                {allSent&&<span style={{color:T.sageD,fontWeight:600,marginLeft:8}}>· All manifests sent ✓</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <button onClick={()=>{
+                            if(!window.confirm("Delete this upload and remove its orders from the feed?")) return;
+                            const orderNums=manifests.flatMap(m=>m.orders);
+                            setSnapshots(prev=>{const updated=prev.filter(s=>s.fileName!==snap.fileName);window.storage.set("ws-snaps",JSON.stringify(updated)).catch(()=>{});return updated;});
+                            setOrders(prev=>{const updated=prev.filter(o=>!orderNums.includes(o.orderNumber));window.storage.set("ws-orders",JSON.stringify(updated)).catch(()=>{});return updated;});
+                          }} style={{marginLeft:"auto",flexShrink:0,background:"none",border:`1.5px solid ${T.border}`,borderRadius:8,width:28,height:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.inkL,fontSize:13,transition:"all .15s"}}
+                            onMouseEnter={e=>{e.currentTarget.style.borderColor=T.red;e.currentTarget.style.color=T.red;}}
+                            onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.inkL;}}>✕</button>
+                        </div>
+
+                        {/* Manifest rows */}
+                        {manifests.length>0?(
+                          <div>
+                            {manifests.map((m,mi)=>(
+                              <div key={mi} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 22px",borderBottom:mi<manifests.length-1?`1px solid ${T.creamD}`:"none",background:m.dispatched?"#F0FDF4":"transparent",transition:"background .2s"}}>
+                                <div style={{fontSize:22,flexShrink:0}}>{m.icon}</div>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:700,color:m.dispatched?T.sageD:T.ink}}>{m.file}</div>
+                                  <div style={{fontSize:11,color:T.inkL,marginTop:3}}>
+                                    {m.label} · <strong>{m.orders.length}</strong> order{m.orders.length!==1?"s":""} · <span style={{fontFamily:"monospace",fontSize:10}}>{m.orders.slice(0,4).join(", ")}{m.orders.length>4?` +${m.orders.length-4} more`:""}</span>{m.sentAt&&<span style={{marginLeft:8,color:T.sageD,fontWeight:600}}>· Sent {m.sentAt}</span>}
+                                  </div>
+                                </div>
+                                <button onClick={()=>markSent(mi)}
+                                  style={{flexShrink:0,padding:"9px 20px",borderRadius:10,border:`2px solid ${m.dispatched?T.sage:T.terra}`,background:m.dispatched?T.sage:T.white,color:m.dispatched?"#fff":T.terra,fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"all .15s",letterSpacing:.3,whiteSpace:"nowrap"}}>
+                                  {m.dispatched?"✓  Manifest Sent":"Mark as Sent"}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ):(
+                          <div style={{padding:"16px 22px",fontSize:12,color:T.inkL,fontStyle:"italic"}}>
+                            Re-upload this CSV to enable manifest tracking.
+                          </div>
+                        )}
+
+                        {/* ── Generated files archive ── */}
+                        {(snap.generatedFiles||[]).length>0&&(()=>{
+                          const gf=snap.generatedFiles;
+                          const prod=gf.filter(f=>f.includes("Production_Sheet"));
+                          const courier=gf.filter(f=>f.includes("COLDXPRESS")||f.includes("DK_DIST")||f.includes("COOLCOURIERS"));
+                          const prints=gf.filter(f=>f.includes("Fronts")||f.includes("Backs"));
+                          return(
+                            <div style={{borderTop:`1px solid ${T.creamD}`,padding:"14px 22px",background:T.cream}}>
+                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:10}}>📁 GENERATED FILES</div>
+                              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                                {prod.map(f=>(
+                                  <div key={f} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 11px",borderRadius:8,background:T.white,border:`1px solid ${T.border}`,fontSize:11}}>
+                                    <span>🏭</span><span style={{fontFamily:"monospace",fontSize:10,color:T.ink}}>{f.replace(/^\d{2}-\d{2}-\d{4}_/,"")}</span>
+                                  </div>
+                                ))}
+                                {courier.map(f=>(
+                                  <div key={f} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 11px",borderRadius:8,background:T.white,border:`1px solid ${T.border}`,fontSize:11}}>
+                                    <span>{f.includes("COLD")?"❄️":f.includes("DK")?"🚚":"🧊"}</span><span style={{fontFamily:"monospace",fontSize:10,color:T.ink}}>{f.replace(/^\d{2}-\d{2}-\d{4}_/,"")}</span>
+                                  </div>
+                                ))}
+                                {prints.length>0&&(
+                                  <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 11px",borderRadius:8,background:T.white,border:`1px solid ${T.border}`,fontSize:11}}>
+                                    <span>🖨️</span>
+                                    <span style={{fontSize:11,color:T.inkM}}>{prints.length} print file{prints.length!==1?"s":""}</span>
+                                    <span style={{fontSize:10,color:T.inkL,fontFamily:"monospace"}}>({prints.map(f=>f.replace(/^\d{2}-\d{2}-\d{4}_/,"").replace(".xlsx","")).join(", ")})</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div style={{marginTop:8,fontSize:11,color:T.inkL}}>Files generated on this date · re-download from the Generate tab</div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ═══ PALLETS ═══ */}
+          {tab==="pallets"&&(
+            <div className="fu">
+              <div style={{marginBottom:20}}><div className="sc">Pallet & Special Orders</div><div className="ss">NON-REGULAR CUSTOMERS · AUTO-SPLIT FROM CSV · {palletOrders.length} ORDERS</div></div>
+              {palletOrders.length===0?(
+                <div style={{textAlign:"center",padding:"60px 0",color:T.inkL}}><div style={{fontSize:48,marginBottom:12}}>🏗️</div><div style={{fontFamily:"'Montserrat',sans-serif",fontSize:20,fontWeight:700,color:T.ink,marginBottom:6}}>No special orders</div><div style={{fontSize:13}}>Special/pallet customers are auto-detected by a non-REGULAR CustomerGroup, PriceGroup, or VisibilityGroup.</div></div>
+              ):(
+                <>
+                  {/* Generate buttons */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:11,marginBottom:18}}>
+                    {[{id:"pallet-prod",label:"Pallet Production Sheet",sub:"Separate run for pallet customers",icon:"🏭"},{id:"pallet-prints",label:"Pallet Print Files (5)",sub:"Fronts & backs for pallet SKUs",icon:"🖨️"}].map(btn=>(
+                      <button key={btn.id} className={`gen-card${done[btn.id]?" done":""}`} onClick={()=>triggerGen(btn.id,btn.label)} disabled={!!gen||!csvName}>
+                        <div style={{width:40,height:40,borderRadius:10,background:done[btn.id]?T.sageL:T.creamDD,border:`1px solid ${done[btn.id]?T.sageD+"44":T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+                          {gen===btn.id?<span className="spin" style={{fontSize:15,color:T.inkL}}>⟳</span>:done[btn.id]?"✅":btn.icon}
+                        </div>
+                        <div style={{flex:1}}><div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:12,color:T.ink}}>{btn.label}</div><div style={{fontSize:11,color:T.inkL,marginTop:2}}>{btn.sub}</div></div>
+                        {done[btn.id]?<span style={{fontSize:11,color:T.sage,fontWeight:600}}>Done ✓</span>:<span style={{fontSize:14,color:T.sand}}>↓</span>}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Special order delivery confirmation */}
+                  <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden",marginBottom:18}}>
+                    <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.creamD}`,background:T.creamD}}>
+                      <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:13,color:T.ink}}>Special Order Delivery</div>
+                      <div style={{fontSize:11,color:T.inkL,marginTop:2}}>These orders are excluded from courier manifests — tick when delivered</div>
+                    </div>
+                    {palletOrders.map((o,i)=>{
+                      const delivered=!!specialDelivered[o.orderNumber];
+                      return(
+                        <div key={o.orderNumber} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 20px",borderBottom:i<palletOrders.length-1?`1px solid ${T.creamD}`:"none",background:delivered?"#F0FDF4":"transparent",transition:"background .2s"}}>
+                          <div style={{flex:1}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:800,color:T.terra}}>{o.orderNumber}</span>
+                              <span style={{fontSize:13,color:T.ink,fontWeight:500}}>{o.customer}</span>
+                            </div>
+                            <div style={{fontSize:11,color:T.inkL,marginTop:2}}>
+                              {o.suburb}{o.suburb&&o.state?", ":""}{o.state} · {o.items.reduce((s,it)=>s+parseInt(it.qty||0),0)} items · Due {o.dueDate||"—"}
+                              {delivered&&specialDelivered[o.orderNumber].at&&<span style={{color:T.sageD,fontWeight:600,marginLeft:8}}>· Delivered {specialDelivered[o.orderNumber].at}</span>}
+                            </div>
+                          </div>
+                          <button onClick={()=>{
+                            const next={...specialDelivered};
+                            if(delivered){
+                              delete next[o.orderNumber];
+                            } else {
+                              next[o.orderNumber]={at:new Date().toLocaleString("en-AU")};
+                              // Also update order status
+                              setOrders(prev=>{
+                                const updated=prev.map(x=>x.orderNumber===o.orderNumber?{...x,status:"Delivered",deliveredAt:next[o.orderNumber].at}:x);
+                                window.storage.set("ws-orders",JSON.stringify(updated)).catch(()=>{});
+                                return updated;
+                              });
+                            }
+                            setSpecialDelivered(next);
+                            localStorage.setItem('ws-special-delivered',JSON.stringify(next));
+                          }} style={{flexShrink:0,width:36,height:36,borderRadius:10,border:`2px solid ${delivered?T.sage:T.border}`,background:delivered?T.sage:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,transition:"all .2s"}}>
+                            {delivered?"✓":""}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{padding:"12px 16px",background:T.amberL,border:`1px solid ${T.amberB}`,borderRadius:11}}>
+                    <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:11,color:T.amber,marginBottom:3}}>ℹ️ SPECIAL ORDERS ARE EXCLUDED FROM ALL COURIER MANIFESTS</div>
+                    <div style={{fontSize:12,color:T.inkM,lineHeight:1.7}}>Orders with a non-REGULAR CustomerGroup, VisibilityGroup, or PriceGroup are automatically kept off the delivery manifests. Tick the green button above to confirm delivery when done.</div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+
+          {/* ═══ CUSTOMERS ═══ */}
+          {tab==="customers"&&(
+            <div className="fu">
+              <div style={{marginBottom:22,display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+                <div><div className="sc">Customers</div><div className="ss">CUSTOMER DATABASE · COMING SOON</div></div>
+              </div>
+              <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:16,padding:"48px",textAlign:"center"}}>
+                <div style={{fontSize:40,marginBottom:12}}>🏪</div>
+                <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:18,color:T.ink,marginBottom:8}}>Customer Database</div>
+                <div style={{fontSize:13,color:T.inkL,maxWidth:400,margin:"0 auto"}}>Full customer profiles and history will be available here. Upload your customer export to populate this tab.</div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ STOCKTAKE ═══ */}
+          {tab==="stocktake"&&(
+            <div className="fu">
+              <div style={{marginBottom:22,display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+                <div>
+                  <div className="sc">Stocktake</div>
+                  <div className="ss">ENTER BOTTLE COUNTS · APPROVE DRAWDOWNS FROM CSV UPLOADS</div>
+                </div>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <button className="btn-o" onClick={()=>{
+                    setStockEdit(Object.fromEntries(ALL_TRACKED_SKUS.map(s=>[s,stock[s]||0])));
+                  }}>✏️ Edit Stock</button>
+                  <button className="btn-o" onClick={()=>{
+                    const d=new Date().toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+                    const el=document.getElementById("ws-print-stocktake");
+                    // Build print HTML
+                    const rows350=SKUS_350.map(s=>`<tr><td>${s}</td><td>${stock[s]||0}</td></tr>`).join("");
+                    const rowsTea=SKUS_TEA.map(s=>`<tr><td>${s}</td><td>${stock[s]||0}</td></tr>`).join("");
+                    const rows1L=SKUS_1L.map(s=>`<tr><td>${s}</td><td>${stock[s]||0}</td></tr>`).join("");
+                    el.innerHTML=`
+                      <div style="font-family:'Montserrat',sans-serif;padding:36px 44px;max-width:800px;margin:0 auto;color:#2D1B14">
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                          <div>
+                            <div style="font-size:22px;font-weight:800;letter-spacing:-0.5px">WHOLESALE STATE</div>
+                            <div style="font-size:10px;font-weight:700;color:#C4A882;letter-spacing:3px;margin-top:2px">STOCK COUNT REPORT</div>
+                          </div>
+                          <div style="text-align:right;font-size:11px;color:#A07A6E">${d}</div>
+                        </div>
+                        <div style="border-top:3px solid #E07A5F;margin-bottom:28px"></div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px">
+                          <div>
+                            <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:#A07A6E;margin-bottom:10px">350ML JUICES</div>
+                            <table style="width:100%;border-collapse:collapse;font-size:12px">
+                              <thead><tr style="background:#FEF9F5"><th style="text-align:left;padding:7px 10px;font-weight:700;border-bottom:2px solid #F0E4D8">Product</th><th style="text-align:right;padding:7px 10px;font-weight:700;border-bottom:2px solid #F0E4D8">Bottles</th></tr></thead>
+                              <tbody>${rows350}</tbody>
+                            </table>
+                          </div>
+                          <div>
+                            <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:#A07A6E;margin-bottom:10px">1L RANGE</div>
+                            <table style="width:100%;border-collapse:collapse;font-size:12px">
+                              <thead><tr style="background:#FEF9F5"><th style="text-align:left;padding:7px 10px;font-weight:700;border-bottom:2px solid #F0E4D8">Product</th><th style="text-align:right;padding:7px 10px;font-weight:700;border-bottom:2px solid #F0E4D8">Bottles</th></tr></thead>
+                              <tbody>${rows1L}</tbody>
+                            </table>
+                            <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:#A07A6E;margin:18px 0 10px">TEA RANGE</div>
+                            <table style="width:100%;border-collapse:collapse;font-size:12px">
+                              <thead><tr style="background:#FEF9F5"><th style="text-align:left;padding:7px 10px;font-weight:700;border-bottom:2px solid #F0E4D8">Product</th><th style="text-align:right;padding:7px 10px;font-weight:700;border-bottom:2px solid #F0E4D8">Bottles</th></tr></thead>
+                              <tbody>${rowsTea}</tbody>
+                            </table>
+                          </div>
+                        </div>
+                        <div style="margin-top:28px;border-top:1px solid #F0E4D8;padding-top:16px;display:flex;justify-content:space-between;align-items:center">
+                          <div style="font-size:11px;color:#A07A6E">Total SKUs tracked: ${ALL_TRACKED_SKUS.length}</div>
+                          <div style="font-size:14px;font-weight:800;color:#E07A5F">TOTAL BOTTLES: ${ALL_TRACKED_SKUS.reduce((s,k)=>s+(stock[k]||0),0).toLocaleString()}</div>
+                        </div>
+                        <div style="margin-top:24px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;border-top:1px solid #F0E4D8;padding-top:20px">
+                          <div style="text-align:center"><div style="font-size:10px;color:#A07A6E;font-weight:700;letter-spacing:1px;margin-bottom:6px">COUNTED BY</div><div style="border-bottom:1px solid #2D1B14;height:24px"></div></div>
+                          <div style="text-align:center"><div style="font-size:10px;color:#A07A6E;font-weight:700;letter-spacing:1px;margin-bottom:6px">VERIFIED BY</div><div style="border-bottom:1px solid #2D1B14;height:24px"></div></div>
+                          <div style="text-align:center"><div style="font-size:10px;color:#A07A6E;font-weight:700;letter-spacing:1px;margin-bottom:6px">DATE</div><div style="border-bottom:1px solid #2D1B14;height:24px"></div></div>
+                        </div>
+                      </div>`;
+                    window.print();
+                  }}>🖨️ Export PDF</button>
+                  <button className="btn-o" onClick={async()=>{
+                    if(window.confirm("Reset all stock counts to zero?")){
+                      const z=Object.fromEntries(ALL_TRACKED_SKUS.map(s=>[s,0]));
+                      setStock(z);
+                      try{await window.storage.set("ws-stock",JSON.stringify(z));}catch(e){}
+                    }
+                  }}>Reset</button>
+                </div>
+              </div>
+
+
+              {/* ── QUICK ADD ── */}
+              <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,padding:"20px 24px",marginBottom:18}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:T.inkL,letterSpacing:1.5}}>QUICK ADD STOCK</div>
+                  <div style={{fontSize:11,color:T.inkL}}>Enter amounts to add · use negative to remove</div>
+                </div>
+                {[
+                  {label:"🧃 350ml Juices",skus:SKUS_350,ac:T.terra,bg:T.terraL},
+                  {label:"🍵 Tea Range",skus:SKUS_TEA,ac:T.teal,bg:T.tealL},
+                  {label:"🫙 1L Range",skus:SKUS_1L,ac:T.sand,bg:T.sandL},
+                ].map(({label,skus,ac,bg})=>(
+                  <div key={label} style={{marginBottom:16}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                      <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:ac,letterSpacing:1.5}}>{label.toUpperCase()}</div>
+                      <div style={{flex:1,height:1,background:T.border}}/>
+                      <button style={{fontSize:10,padding:"3px 10px",borderRadius:6,border:`1px solid ${T.border}`,background:T.creamD,cursor:"pointer",color:T.inkL,fontFamily:"'Montserrat',sans-serif",fontWeight:600}}
+                        onClick={()=>setQuickAdd(p=>{const u={...p};skus.forEach(s=>delete u[s]);return u;})}>
+                        Clear section
+                      </button>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(185px,1fr))",gap:7}}>
+                      {skus.map(sku=>{
+                        const val=quickAdd[sku]??0;
+                        const hasVal=parseInt(val)!==0&&val!=="";
+                        return(
+                          <div key={sku} style={{display:"flex",alignItems:"center",gap:6,background:hasVal?bg:T.creamD,border:`1.5px solid ${hasVal?ac+"55":T.border}`,borderRadius:9,padding:"8px 10px",transition:"all .15s"}}>
+                            <div style={{flex:1,fontSize:11,color:T.ink,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}>
+                              {sku.replace(" 350ml","").replace(" 1L","").replace("Organic ","").replace(" Iced Tea 350ml","")}
+                            </div>
+                            <div style={{display:"flex",alignItems:"center",gap:3,flexShrink:0}}>
+                              <button onClick={()=>setQuickAdd(p=>({...p,[sku]:(parseInt(p[sku]||0)||0)-1}))}
+                                style={{width:20,height:20,borderRadius:4,border:`1px solid ${T.border}`,background:T.white,cursor:"pointer",fontSize:12,color:T.inkM,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+                              <input type="number"
+                                value={val}
+                                onChange={e=>setQuickAdd(p=>({...p,[sku]:e.target.value}))}
+                                style={{width:44,padding:"3px 5px",borderRadius:6,border:`1.5px solid ${hasVal?ac:T.border}`,fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:12,textAlign:"center",background:T.white,color:hasVal&&parseInt(val)<0?T.red:T.ink}}/>
+                              <button onClick={()=>setQuickAdd(p=>({...p,[sku]:(parseInt(p[sku]||0)||0)+1}))}
+                                style={{width:20,height:20,borderRadius:4,border:`1px solid ${T.border}`,background:T.white,cursor:"pointer",fontSize:12,color:T.inkM,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                <div style={{display:"flex",gap:8,marginTop:4,paddingTop:14,borderTop:`1px solid ${T.border}`,alignItems:"center"}}>
+                  <button className="btn-t" onClick={async()=>{
+                    const hasChanges=ALL_TRACKED_SKUS.some(s=>parseInt(quickAdd[s]||0)!==0);
+                    if(!hasChanges){alert("No quantities entered.");return;}
+                    setStock(prev=>{
+                      const updated={...prev};
+                      ALL_TRACKED_SKUS.forEach(s=>{
+                        const delta=parseInt(quickAdd[s])||0;
+                        if(delta!==0) updated[s]=Math.max(0,(updated[s]||0)+delta);
+                      });
+                      window.storage.set("ws-stock",JSON.stringify(updated)).catch(()=>{});
+                      return updated;
+                    });
+                    setQuickAdd({});
+                  }}>＋ Apply to Stock</button>
+                  <button className="btn-o" onClick={()=>setQuickAdd({})}>Clear All</button>
+                  <div style={{marginLeft:"auto",fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:700,color:T.inkM}}>
+                    {ALL_TRACKED_SKUS.some(s=>parseInt(quickAdd[s]||0)!==0)&&
+                      `${ALL_TRACKED_SKUS.reduce((s,k)=>s+(parseInt(quickAdd[k])||0),0)>0?"+" : ""}${ALL_TRACKED_SKUS.reduce((s,k)=>s+(parseInt(quickAdd[k])||0),0)} bottles total`
+                    }
+                  </div>
+                </div>
+              </div>
+
+              {/* ── PENDING DRAWDOWNS ── */}
+              <div style={{marginBottom:16}}>
+                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:T.inkL,letterSpacing:1.5,marginBottom:10}}>
+                  PENDING DRAWDOWNS {pendingDrawdowns.length>0&&<span style={{background:T.terra,color:"#fff",borderRadius:20,padding:"2px 8px",fontSize:10,marginLeft:6}}>{pendingDrawdowns.length}</span>}
+                </div>
+                {pendingDrawdowns.length===0?(
+                  <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,padding:"32px",textAlign:"center",color:T.inkL}}>
+                    <div style={{fontSize:28,marginBottom:8}}>📋</div>
+                    <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:13,color:T.inkM,marginBottom:4}}>No pending drawdowns</div>
+                    <div style={{fontSize:12}}>When you upload a CSV, it will appear here for approval before drawing down stock.</div>
+                  </div>
+                ):(
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {pendingDrawdowns.map(pd=>{
+                      const totalBottles=Object.values(pd.skuTotals).reduce((s,v)=>s+v,0);
+                      const affectedSkus=Object.entries(pd.skuTotals).filter(([,v])=>v>0);
+                      return(
+                        <div key={pd.id} style={{background:T.white,border:`1.5px solid ${T.amberB}`,borderRadius:14,padding:"18px 22px"}}>
+                          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,marginBottom:14}}>
+                            <div>
+                              <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:14,color:T.ink,marginBottom:3}}>{pd.orderDateLabel||pd.csvName}</div>
+                              <div style={{fontSize:12,color:T.inkL}}>Uploaded {pd.date} · <strong style={{color:T.terra}}>{totalBottles.toLocaleString()} bottles</strong> across {affectedSkus.length} SKUs</div>
+                            </div>
+                            <div style={{display:"flex",gap:8,flexShrink:0}}>
+                              <button style={{background:T.sageL,border:`1.5px solid ${T.sageD}55`,borderRadius:9,padding:"8px 16px",fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:12,color:T.sageD,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
+                                onClick={()=>approveDrawdown(pd)}>
+                                ✅ Approve &amp; Draw Down
+                              </button>
+                              <button className="btn-o" onClick={()=>{
+                                setPendingDrawdowns(prev=>{
+                                  const updated=prev.filter(p=>p.id!==pd.id);
+                                  window.storage.set("ws-pending-drawdowns",JSON.stringify(updated)).catch(()=>{});
+                                  return updated;
+                                });
+                              }}>Dismiss</button>
+                            </div>
+                          </div>
+                          {/* SKU breakdown */}
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:6}}>
+                            {affectedSkus.map(([sku,qty])=>(
+                              <div key={sku} style={{background:T.amberL,border:`1px solid ${T.amberB}`,borderRadius:8,padding:"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                <div style={{fontSize:11,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,marginRight:8}}>{sku}</div>
+                                <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:13,color:T.amber,flexShrink:0}}>−{qty}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* ── CURRENT STOCK ── */}
+              {Object.keys(stockEdit).length>0?(
+                /* EDIT MODE */
+                <div style={{background:T.white,border:`1.5px solid ${T.terra}55`,borderRadius:16,padding:"22px 26px",marginBottom:20}}>
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:13,color:T.terra,letterSpacing:.5,marginBottom:18}}>EDIT STOCK COUNTS — BOTTLES</div>
+                  {[["350ml Juices",SKUS_350],["Tea Range",SKUS_TEA],["1L Range",SKUS_1L]].map(([section,skus])=>(
+                    <div key={section} style={{marginBottom:20}}>
+                      <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:1.5,marginBottom:10}}>{section.toUpperCase()}</div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8}}>
+                        {skus.map(sku=>(
+                          <div key={sku} style={{background:T.creamD,borderRadius:10,padding:"10px 13px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                            <div style={{fontSize:12,color:T.ink,fontWeight:500,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sku}</div>
+                            <input
+                              type="number" min="0"
+                              value={stockEdit[sku]??0}
+                              onChange={e=>setStockEdit(p=>({...p,[sku]:parseInt(e.target.value)||0}))}
+                              style={{width:70,padding:"5px 8px",borderRadius:7,border:`1.5px solid ${T.border}`,fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:13,textAlign:"right",background:T.white}}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{display:"flex",gap:10,marginTop:8}}>
+                    <button className="btn-t" onClick={async()=>{
+                      setStock(stockEdit);
+                      setStockEdit({});
+                      try{await window.storage.set("ws-stock",JSON.stringify(stockEdit));}catch(e){}
+                    }}>✅ Save Stock Count</button>
+                    <button className="btn-o" onClick={()=>setStockEdit({})}>Cancel</button>
+                  </div>
+                </div>
+              ):(
+                /* VIEW MODE */
+                <div style={{marginBottom:20}}>
+                  {[["🧃 350ml Juices",SKUS_350,T.terra],["🍵 Tea Range",SKUS_TEA,T.teal],["🫙 1L Range",SKUS_1L,T.sand]].map(([section,skus,ac])=>(
+                    <div key={section} style={{marginBottom:16}}>
+                      <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:T.inkL,letterSpacing:1.5,marginBottom:8}}>{section.toUpperCase()}</div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:8}}>
+                        {skus.map(sku=>{
+                          const qty=stock[sku]||0;
+                          const low=qty<24;
+                          return(
+                            <div key={sku} style={{background:T.white,border:`1px solid ${low&&qty>0?T.amberB:qty===0?"#FECACA":T.border}`,borderRadius:12,padding:"14px 16px",transition:"all .15s"}}
+                              onMouseEnter={e=>e.currentTarget.style.transform="translateY(-1px)"}
+                              onMouseLeave={e=>e.currentTarget.style.transform="none"}>
+                              <div style={{fontSize:11,color:T.inkL,marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sku}</div>
+                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:24,fontWeight:800,color:qty===0?T.red:low?T.amber:ac,lineHeight:1}}>{qty}</div>
+                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:600,color:qty===0?T.red:low?T.amber:T.inkL,marginTop:4,letterSpacing:.5}}>
+                                {qty===0?"OUT OF STOCK":low?"LOW STOCK":"BOTTLES"}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* ── DRAWDOWN HISTORY ── */}
+              {approvedDrawdowns.length>0&&(
+                <div>
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:T.inkL,letterSpacing:1.5,marginBottom:10}}>DRAWDOWN HISTORY</div>
+                  <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
+                    {approvedDrawdowns.slice(0,20).map((d,i)=>(
+                      <div key={d.id} style={{display:"flex",alignItems:"center",gap:14,padding:"12px 20px",borderBottom:i<approvedDrawdowns.length-1?`1px solid ${T.creamD}`:"none"}}>
+                        <span style={{fontSize:16}}>✅</span>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:13,color:T.ink,fontWeight:500}}>{d.csvName}</div>
+                          <div style={{fontSize:11,color:T.inkL,marginTop:1}}>Approved {d.approvedAt} · {Object.values(d.skuTotals).reduce((s,v)=>s+v,0).toLocaleString()} bottles drawn</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ═══ EMAIL HUB ═══ */}
+          {tab==="email"&&(
+            <div className="fu">
+              <div style={{marginBottom:20,display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
+                <div><div className="sc">Email Hub</div><div className="ss">ORDERMENTUM ORDERS VIA OUTLOOK · AUTO-SYNC EVERY 3 MIN</div></div>
+                {graphConnected&&(
+                  <button onClick={async()=>{
+                    try{await apiFetch('/api/graph/poll',{method:'POST'});alert('Inbox polled — check Orders tab for new orders.');}
+                    catch(e){alert('Poll failed: '+e.message);}
+                  }} className="btn-o" style={{fontSize:12}}>⟳ Poll Now</button>
+                )}
+              </div>
+
+              {/* Connection card */}
+              <div className="card" style={{marginBottom:16,border:`1.5px solid ${graphConnected?T.sage+'66':T.border}`}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14}}>
+                  <div style={{display:"flex",alignItems:"center",gap:14}}>
+                    <div style={{width:48,height:48,borderRadius:13,background:graphConnected?T.sageL:T.creamDD,border:`1px solid ${graphConnected?T.sageD+'44':T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>
+                      {graphConnected?"📬":"📭"}
+                    </div>
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:3}}>
+                        <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:15,fontWeight:700,color:T.ink}}>Microsoft 365 / Outlook</span>
+                        {graphConnected&&<span style={{fontSize:10,background:T.sageL,color:T.sageD,padding:"2px 9px",borderRadius:20,fontFamily:"'Montserrat',sans-serif",fontWeight:700,letterSpacing:.8,display:"flex",alignItems:"center",gap:4}}><span style={{width:6,height:6,borderRadius:"50%",background:T.sage,display:"inline-block"}}/>LIVE</span>}
+                      </div>
+                      <div style={{fontSize:13,color:T.inkL}}>
+                        {graphConnected
+                          ? `Connected · polling every 3 min · new Ordermentum orders auto-added`
+                          : "Connect your Outlook inbox to automatically pull in new Ordermentum orders."}
+                      </div>
+                      {graphConnected&&graphConnectedAt&&(
+                        <div style={{fontSize:11,color:T.inkL,marginTop:3}}>Connected {new Date(graphConnectedAt).toLocaleDateString('en-AU')}</div>
+                      )}
+                    </div>
+                  </div>
+                  {graphConnected
+                    ? <button onClick={async()=>{
+                        if(!window.confirm('Disconnect Outlook? Email auto-import will stop.')) return;
+                        try{await apiFetch('/api/graph/disconnect',{method:'POST'});setGraphConnected(false);setGraphConnectedAt(null);}
+                        catch(e){alert('Error: '+e.message);}
+                      }} className="btn-o" style={{color:T.red,borderColor:T.red,flexShrink:0}}>Disconnect</button>
+                    : <button onClick={()=>window.location.href='/api/graph/connect'} className="btn-t" style={{flexShrink:0}}>Connect Inbox</button>
+                  }
+                </div>
+
+                {!graphConnected&&(
+                  <div style={{marginTop:12,padding:"12px 15px",background:T.blueL,border:`1px solid #BFDBFE`,borderRadius:10}}>
+                    <div style={{fontSize:13,color:T.inkM,lineHeight:1.7}}>
+                      Click <strong>Connect Inbox</strong> to authorise this dashboard to read your Outlook inbox via Microsoft Graph.
+                      You'll need your Azure app credentials set in Railway environment variables first — see <strong>DEPLOY.md</strong>.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* How it works */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+                <div className="card">
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:14}}>HOW IT WORKS</div>
+                  {[
+                    {n:"1",t:"Order email arrives",d:"From Ordermentum to admin@pressedjuices.com.au with OMO number",c:T.terra},
+                    {n:"2",t:"Server parses email",d:"Extracts order number, customer, items, delivery date — every 3 min",c:T.sage},
+                    {n:"3",t:"Added to Orders tab",d:"Appears as Order Confirmed — ready for CSV upload to generate files",c:T.sand},
+                    {n:"4",t:"POD email received",d:"Courier sends delivery confirmation with OMO ref → auto-marked Delivered",c:T.teal},
+                  ].map((s,i,arr)=>(
+                    <div key={s.n} style={{display:"flex",gap:12,marginBottom:i<arr.length-1?12:0}}>
+                      <div style={{width:26,height:26,borderRadius:"50%",background:s.c+"22",border:`1.5px solid ${s.c}55`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:s.c,flexShrink:0}}>{s.n}</div>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{s.t}</div>
+                        <div style={{fontSize:11,color:T.inkL,marginTop:2}}>{s.d}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="card">
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:14}}>WHAT GETS PARSED</div>
+                  {[
+                    ["OMO Number","Order reference from subject/body"],
+                    ["Customer Name","From email subject line"],
+                    ["Delivery Date","Due date extracted from body"],
+                    ["Line Items","Products × quantities"],
+                    ["Payment Method","Card / direct / other"],
+                    ["Source","Tagged as 'email' so you know origin"],
+                  ].map(([k,v])=>(
+                    <div key={k} style={{display:"flex",gap:8,marginBottom:8,fontSize:12}}>
+                      <span style={{color:T.inkL,width:110,flexShrink:0}}>{k}</span>
+                      <span style={{color:T.ink}}>{v}</span>
+                    </div>
+                  ))}
+                  <div style={{marginTop:8,padding:"8px 12px",background:T.amberL,border:`1px solid ${T.amberB}`,borderRadius:8,fontSize:11,color:T.amber}}>
+                    ⚠️ Courier and suburb are blank until CSV upload — email gives the order, CSV gives the routing.
+                  </div>
+                </div>
+              </div>
+
+              {/* Setup checklist */}
+              {!graphConnected&&(
+                <div className="card">
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:14}}>SETUP CHECKLIST</div>
+                  {[
+                    ["Railway deployed","Your app is live at a railway.app URL"],
+                    ["PostgreSQL added","Database provisioned in Railway project"],
+                    ["Azure app registered","AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET set in Railway Variables"],
+                    ["Redirect URI set","GRAPH_REDIRECT_URI matches your Azure app registration exactly"],
+                    ["Connect Inbox","Click the button above and sign in with your Microsoft 365 account"],
+                  ].map(([t,d],i)=>(
+                    <div key={i} style={{display:"flex",gap:12,marginBottom:12,alignItems:"flex-start"}}>
+                      <div style={{width:20,height:20,borderRadius:4,border:`1.5px solid ${T.border}`,flexShrink:0,marginTop:1}}/>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{t}</div>
+                        <div style={{fontSize:11,color:T.inkL}}>{d}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+        </main>
+      </div>
+    </>
+  );
+}
+
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+
+  </script>
 </body>
 </html>
