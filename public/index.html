@@ -247,8 +247,32 @@ function dlXlsx(sheets,filename){
     console.error(err);
   }
 }
-/* ── CSV ── */
-function parseCSV(text){
+
+// Bundle multiple xlsx files into one zip for download
+function dlZip(files, zipName){
+  Promise.all(files.map(({sheets,name})=>{
+    const{wb,wbR,rR,ct,sty,ssX,sxml}=buildXlsx(sheets);
+    const xlsxBlob=mkZip([
+      {name:"[Content_Types].xml",        data:u8(ct)},
+      {name:"_rels/.rels",                data:u8(rR)},
+      {name:"xl/workbook.xml",            data:u8(wb)},
+      {name:"xl/_rels/workbook.xml.rels", data:u8(wbR)},
+      {name:"xl/styles.xml",              data:u8(sty)},
+      {name:"xl/sharedStrings.xml",       data:u8(ssX)},
+      ...sxml.map((x,i)=>({name:`xl/worksheets/sheet${i+1}.xml`,data:u8(x)})),
+    ]);
+    return xlsxBlob.arrayBuffer().then(buf=>({name,data:new Uint8Array(buf)}));
+  })).then(entries=>{
+    const outerZip=mkZip(entries);
+    const url=URL.createObjectURL(outerZip);
+    const a=document.createElement("a");
+    a.href=url;a.download=zipName;
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
+  }).catch(err=>alert("Zip error: "+err.message));
+}
+
+(text){
   const lines=text.split(/\r?\n/).filter(Boolean);
   if(lines.length<2)return[];
   const headers=lines[0].split(",").map(h=>h.replace(/^"|"$/g,"").trim());
@@ -927,12 +951,18 @@ function App(){
       else if(type==="pallet-prod")dlXlsx(genProduction(rows,true),`${d}_Pallet_Production.xlsx`);
       else if(type==="pallet-prints"){const{f350,b350,fT,bT,f1}=genPrints(rows,true);for(const[s,n]of[[f350,`${d}_Pallet_350ml_Fronts.xlsx`],[b350,`${d}_Pallet_350ml_Backs.xlsx`],[fT,`${d}_Pallet_Tea_Fronts.xlsx`],[bT,`${d}_Pallet_Tea_Backs.xlsx`],[f1,`${d}_Pallet_1L_Fronts.xlsx`]])dlXlsx(s,n);}
       else if(type==="all"){
-        dlXlsx(genProduction(rows),`${d}_Production_Sheet.xlsx`);
-        dlXlsx(genColdXpress(rows,d),`${d}_COLDXPRESS.xlsx`);
-        dlXlsx(genDK(rows),`${d}_DK_DISTRIBUTIONS.xlsx`);
-        dlXlsx(genCoolCouriers(rows),`${d}_COOLCOURIERS.xlsx`);
         const{f350,b350,fT,bT,f1}=genPrints(rows);
-        for(const[s,n]of[[f350,`${d}_350ml_Fronts.xlsx`],[b350,`${d}_350ml_Backs.xlsx`],[fT,`${d}_Tea_Fronts.xlsx`],[bT,`${d}_Tea_Backs.xlsx`],[f1,`${d}_1L_Fronts.xlsx`]])dlXlsx(s,n);
+        dlZip([
+          {sheets:genProduction(rows),       name:`${d}_Production_Sheet.xlsx`},
+          {sheets:genColdXpress(rows,d),     name:`${d}_COLDXPRESS.xlsx`},
+          {sheets:genDK(rows),               name:`${d}_DK_DISTRIBUTIONS.xlsx`},
+          {sheets:genCoolCouriers(rows),     name:`${d}_COOLCOURIERS.xlsx`},
+          {sheets:f350,                      name:`${d}_350ml_Fronts.xlsx`},
+          {sheets:b350,                      name:`${d}_350ml_Backs.xlsx`},
+          {sheets:fT,                        name:`${d}_Tea_Fronts.xlsx`},
+          {sheets:bT,                        name:`${d}_Tea_Backs.xlsx`},
+          {sheets:f1,                        name:`${d}_1L_Fronts.xlsx`},
+        ], `${d}_Wholesale_State_Files.zip`);
       }
       setDone(p=>({...p,[type]:true}));
       // Record this file in the current snap's generatedFiles registry
