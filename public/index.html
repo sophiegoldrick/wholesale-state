@@ -820,6 +820,7 @@ function App(){
   const[valModal,setValModal]=useState(null);
   const[snapshots,setSnapshots]=useState([]);
   const[analytics,setAnalytics]=useState(null);
+  const[reportTab,setReportTab]=useState("revenue");
   const[connected,setConnected]=useState(false);
   const[efilt,setEfilt]=useState("all");
   const[customers,setCustomers]=useState([]);
@@ -833,10 +834,7 @@ function App(){
   const[pendingDrawdowns,setPendingDrawdowns]=useState([]); // [{csvName, date, skuTotals, id}]
   const[approvedDrawdowns,setApprovedDrawdowns]=useState([]); // history
   const[quickAdd,setQuickAdd]=useState({});
-  const[errDismissed,setErrDismissed]=useState(false);
-  const[warnDismissed,setWarnDismissed]=useState(false);
-  const[palletExpanded,setPalletExpanded]=useState(null);
-  const[repTab,setRepTab]=useState("overview"); // {sku: delta string} for quick +/- inputs
+  const[snapGen,setSnapGen]=useState({}); // {dateKey: type} — tracks which snap is generating // {sku: delta string} for quick +/- inputs
   const fileRef=useRef();
   const rowsRef=useRef([]);  // always holds latest parsed rows, safe for async doGen
 
@@ -869,7 +867,6 @@ function App(){
       const rows=parseCSV(e.target.result);
       rowsRef.current=rows;
       setCsvRows(rows);setCsvName(file.name);setDone({});
-      setErrDismissed(false);setWarnDismissed(false);
       const om={};
       rows.filter(r=>r.SKU!=="FREIGHT").forEach(r=>{
         if(!om[r.OrderNumber])om[r.OrderNumber]={orderNumber:r.OrderNumber,customer:r.Customer,courier:r.Courier,dueDate:r.DueDate,deliveryDate:r.DeliveryDate,state:r.CustomerState,suburb:r.CustomerSuburb,postcode:r.Postcode,address:r.CustomerAddress1,address2:r.CustomerAddress2,invoiceNumber:r.InvoiceNumber,orderDate:r.ExcelisedOrderDate,accountManager:r.AccountManager,customerGroup:r.Customergroup,customerId:r.CustomerId,paymentMethod:r.PaymentMethod||"",paidAt:r.PaidAt,status:"In Production",items:[],isPallet:false};
@@ -1179,8 +1176,8 @@ function App(){
               {TABS.map(t=><button key={t.id} className={`tab-btn${tab===t.id?" active":""}`} onClick={()=>setTab(t.id)}><span>{t.icon}</span>{t.label}</button>)}
             </nav>
             <div style={{display:"flex",alignItems:"center",gap:7}}>
-              {vStats&&vStats.errors>0&&!errDismissed&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:T.redL,border:`1px solid ${T.redB}`,borderRadius:20}}><span style={{fontSize:11}}>🚫</span><span className="mt" style={{fontSize:11,color:T.red,fontWeight:700}}>{vStats.errors} error{vStats.errors>1?"s":""}</span><button onClick={()=>setErrDismissed(true)} style={{background:"none",border:"none",cursor:"pointer",color:T.red,fontSize:12,lineHeight:1,padding:"0 0 0 4px",fontWeight:700}}>✕</button></div>}
-              {vStats&&vStats.warnings>0&&!warnDismissed&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:T.amberL,border:`1px solid ${T.amberB}`,borderRadius:20}}><span style={{fontSize:11}}>⚠️</span><span className="mt" style={{fontSize:11,color:T.amber,fontWeight:700}}>{vStats.warnings}</span><button onClick={()=>setWarnDismissed(true)} style={{background:"none",border:"none",cursor:"pointer",color:T.amber,fontSize:12,lineHeight:1,padding:"0 0 0 4px",fontWeight:700}}>✕</button></div>}
+              {vStats&&vStats.errors>0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:T.redL,border:`1px solid ${T.redB}`,borderRadius:20}}><span style={{fontSize:11}}>🚫</span><span className="mt" style={{fontSize:11,color:T.red,fontWeight:700}}>{vStats.errors} error{vStats.errors>1?"s":""}</span></div>}
+              {vStats&&vStats.warnings>0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:T.amberL,border:`1px solid ${T.amberB}`,borderRadius:20}}><span style={{fontSize:11}}>⚠️</span><span className="mt" style={{fontSize:11,color:T.amber,fontWeight:700}}>{vStats.warnings}</span></div>}
               <div style={{display:"flex",alignItems:"center",gap:7,padding:"5px 11px",background:T.creamD,border:`1px solid ${T.border}`,borderRadius:8}}>
                 <div className="dot" style={{background:csvName?T.sage:T.sand}}/>
                 <span style={{fontSize:12,color:csvName?T.inkM:T.inkL,maxWidth:170,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'Montserrat',sans-serif",fontWeight:500}}>{csvName||"No file loaded"}</span>
@@ -1260,13 +1257,11 @@ function App(){
                   )}
 
                   {vStats&&(
-                    <div style={{marginTop:14,padding:"11px 16px",background:vStats.errors>0&&!errDismissed?T.redL:vStats.warnings>0&&!warnDismissed?T.amberL:T.sageL,border:`1px solid ${vStats.errors>0&&!errDismissed?T.redB:vStats.warnings>0&&!warnDismissed?T.amberB:T.sageD+"44"}`,borderRadius:11,display:"flex",alignItems:"center",gap:9}}>
-                      <span style={{fontSize:15}}>{vStats.errors>0&&!errDismissed?"🚫":vStats.warnings>0&&!warnDismissed?"⚠️":"✅"}</span>
-                      <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:600,color:vStats.errors>0&&!errDismissed?T.red:vStats.warnings>0&&!warnDismissed?T.amber:T.sageD,flex:1}}>
-                        {vStats.errors>0&&!errDismissed?`${vStats.errors} blocking errors — fix before generating`:vStats.warnings>0&&!warnDismissed?`${vStats.warnings} warnings — review before generating`:`All ${vStats.orders} orders validated ✓`}
+                    <div style={{marginTop:14,padding:"11px 16px",background:vStats.errors>0?T.redL:vStats.warnings>0?T.amberL:T.sageL,border:`1px solid ${vStats.errors>0?T.redB:vStats.warnings>0?T.amberB:T.sageD+"44"}`,borderRadius:11,display:"flex",alignItems:"center",gap:9}}>
+                      <span style={{fontSize:15}}>{vStats.errors>0?"🚫":vStats.warnings>0?"⚠️":"✅"}</span>
+                      <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:600,color:vStats.errors>0?T.red:vStats.warnings>0?T.amber:T.sageD}}>
+                        {vStats.errors>0?`${vStats.errors} blocking errors — fix before generating`:vStats.warnings>0?`${vStats.warnings} warnings — review before generating`:`All ${vStats.orders} orders validated ✓`}
                       </span>
-                      {vStats.errors>0&&!errDismissed&&<button onClick={()=>setErrDismissed(true)} style={{background:"none",border:"none",cursor:"pointer",color:T.red,fontSize:13,fontWeight:700,padding:0,lineHeight:1,flexShrink:0}}>✕</button>}
-                      {vStats.warnings>0&&!warnDismissed&&!(vStats.errors>0&&!errDismissed)&&<button onClick={()=>setWarnDismissed(true)} style={{background:"none",border:"none",cursor:"pointer",color:T.amber,fontSize:13,fontWeight:700,padding:0,lineHeight:1,flexShrink:0}}>✕</button>}
                     </div>
                   )}
                 </div>
@@ -1373,269 +1368,18 @@ function App(){
           )}
 
           {/* ═══ REPORTS ═══ */}
-          {tab==="reports"&&(()=>{
-            const allO=orders;
-            const allC=customers;
-            const snaps=[...snapshots].sort((a,b)=>(a.dateKey||"").localeCompare(b.dateKey||""));
-            const revenueHistory=snaps.map(s=>({date:s.dateKey,revenue:Math.round(s.totalRevenue||0),orders:s.totalOrders||0}));
-            const totalRevAllTime=allO.reduce((s,o)=>s+o.items.reduce((ss,it)=>ss+(parseFloat(it.price||0)*parseInt(it.qty||0)),0),0);
-            const totalOrdersAllTime=allO.length;
-            const totalBottlesAllTime=allO.reduce((s,o)=>s+o.items.reduce((ss,it)=>ss+parseInt(it.qty||0),0),0);
-            const uniqueCustomers=[...new Set(allO.filter(o=>o.customerId).map(o=>o.customerId))].length;
-            const avgOrderVal=totalOrdersAllTime>0?totalRevAllTime/totalOrdersAllTime:0;
-            const byCourier={};
-            allO.forEach(o=>{const c=o.courier||"Unknown";if(!byCourier[c])byCourier[c]={orders:0,revenue:0,bottles:0};byCourier[c].orders++;o.items.forEach(it=>{byCourier[c].revenue+=(parseFloat(it.price||0)*parseInt(it.qty||0));byCourier[c].bottles+=parseInt(it.qty||0);});});
-            const courierData=Object.entries(byCourier).sort((a,b)=>b[1].revenue-a[1].revenue).map(([name,d])=>({name:name==="COLDXPRESS"?"Cold Xpress":name==="DKDISTRIBUTION"?"DK Distrib.":name==="COOLCOURIERS"?"Cool Couriers":name,orders:d.orders,revenue:Math.round(d.revenue),bottles:d.bottles}));
-            const byState={};
-            allO.forEach(o=>{const st=o.state||"?";if(!byState[st])byState[st]={orders:0,revenue:0};byState[st].orders++;o.items.forEach(it=>byState[st].revenue+=(parseFloat(it.price||0)*parseInt(it.qty||0)));});
-            const stateData=Object.entries(byState).sort((a,b)=>b[1].revenue-a[1].revenue).map(([state,d])=>({state,orders:d.orders,revenue:Math.round(d.revenue)}));
-            const byProduct={};
-            allO.forEach(o=>o.items.forEach(it=>{if(!it.name||it.sku==="FREIGHT")return;if(!byProduct[it.name])byProduct[it.name]={qty:0,revenue:0,orders:new Set()};byProduct[it.name].qty+=parseInt(it.qty||0);byProduct[it.name].revenue+=(parseFloat(it.price||0)*parseInt(it.qty||0));byProduct[it.name].orders.add(o.orderNumber);}));
-            const productData=Object.entries(byProduct).sort((a,b)=>b[1].qty-a[1].qty).map(([name,d])=>({name:name.length>16?name.slice(0,15)+"…":name,fullName:name,qty:d.qty,revenue:Math.round(d.revenue),orders:d.orders.size}));
-            const topCustomers=[...allC].filter(c=>c.totalRevenue>0).sort((a,b)=>(b.totalRevenue||0)-(a.totalRevenue||0)).slice(0,10);
-            const byStatus={};allO.forEach(o=>{byStatus[o.status]=(byStatus[o.status]||0)+1;});
-            const statusPie=Object.entries(byStatus).map(([name,value])=>({name,value}));
-            const regOrders=allO.filter(o=>!o.isPallet).length;
-            const palOrders=allO.filter(o=>o.isPallet).length;
-            const SB=({value,label,icon,color})=>(
-              <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px 22px"}}>
-                <div style={{fontSize:20,marginBottom:8}}>{icon}</div>
-                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:26,fontWeight:800,color,lineHeight:1}}>{value}</div>
-                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:T.inkL,marginTop:6,letterSpacing:.5,fontWeight:600}}>{label}</div>
+          {tab==="reports"&&(
+            <div className="fu">
+              <div style={{marginBottom:22,display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+                <div><div className="sc">Reports</div><div className="ss">BUSINESS INTELLIGENCE · COMING SOON</div></div>
               </div>
-            );
-            return(
-              <div className="fu">
-                <div style={{marginBottom:22,display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-                  <div><div className="sc">Reports</div><div className="ss">ALL-TIME BUSINESS INTELLIGENCE · {totalOrdersAllTime} ORDERS · {allC.length} CUSTOMERS</div></div>
-                </div>
-                <div style={{display:"flex",gap:4,marginBottom:22,background:T.creamD,padding:3,borderRadius:10,border:`1px solid ${T.border}`,width:"fit-content"}}>
-                  {[["overview","📊 Overview"],["products","🧃 Products"],["customers","🏪 Customers"],["geography","🗺️ Geography"],["couriers","🚚 Couriers"]].map(([id,label])=>(
-                    <button key={id} onClick={()=>setRepTab(id)} style={{padding:"7px 16px",borderRadius:8,border:"none",background:repTab===id?T.terra:"transparent",color:repTab===id?"#fff":T.inkL,fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap"}}>{label}</button>
-                  ))}
-                </div>
-                {allO.length===0?(
-                  <div style={{textAlign:"center",padding:"70px 0",color:T.inkL}}>
-                    <div style={{fontSize:48,marginBottom:12}}>📈</div>
-                    <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:18,fontWeight:800,color:T.ink,marginBottom:8}}>No data yet</div>
-                    <div style={{fontSize:13}}>Upload your CSVs on the Generate tab to populate reports.</div>
-                  </div>
-                ):(
-                  <>
-                    {repTab==="overview"&&(
-                      <div>
-                        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:20}}>
-                          <SB value={f$(totalRevAllTime)} label="ALL-TIME REVENUE" icon="💰" color={T.terra}/>
-                          <SB value={totalOrdersAllTime.toLocaleString()} label="TOTAL ORDERS" icon="🛒" color={T.sage}/>
-                          <SB value={fN(totalBottlesAllTime)} label="BOTTLES SOLD" icon="🧃" color={T.sand}/>
-                          <SB value={f$(avgOrderVal)} label="AVG ORDER VALUE" icon="📊" color={T.teal}/>
-                          <SB value={uniqueCustomers.toLocaleString()} label="UNIQUE CUSTOMERS" icon="🏪" color={T.inkM}/>
-                        </div>
-                        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:16,marginBottom:16}}>
-                          <div className="rc"><div className="rt">REVENUE OVER TIME</div>
-                            {revenueHistory.length<2?<div style={{textAlign:"center",padding:"28px 0",color:T.inkL,fontSize:12}}>Upload more CSVs to build the trend.</div>:(
-                              <ResponsiveContainer width="100%" height={200}>
-                                <LineChart data={revenueHistory} margin={{top:4,right:8,left:-14,bottom:28}}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
-                                  <XAxis dataKey="date" tick={{fontSize:9,fill:T.inkL}} angle={-35} textAnchor="end" interval="preserveStartEnd"/>
-                                  <YAxis tick={{fontSize:9,fill:T.inkL}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
-                                  <Tooltip {...TT} formatter={v=>[f$(v),"Revenue"]}/>
-                                  <Line type="monotone" dataKey="revenue" stroke={T.terra} strokeWidth={2.5} dot={{r:3,fill:T.terra}} activeDot={{r:5}}/>
-                                </LineChart>
-                              </ResponsiveContainer>
-                            )}
-                          </div>
-                          <div className="rc"><div className="rt">ORDER STATUS</div>
-                            <ResponsiveContainer width="100%" height={200}>
-                              <PieChart>
-                                <Pie data={statusPie} cx="50%" cy="46%" innerRadius={40} outerRadius={72} paddingAngle={3} dataKey="value">
-                                  {statusPie.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
-                                </Pie>
-                                <Tooltip {...TT} formatter={(v,n)=>[v+" orders",n]}/>
-                                <Legend iconSize={7} wrapperStyle={{fontSize:9,fontFamily:"'Montserrat',sans-serif"}}/>
-                              </PieChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-                        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:16}}>
-                          <div className="rc"><div className="rt">ORDERS PER RUN</div>
-                            {revenueHistory.length<2?<div style={{textAlign:"center",padding:"28px 0",color:T.inkL,fontSize:12}}>Upload more CSVs to see history.</div>:(
-                              <ResponsiveContainer width="100%" height={180}>
-                                <BarChart data={revenueHistory} margin={{top:4,right:8,left:-14,bottom:28}}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
-                                  <XAxis dataKey="date" tick={{fontSize:9,fill:T.inkL}} angle={-35} textAnchor="end" interval="preserveStartEnd"/>
-                                  <YAxis tick={{fontSize:9,fill:T.inkL}}/>
-                                  <Tooltip {...TT} formatter={v=>[v,"Orders"]}/>
-                                  <Bar dataKey="orders" fill={T.sage} radius={[4,4,0,0]} name="Orders"/>
-                                </BarChart>
-                              </ResponsiveContainer>
-                            )}
-                          </div>
-                          <div className="rc" style={{display:"flex",flexDirection:"column"}}><div className="rt">ORDER TYPE SPLIT</div>
-                            <div style={{display:"flex",flexDirection:"column",gap:12,flex:1,justifyContent:"center"}}>
-                              {[["Regular Wholesale",regOrders,T.terra],["Pallet / Special",palOrders,T.amber]].map(([label,count,color])=>(
-                                <div key={label}>
-                                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}><span style={{fontSize:12,color:T.ink,fontWeight:500}}>{label}</span><span style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:800,color}}>{count}</span></div>
-                                  <div style={{height:8,borderRadius:4,background:T.creamD,overflow:"hidden"}}><div style={{height:"100%",borderRadius:4,background:color,width:totalOrdersAllTime>0?`${(count/totalOrdersAllTime*100).toFixed(0)}%`:"0%"}}/></div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    {repTab==="products"&&(
-                      <div>
-                        <div style={{display:"grid",gridTemplateColumns:"1.4fr 1fr",gap:16,marginBottom:16}}>
-                          <div className="rc"><div className="rt">BOTTLES SOLD BY PRODUCT</div>
-                            <ResponsiveContainer width="100%" height={280}>
-                              <BarChart data={productData.slice(0,12)} layout="vertical" margin={{top:0,right:16,left:80,bottom:0}}>
-                                <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
-                                <XAxis type="number" tick={{fontSize:9,fill:T.inkL}}/>
-                                <YAxis type="category" dataKey="name" tick={{fontSize:10,fill:T.ink}} width={80}/>
-                                <Tooltip {...TT} formatter={v=>[fN(v),"Bottles"]}/>
-                                <Bar dataKey="qty" radius={[0,4,4,0]} name="Bottles">{productData.slice(0,12).map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}</Bar>
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                          <div className="rc"><div className="rt">REVENUE BY PRODUCT</div>
-                            <ResponsiveContainer width="100%" height={280}>
-                              <PieChart>
-                                <Pie data={productData.slice(0,8)} cx="50%" cy="48%" innerRadius={48} outerRadius={88} paddingAngle={2} dataKey="revenue">
-                                  {productData.slice(0,8).map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
-                                </Pie>
-                                <Tooltip {...TT} formatter={(v,n)=>[f$(v),n]}/>
-                                <Legend iconSize={7} wrapperStyle={{fontSize:9,fontFamily:"'Montserrat',sans-serif"}}/>
-                              </PieChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-                        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 80px 100px 80px",padding:"10px 18px",background:T.creamD,borderBottom:`1px solid ${T.border}`}}>
-                            {["Product","Bottles","Revenue","Orders"].map(h=><div key={h} style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:.8}}>{h}</div>)}
-                          </div>
-                          {productData.map((p,i)=>(
-                            <div key={p.fullName} style={{display:"grid",gridTemplateColumns:"1fr 80px 100px 80px",padding:"11px 18px",borderBottom:i<productData.length-1?`1px solid ${T.creamD}`:"none",alignItems:"center"}}>
-                              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:10,height:10,borderRadius:3,background:CHART_COLORS[i%CHART_COLORS.length],flexShrink:0}}/><span style={{fontSize:13,color:T.ink,fontWeight:500}}>{p.fullName}</span></div>
-                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:700,color:T.terra}}>{fN(p.qty)}</div>
-                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:700,color:T.ink}}>{f$(p.revenue)}</div>
-                              <div style={{fontSize:12,color:T.inkL}}>{p.orders}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {repTab==="customers"&&(
-                      <div>
-                        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
-                          <SB value={allC.length.toLocaleString()} label="TOTAL CUSTOMERS" icon="🏪" color={T.terra}/>
-                          <SB value={allC.filter(c=>c.type==="Pallet").length} label="PALLET ACCOUNTS" icon="🏗️" color={T.amber}/>
-                          <SB value={allC.filter(c=>c.type==="Regular").length} label="REGULAR ACCOUNTS" icon="🛒" color={T.sage}/>
-                          <SB value={f$(allC.reduce((s,c)=>s+(c.totalRevenue||0),0)/Math.max(allC.filter(c=>c.totalRevenue>0).length,1))} label="AVG CUSTOMER LTV" icon="📊" color={T.teal}/>
-                        </div>
-                        <div className="rc" style={{marginBottom:16}}><div className="rt">TOP 10 CUSTOMERS BY REVENUE</div>
-                          <ResponsiveContainer width="100%" height={220}>
-                            <BarChart data={topCustomers.map(c=>({name:c.name.length>14?c.name.slice(0,13)+"…":c.name,revenue:Math.round(c.totalRevenue||0)}))} margin={{top:4,right:8,left:-8,bottom:40}}>
-                              <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
-                              <XAxis dataKey="name" tick={{fontSize:9,fill:T.inkL}} angle={-35} textAnchor="end" interval={0}/>
-                              <YAxis tick={{fontSize:9,fill:T.inkL}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
-                              <Tooltip {...TT} formatter={v=>[f$(v),"Revenue"]}/>
-                              <Bar dataKey="revenue" radius={[4,4,0,0]} name="Revenue">{topCustomers.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}</Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 80px 100px 100px 80px",padding:"10px 18px",background:T.creamD,borderBottom:`1px solid ${T.border}`}}>
-                            {["Customer","Type","Revenue","Bottles","Orders"].map(h=><div key={h} style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:.8}}>{h}</div>)}
-                          </div>
-                          {[...allC].sort((a,b)=>(b.totalRevenue||0)-(a.totalRevenue||0)).slice(0,20).map((c,i)=>(
-                            <div key={c.id} style={{display:"grid",gridTemplateColumns:"1fr 80px 100px 100px 80px",padding:"11px 18px",borderBottom:i<19?`1px solid ${T.creamD}`:"none",alignItems:"center"}}>
-                              <div><div style={{fontSize:13,color:T.ink,fontWeight:500}}>{c.name}</div><div style={{fontSize:10,color:T.inkL,marginTop:1}}>{c.suburb}{c.suburb&&c.state?", ":""}{c.state}</div></div>
-                              <div><span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:c.type==="Pallet"?T.amberL:T.sageL,color:c.type==="Pallet"?T.amber:T.sageD,fontFamily:"'Montserrat',sans-serif",fontWeight:700}}>{c.type||"Regular"}</span></div>
-                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:700,color:T.terra}}>{f$(c.totalRevenue||0)}</div>
-                              <div style={{fontSize:12,color:T.inkM}}>{fN(c.totalBottles||0)}</div>
-                              <div style={{fontSize:12,color:T.inkL}}>{c.totalOrders||0}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {repTab==="geography"&&(
-                      <div>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
-                          <div className="rc"><div className="rt">REVENUE BY STATE</div>
-                            <ResponsiveContainer width="100%" height={230}>
-                              <BarChart data={stateData} margin={{top:4,right:8,left:-8,bottom:0}}>
-                                <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
-                                <XAxis dataKey="state" tick={{fontSize:11,fill:T.inkL}}/>
-                                <YAxis tick={{fontSize:9,fill:T.inkL}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
-                                <Tooltip {...TT} formatter={v=>[f$(v),"Revenue"]}/>
-                                <Bar dataKey="revenue" radius={[4,4,0,0]} name="Revenue">{stateData.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}</Bar>
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                          <div className="rc"><div className="rt">ORDERS BY STATE</div>
-                            <ResponsiveContainer width="100%" height={230}>
-                              <PieChart>
-                                <Pie data={stateData} cx="50%" cy="46%" innerRadius={44} outerRadius={80} paddingAngle={3} dataKey="orders">
-                                  {stateData.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
-                                </Pie>
-                                <Tooltip {...TT} formatter={(v,n)=>[v+" orders",n]}/>
-                                <Legend iconSize={7} wrapperStyle={{fontSize:10,fontFamily:"'Montserrat',sans-serif"}}/>
-                              </PieChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-                        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 100px 120px 120px",padding:"10px 18px",background:T.creamD,borderBottom:`1px solid ${T.border}`}}>
-                            {["State","Orders","Revenue","Avg Order"].map(h=><div key={h} style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:.8}}>{h}</div>)}
-                          </div>
-                          {stateData.map((s,i)=>(
-                            <div key={s.state} style={{display:"grid",gridTemplateColumns:"1fr 100px 120px 120px",padding:"12px 18px",borderBottom:i<stateData.length-1?`1px solid ${T.creamD}`:"none",alignItems:"center"}}>
-                              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:10,height:10,borderRadius:3,background:CHART_COLORS[i%CHART_COLORS.length]}}/><span style={{fontSize:14,fontWeight:700,color:T.ink}}>{s.state}</span></div>
-                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:700,color:T.sage}}>{s.orders}</div>
-                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:700,color:T.terra}}>{f$(s.revenue)}</div>
-                              <div style={{fontSize:12,color:T.inkM}}>{f$(s.orders>0?s.revenue/s.orders:0)}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {repTab==="couriers"&&(
-                      <div>
-                        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:20}}>
-                          {courierData.map((c,i)=>(
-                            <div key={c.name} style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px 22px"}}>
-                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:T.inkL,letterSpacing:.8,marginBottom:12}}>{c.name.toUpperCase()}</div>
-                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                                {[["Orders",c.orders,T.sage],["Revenue",f$(c.revenue),T.terra],["Bottles",fN(c.bottles),T.sand]].map(([l,v,col])=>(
-                                  <div key={l}><div style={{fontFamily:"'Montserrat',sans-serif",fontSize:18,fontWeight:800,color:col}}>{v}</div><div style={{fontSize:10,color:T.inkL,marginTop:2,fontFamily:"'Montserrat',sans-serif",fontWeight:600}}>{l}</div></div>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="rc"><div className="rt">COURIER COMPARISON</div>
-                          <ResponsiveContainer width="100%" height={220}>
-                            <BarChart data={courierData} margin={{top:4,right:8,left:-8,bottom:0}}>
-                              <CartesianGrid strokeDasharray="3 3" stroke={T.border}/>
-                              <XAxis dataKey="name" tick={{fontSize:11,fill:T.inkL}}/>
-                              <YAxis yAxisId="left" tick={{fontSize:9,fill:T.inkL}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
-                              <YAxis yAxisId="right" orientation="right" tick={{fontSize:9,fill:T.inkL}}/>
-                              <Tooltip {...TT} formatter={(v,n)=>n==="Revenue"?[f$(v),n]:[v,n]}/>
-                              <Legend iconSize={8} wrapperStyle={{fontSize:10,fontFamily:"'Montserrat',sans-serif"}}/>
-                              <Bar yAxisId="left" dataKey="revenue" fill={T.terra} radius={[4,4,0,0]} name="Revenue"/>
-                              <Bar yAxisId="right" dataKey="orders" fill={T.sage} radius={[4,4,0,0]} name="Orders"/>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
+              <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:16,padding:"48px",textAlign:"center"}}>
+                <div style={{fontSize:40,marginBottom:12}}>📈</div>
+                <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:18,color:T.ink,marginBottom:8}}>Reports & Analytics</div>
+                <div style={{fontSize:13,color:T.inkL,maxWidth:400,margin:"0 auto"}}>Revenue trends, customer retention, account manager performance and more will live here.</div>
               </div>
-            );
-          })()}
+            </div>
+          )}
 
           {/* ═══ HISTORY ═══ */}
           {tab==="history"&&(
@@ -1731,39 +1475,31 @@ function App(){
                           </div>
                         )}
 
-                        {/* ── Re-download archive ── */}
-                        {snap.hasCsv&&(()=>{
+                        {/* ── Re-generate from stored CSV ── */}
+                        {(()=>{
                           const d2=snap.dateKey?snap.dateKey.split("/").reverse().join("-"):"";
-                          const b64ToU8=(b64)=>{const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;};
-                          const dlFromZip=async(zipFilename,outFilename)=>{
+                          const currentGen=snapGen[snap.dateKey]||null;
+                          const regenFile=async(type,label)=>{
+                            setSnapGen(p=>({...p,[snap.dateKey]:type}));
                             try{
-                              const stored=await window.storage.get("ws-zip-"+snap.dateKey);
-                              if(!stored){alert("Files not ready yet — please wait a moment after uploading, then try again.");return;}
-                              const zip=await JSZip.loadAsync(b64ToU8(stored.value));
-                              const file=zip.file(zipFilename);
-                              if(!file){alert(`${zipFilename} not found in archive.`);return;}
-                              const blob=new Blob([await file.async("uint8array")],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+                              const stored=await window.storage.get("ws-csv-"+snap.dateKey);
+                              if(!stored){alert("CSV not found for this upload. Re-upload the original CSV file to restore access.");setSnapGen(p=>({...p,[snap.dateKey]:null}));return;}
+                              const resp=await apiFetch("/api/generate",{method:"POST",body:JSON.stringify({csvData:stored.value,type,dateStr:d2})});
+                              if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.error||"Generation failed");}
+                              const blob=await resp.blob();
                               const url=URL.createObjectURL(blob);
-                              const a=document.createElement("a");a.href=url;a.download=outFilename||zipFilename;
+                              const a=document.createElement("a");
+                              a.href=url;
+                              a.download=type==="all"?`${d2}_Wholesale_State_Files.zip`:type==="prints"?`${d2}_Print_Files.zip`:`${d2}_${label}.xlsx`;
                               document.body.appendChild(a);a.click();
                               setTimeout(()=>{URL.revokeObjectURL(url);document.body.removeChild(a);},1000);
-                            }catch(e){alert("Download failed: "+e.message);}
-                          };
-                          const dlFullZip=async()=>{
-                            try{
-                              const stored=await window.storage.get("ws-zip-"+snap.dateKey);
-                              if(!stored){alert("Files not ready yet — please wait a moment after uploading, then try again.");return;}
-                              const blob=new Blob([b64ToU8(stored.value)],{type:"application/zip"});
-                              const url=URL.createObjectURL(blob);
-                              const a=document.createElement("a");a.href=url;a.download=`${d2}_Wholesale_State_Files.zip`;
-                              document.body.appendChild(a);a.click();
-                              setTimeout(()=>{URL.revokeObjectURL(url);document.body.removeChild(a);},1000);
-                            }catch(e){alert("Download failed: "+e.message);}
+                            }catch(e){alert("Error: "+e.message);}
+                            setSnapGen(p=>({...p,[snap.dateKey]:null}));
                           };
                           const dlCsv=async()=>{
                             try{
                               const stored=await window.storage.get("ws-csv-"+snap.dateKey);
-                              if(!stored){alert("CSV not found.");return;}
+                              if(!stored){alert("CSV not found for this upload.");return;}
                               const blob=new Blob([stored.value],{type:"text/csv"});
                               const url=URL.createObjectURL(blob);
                               const a=document.createElement("a");a.href=url;a.download=snap.fileName||"orders.csv";
@@ -1772,24 +1508,27 @@ function App(){
                             }catch(e){alert("Download failed: "+e.message);}
                           };
                           const couriers=(snap.manifests||[]);
-                          const COURIER_FILE={'COLDXPRESS':`${d2}_COLDXPRESS.xlsx`,'DKDISTRIBUTION':`${d2}_DK_DISTRIBUTIONS.xlsx`,'COOLCOURIERS':`${d2}_COOLCOURIERS.xlsx`};
-                          const btn=(onClick,icon,label)=>(
-                            <button onClick={onClick} style={{padding:"5px 12px",borderRadius:7,border:`1px solid ${T.border}`,background:T.white,color:T.inkM,fontSize:11,cursor:"pointer",fontFamily:"'Montserrat',sans-serif",fontWeight:600,display:"flex",alignItems:"center",gap:5,transition:"border-color .15s,color .15s"}}
-                              onMouseEnter={e=>{e.currentTarget.style.borderColor=T.terra;e.currentTarget.style.color=T.terra;}}
-                              onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.inkM;}}>
-                              {icon} {label}
-                            </button>
-                          );
+                          const COURIER_TYPE={"COLDXPRESS":"coldxpress","DKDISTRIBUTION":"dk","COOLCOURIERS":"coolcouriers"};
+                          const COURIER_FNAME={"COLDXPRESS":"COLDXPRESS","DKDISTRIBUTION":"DK_DISTRIBUTIONS","COOLCOURIERS":"COOLCOURIERS"};
+                          const btn=(onClick,icon,label,type)=>{
+                            const isLoading=currentGen===type;
+                            return(
+                              <button key={type} onClick={onClick} disabled={!!currentGen}
+                                style={{padding:"5px 12px",borderRadius:7,border:`1px solid ${T.border}`,background:isLoading?T.creamD:T.white,color:isLoading?T.inkL:T.inkM,fontSize:11,cursor:currentGen?"default":"pointer",fontFamily:"'Montserrat',sans-serif",fontWeight:600,display:"flex",alignItems:"center",gap:5,transition:"border-color .15s,color .15s",opacity:currentGen&&!isLoading?0.5:1}}
+                                onMouseEnter={e=>{if(!currentGen){e.currentTarget.style.borderColor=T.terra;e.currentTarget.style.color=T.terra;}}}
+                                onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=isLoading?T.inkL:T.inkM;}}>
+                                {isLoading?<span className="spin" style={{fontSize:11}}>⟳</span>:icon} {label}
+                              </button>
+                            );
+                          };
                           return(
                             <div style={{borderTop:`1px solid ${T.creamD}`,padding:"11px 22px",background:T.cream,display:"flex",flexWrap:"wrap",alignItems:"center",gap:7}}>
-                              <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:.8,marginRight:2,flexShrink:0}}>↓ FILES</span>
-                              {couriers.map(m=>btn(()=>dlFromZip(COURIER_FILE[m.courier],COURIER_FILE[m.courier]),m.icon,m.label.replace(" Manifest","").replace(" Distributions","")))}
-                              {btn(()=>dlFromZip(`${d2}_Production_Sheet.xlsx`,`${d2}_Production_Sheet.xlsx`),"🏭","Production")}
-                              {btn(()=>dlFromZip(`${d2}_350ml_Fronts.xlsx`,`${d2}_350ml_Fronts.xlsx`),"🖨️","350ml")}
-                              {(snap.generatedFiles||[]).some(f=>f.includes("Tea_Fronts"))&&btn(()=>dlFromZip(`${d2}_Tea_Fronts.xlsx`,`${d2}_Tea_Fronts.xlsx`),"🍵","Tea")}
-                              {(snap.generatedFiles||[]).some(f=>f.includes("1L_Fronts"))&&btn(()=>dlFromZip(`${d2}_1L_Fronts.xlsx`,`${d2}_1L_Fronts.xlsx`),"🫙","1L")}
-                              {btn(dlCsv,"📄","CSV")}
-                              {btn(dlFullZip,"📦","All")}
+                              <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:.8,marginRight:2,flexShrink:0}}>↓ REGENERATE</span>
+                              {couriers.map(m=>btn(()=>regenFile(COURIER_TYPE[m.courier],COURIER_FNAME[m.courier]),m.icon,m.label.replace(" Manifest","").replace(" Distributions",""),COURIER_TYPE[m.courier]))}
+                              {btn(()=>regenFile("production","Production_Sheet"),"🏭","Production","production")}
+                              {btn(()=>regenFile("prints","Print_Files"),"🖨️","Print Files","prints")}
+                              {btn(dlCsv,"📄","CSV","csv")}
+                              {btn(()=>regenFile("all","Wholesale_State_Files"),"📦","All Files","all")}
                             </div>
                           );
                         })()}
@@ -1809,118 +1548,57 @@ function App(){
                 <div style={{textAlign:"center",padding:"60px 0",color:T.inkL}}><div style={{fontSize:48,marginBottom:12}}>🏗️</div><div style={{fontFamily:"'Montserrat',sans-serif",fontSize:20,fontWeight:700,color:T.ink,marginBottom:6}}>No special orders</div><div style={{fontSize:13}}>Special/pallet customers are auto-detected by a non-REGULAR CustomerGroup, PriceGroup, or VisibilityGroup.</div></div>
               ):(
                 <>
+                  {/* Generate buttons */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:11,marginBottom:18}}>
+                    {[{id:"pallet-prod",label:"Pallet Production Sheet",sub:"Separate run for pallet customers",icon:"🏭"},{id:"pallet-prints",label:"Pallet Print Files (5)",sub:"Fronts & backs for pallet SKUs",icon:"🖨️"}].map(btn=>(
+                      <button key={btn.id} className={`gen-card${done[btn.id]?" done":""}`} onClick={()=>triggerGen(btn.id,btn.label)} disabled={!!gen||!csvName}>
+                        <div style={{width:40,height:40,borderRadius:10,background:done[btn.id]?T.sageL:T.creamDD,border:`1px solid ${done[btn.id]?T.sageD+"44":T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+                          {gen===btn.id?<span className="spin" style={{fontSize:15,color:T.inkL}}>⟳</span>:done[btn.id]?"✅":btn.icon}
+                        </div>
+                        <div style={{flex:1}}><div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:12,color:T.ink}}>{btn.label}</div><div style={{fontSize:11,color:T.inkL,marginTop:2}}>{btn.sub}</div></div>
+                        {done[btn.id]?<span style={{fontSize:11,color:T.sage,fontWeight:600}}>Done ✓</span>:<span style={{fontSize:14,color:T.sand}}>↓</span>}
+                      </button>
+                    ))}
+                  </div>
 
                   {/* Special order delivery confirmation */}
                   <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden",marginBottom:18}}>
                     <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.creamD}`,background:T.creamD}}>
                       <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:13,color:T.ink}}>Special Order Delivery</div>
-                      <div style={{fontSize:11,color:T.inkL,marginTop:2}}>Expand an order to see SKUs · generate Production Sheet, Fronts, or Backs per order</div>
+                      <div style={{fontSize:11,color:T.inkL,marginTop:2}}>These orders are excluded from courier manifests — tick when delivered</div>
                     </div>
                     {palletOrders.map((o,i)=>{
                       const delivered=!!specialDelivered[o.orderNumber];
-                      const isExp=palletExpanded===o.orderNumber;
-                      const total=o.items.reduce((s,it)=>s+(parseFloat(it.price||0)*parseInt(it.qty||0)),0);
-                      const COURIER_LABEL={"COLDXPRESS":"Cold Xpress","DKDISTRIBUTION":"DK Distributions","COOLCOURIERS":"Cool Couriers"};
-                      const getOrderRows=()=>csvRows.filter(r=>r.OrderNumber===o.orderNumber&&r.SKU!=="FREIGHT"&&r.Product);
-                      const genFile=(type)=>{
-                        const orderRows=getOrderRows();
-                        if(!orderRows.length){alert("No CSV data loaded for this order — upload the CSV on the Generate tab first.");return;}
-                        const d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
-                        const on=o.orderNumber;
-                        if(type==="prod"){
-                          dlXlsx(genProduction(orderRows,true),`${d}_${on}_Production.xlsx`);
-                        } else if(type==="fronts"){
-                          const{f350,fT,f1}=genPrints(orderRows,true);
-                          for(const[s,n]of[[f350,`${d}_${on}_350ml_Fronts.xlsx`],[fT,`${d}_${on}_Tea_Fronts.xlsx`],[f1,`${d}_${on}_1L_Fronts.xlsx`]])dlXlsx(s,n);
-                        } else if(type==="backs"){
-                          const{b350,bT}=genPrints(orderRows,true);
-                          for(const[s,n]of[[b350,`${d}_${on}_350ml_Backs.xlsx`],[bT,`${d}_${on}_Tea_Backs.xlsx`]])dlXlsx(s,n);
-                        }
-                      };
-                      const PBtn=({onClick,icon,label,color})=>(
-                        <button onClick={e=>{e.stopPropagation();onClick();}}
-                          style={{flexShrink:0,padding:"5px 11px",borderRadius:8,border:`1.5px solid ${color||T.terra}`,background:"transparent",color:color||T.terra,fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4,transition:"all .15s",whiteSpace:"nowrap"}}
-                          onMouseEnter={e=>{e.currentTarget.style.background=color||T.terra;e.currentTarget.style.color="#fff";}}
-                          onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=color||T.terra;}}>
-                          {icon} {label}
-                        </button>
-                      );
                       return(
-                        <div key={o.orderNumber} style={{borderBottom:i<palletOrders.length-1?`1px solid ${T.creamD}`:"none"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 20px",background:delivered?"#F0FDF4":"transparent",cursor:"pointer",transition:"background .15s"}}
-                            onClick={()=>setPalletExpanded(isExp?null:o.orderNumber)}>
-                            <div style={{fontSize:10,color:T.inkL,transform:isExp?"rotate(90deg)":"none",transition:"transform .15s",flexShrink:0}}>▶</div>
-                            <div style={{flex:1,minWidth:0}}>
-                              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                                <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:800,color:T.terra}}>{o.orderNumber}</span>
-                                <span style={{fontSize:13,color:T.ink,fontWeight:500}}>{o.customer}</span>
-                                {o.courier&&<span style={{fontSize:11,color:T.inkL,background:T.creamDD,padding:"2px 8px",borderRadius:20,border:`1px solid ${T.border}`}}>{COURIER_LABEL[o.courier]||o.courier}</span>}
-                              </div>
-                              <div style={{fontSize:11,color:T.inkL,marginTop:2}}>
-                                {o.suburb}{o.suburb&&o.state?", ":""}{o.state} · {o.items.reduce((s,it)=>s+parseInt(it.qty||0),0)} bottles · Due {o.dueDate||"—"}
-                                {delivered&&specialDelivered[o.orderNumber].at&&<span style={{color:T.sageD,fontWeight:600,marginLeft:8}}>· Delivered {specialDelivered[o.orderNumber].at}</span>}
-                              </div>
+                        <div key={o.orderNumber} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 20px",borderBottom:i<palletOrders.length-1?`1px solid ${T.creamD}`:"none",background:delivered?"#F0FDF4":"transparent",transition:"background .2s"}}>
+                          <div style={{flex:1}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:800,color:T.terra}}>{o.orderNumber}</span>
+                              <span style={{fontSize:13,color:T.ink,fontWeight:500}}>{o.customer}</span>
                             </div>
-                            <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
-                              <PBtn onClick={()=>genFile("prod")} icon="🏭" label="Production" color={T.inkM}/>
-                              <PBtn onClick={()=>genFile("fronts")} icon="🖨️" label="Fronts" color={T.terra}/>
-                              <PBtn onClick={()=>genFile("backs")} icon="🖨️" label="Backs" color={T.sage}/>
-                              <button onClick={e=>{e.stopPropagation();setTab("tracker");}}
-                                style={{flexShrink:0,padding:"5px 11px",borderRadius:8,border:`1.5px solid ${T.border}`,background:"transparent",color:T.inkM,fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:600,cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap"}}
-                                onMouseEnter={e=>{e.currentTarget.style.borderColor=T.terra;e.currentTarget.style.color=T.terra;}}
-                                onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.inkM;}}>
-                                ↗ Order
-                              </button>
-                              <button onClick={e=>{
-                                e.stopPropagation();
-                                const next={...specialDelivered};
-                                if(delivered){delete next[o.orderNumber];}
-                                else{
-                                  next[o.orderNumber]={at:new Date().toLocaleString("en-AU")};
-                                  setOrders(prev=>{const updated=prev.map(x=>x.orderNumber===o.orderNumber?{...x,status:"Delivered",deliveredAt:next[o.orderNumber].at}:x);window.storage.set("ws-orders",JSON.stringify(updated)).catch(()=>{});return updated;});
-                                }
-                                setSpecialDelivered(next);
-                                localStorage.setItem('ws-special-delivered',JSON.stringify(next));
-                              }} style={{flexShrink:0,width:34,height:34,borderRadius:10,border:`2px solid ${delivered?T.sage:T.border}`,background:delivered?T.sage:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,transition:"all .2s"}}>
-                                {delivered?"✓":""}
-                              </button>
+                            <div style={{fontSize:11,color:T.inkL,marginTop:2}}>
+                              {o.suburb}{o.suburb&&o.state?", ":""}{o.state} · {o.items.reduce((s,it)=>s+parseInt(it.qty||0),0)} items · Due {o.dueDate||"—"}
+                              {delivered&&specialDelivered[o.orderNumber].at&&<span style={{color:T.sageD,fontWeight:600,marginLeft:8}}>· Delivered {specialDelivered[o.orderNumber].at}</span>}
                             </div>
                           </div>
-                          {isExp&&(
-                            <div style={{background:T.creamD,borderTop:`1px solid ${T.border}`,padding:"14px 20px 16px 44px"}}>
-                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-                                <div>
-                                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:8}}>LINE ITEMS</div>
-                                  {o.items.map((it,ii)=>(
-                                    <div key={ii} style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4,padding:"5px 0",borderBottom:`1px solid ${T.border}`,color:T.ink}}>
-                                      <span style={{flex:1,fontWeight:500}}>{it.name}</span>
-                                      <span style={{color:T.inkL,marginRight:14}}>×{it.qty}</span>
-                                      <span style={{fontWeight:700,color:T.terra}}>{it.price?`$${(parseFloat(it.price)*parseInt(it.qty)).toFixed(2)}`:"—"}</span>
-                                    </div>
-                                  ))}
-                                  {total>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginTop:6,fontWeight:800,color:T.ink}}><span>Total</span><span>${total.toFixed(2)}</span></div>}
-                                </div>
-                                <div>
-                                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:8}}>ORDER DETAILS</div>
-                                  {[
-                                    ["Order #",o.orderNumber],
-                                    ...(o.invoiceNumber?[["Invoice #",o.invoiceNumber]]:[]),
-                                    ["Customer",o.customer],
-                                    ...(o.customerId?[["Cust ID",o.customerId]]:[]),
-                                    ...(o.accountManager?[["Acct Mgr",o.accountManager]]:[]),
-                                    ...(o.customerGroup?[["Group",o.customerGroup]]:[]),
-                                    ...(o.dueDate?[["Due Date",o.dueDate]]:[]),
-                                    ...(o.address?[["Address",[o.address,o.suburb,o.state,o.postcode].filter(Boolean).join(", ")]]:[]),
-                                  ].map(([k,v])=>(
-                                    <div key={k} style={{display:"flex",gap:8,fontSize:12,marginBottom:4}}>
-                                      <span style={{color:T.inkL,width:70,flexShrink:0,fontSize:11}}>{k}</span>
-                                      <span style={{color:T.ink,fontWeight:500}}>{v}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                          <button onClick={()=>{
+                            const next={...specialDelivered};
+                            if(delivered){
+                              delete next[o.orderNumber];
+                            } else {
+                              next[o.orderNumber]={at:new Date().toLocaleString("en-AU")};
+                              // Also update order status
+                              setOrders(prev=>{
+                                const updated=prev.map(x=>x.orderNumber===o.orderNumber?{...x,status:"Delivered",deliveredAt:next[o.orderNumber].at}:x);
+                                window.storage.set("ws-orders",JSON.stringify(updated)).catch(()=>{});
+                                return updated;
+                              });
+                            }
+                            setSpecialDelivered(next);
+                            localStorage.setItem('ws-special-delivered',JSON.stringify(next));
+                          }} style={{flexShrink:0,width:36,height:36,borderRadius:10,border:`2px solid ${delivered?T.sage:T.border}`,background:delivered?T.sage:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,transition:"all .2s"}}>
+                            {delivered?"✓":""}
+                          </button>
                         </div>
                       );
                     })}
