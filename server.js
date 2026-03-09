@@ -23,10 +23,10 @@ const EMBEDDED_TEMPLATES = {
 };
 
 // Extract embedded templates to disk on startup
-const TEMPLATE_DIR = path.join(process.cwd(), 'templates');
+const TEMPLATE_DIR = join(process.cwd(), 'templates');
 if (!fs.existsSync(TEMPLATE_DIR)) fs.mkdirSync(TEMPLATE_DIR, { recursive: true });
 for (const [name, b64] of Object.entries(EMBEDDED_TEMPLATES)) {
-  const dest = path.join(TEMPLATE_DIR, name);
+  const dest = join(TEMPLATE_DIR, name);
   if (!fs.existsSync(dest)) {
     fs.writeFileSync(dest, Buffer.from(b64, 'base64'));
     console.log(`Extracted template: ${name}`);
