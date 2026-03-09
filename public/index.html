@@ -668,7 +668,7 @@ function OrdersTable({rows,allOrders,setOrders}){
 /* ══ MAIN APP ══ */
 const REQUIRED_TEMPLATES = ['COLDXPRESS.xlsx','DK_DISTRIBUTIONS.xlsx','COOLCOURIERS.xlsx','Production_Sheet.xlsx','350ml_Fronts.xlsx','350ml_Backs.xlsx','Tea_Fronts.xlsx','Tea_Backs.xlsx','1L_Fronts.xlsx'];
 
-function TemplateUploader({apiFetch,T}){
+){
   const [uploaded,setUploaded]=React.useState([]);
   const [loading,setLoading]=React.useState(true);
   const [uploading,setUploading]=React.useState(false);
@@ -1236,7 +1236,7 @@ function App(){
                 {/* RIGHT — Generate buttons */}
                 <div style={{display:"flex",flexDirection:"column",gap:11}}>
                   {/* Template upload status */}
-                  {IS_DEPLOYED&&<TemplateUploader apiFetch={apiFetch} T={T}/>}
+                  
                   <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:2,marginBottom:2,marginTop:8}}>GENERATE FILES</div>
                   {BTNS.map(btn=>(
                     <button key={btn.id} className={`gen-card${done[btn.id]?" done":""}`}
