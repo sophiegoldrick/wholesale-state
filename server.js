@@ -972,7 +972,7 @@ if GEN_TYPE in ('prints','all'):
         ws.cell(ri,12).value = 'Portrait'
         ws.cell(ri,13).value = 'As in printer'
 
-    def make_print_file(sheet_name, is_backs, data, out_path):
+    def make_print_file(sheet_name, is_backs, data, out_path, folder_override=None):
         wb = Workbook(); ws = wb.active; ws.title = sheet_name
         for ci, h in enumerate(HEADS, 1):
             c = ws.cell(1, ci, h); c.font = XBOLD; c.fill = XGREY
@@ -980,7 +980,7 @@ if GEN_TYPE in ('prints','all'):
         if not is_backs:
             write_prow(ws, 2, 1, 'BLANK', 24, None, 'BLANK')
             for i, r in enumerate(data, 3):
-                write_prow(ws, i, i-1, r['SKU'], r['Quantity'], r['Customer'], r['CustomerId'])
+                write_prow(ws, i, i-1, r['SKU'], r['Quantity'], r['Customer'], folder_override if folder_override else r['CustomerId'])
             write_prow(ws, 2+len(data)+1, total, 'BLANK', 24, None, 'BLANK')
         else:
             # Entire data is reversed — rows printed in reverse so labels align on the backing roll
@@ -1002,7 +1002,8 @@ if GEN_TYPE in ('prints','all'):
     make_print_file('BACKS',  True,  r350, f'{OUT_DIR}/{DATE_STR}_350ml_Backs.xlsx')
     if rtea: make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Fronts.xlsx')
     if rtea: make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
-    if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx')
+    if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
+    if r1l:  make_print_file('BACKS',  True,  r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Backs.xlsx')
 
 # ══ ZIP all generated files ══
 zip_path = f'{OUT_DIR}/{DATE_STR}_Wholesale_State_Files.zip'
@@ -1053,10 +1054,11 @@ app.post('/api/generate', auth, async (req, res) => {
 
     const result = JSON.parse(stdout.trim());
 
-    if (type === 'all' && result.zip) {
+    if ((type === 'all' || type === 'prints') && result.zip) {
       const zipData = await _readFile(result.zip);
+      const zipName = type === 'prints' ? `${d}_Print_Files.zip` : `${d}_Wholesale_State_Files.zip`;
       res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', `attachment; filename="${d}_Wholesale_State_Files.zip"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
       return res.send(zipData);
     }
     if (result.paths && result.paths.length > 0) {

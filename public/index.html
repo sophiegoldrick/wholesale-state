@@ -1094,7 +1094,7 @@ function App(){
         const blob=await resp.blob();
         const url=URL.createObjectURL(blob);
         const a=document.createElement("a");
-        a.href=url;a.download=type==="all"?d+"_Wholesale_State_Files.zip":d+"_"+type+".xlsx";
+        a.href=url;a.download=type==="all"?d+"_Wholesale_State_Files.zip":type==="prints"?d+"_Print_Files.zip":d+"_"+type+".xlsx";
         document.body.appendChild(a);a.click();
         setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
         setDone(p=>({...p,[type]:true}));
