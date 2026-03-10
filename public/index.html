@@ -1495,7 +1495,7 @@ function App(){
                           };
                           const COURIER_TYPE={"COLDXPRESS":"coldxpress","DKDISTRIBUTION":"dk","COOLCOURIERS":"coolcouriers"};
                           const COURIER_FNAME={"COLDXPRESS":"COLDXPRESS","DKDISTRIBUTION":"DK_DISTRIBUTIONS","COOLCOURIERS":"COOLCOURIERS"};
-                          const Btn=({onClick,icon,label,type})=>{
+                          const mkBtn=(onClick,icon,label,type)=>{
                             const busy=currentGen===type;
                             return(
                               <button onClick={onClick} disabled={!!currentGen}
@@ -1510,11 +1510,11 @@ function App(){
                           return(
                             <div style={{borderTop:`1px solid ${T.creamD}`,padding:"11px 22px",background:T.cream,display:"flex",flexWrap:"wrap",alignItems:"center",gap:7}}>
                               <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:.8,marginRight:4,flexShrink:0}}>↓ REGENERATE</span>
-                              {couriers.map(m=><Btn key={m.courier} onClick={()=>regenFile(COURIER_TYPE[m.courier],COURIER_FNAME[m.courier])} icon={m.icon} label={m.label.replace(" Manifest","").replace(" Distributions","")} type={COURIER_TYPE[m.courier]}/>)}
-                              <Btn onClick={()=>regenFile("production","Production_Sheet")} icon="🏭" label="Production" type="production"/>
-                              <Btn onClick={()=>regenFile("prints","Print_Files")} icon="🖨️" label="Print Files" type="prints"/>
-                              <Btn onClick={dlCsv} icon="📄" label="CSV" type="csv"/>
-                              <Btn onClick={()=>regenFile("all","Wholesale_State_Files")} icon="📦" label="All Files" type="all"/>
+                              {couriers.map(m=>mkBtn(()=>regenFile(COURIER_TYPE[m.courier],COURIER_FNAME[m.courier]),m.icon,m.label.replace(" Manifest","").replace(" Distributions",""),COURIER_TYPE[m.courier]))}
+                              {mkBtn(()=>regenFile("production","Production_Sheet"),"🏭","Production","production")}
+                              {mkBtn(()=>regenFile("prints","Print_Files"),"🖨️","Print Files","prints")}
+                              {mkBtn(dlCsv,"📄","CSV","csv")}
+                              {mkBtn(()=>regenFile("all","Wholesale_State_Files"),"📦","All Files","all")}
                             </div>
                           );
                         })()}
