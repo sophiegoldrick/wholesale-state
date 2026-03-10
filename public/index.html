@@ -1498,11 +1498,10 @@ function App(){
                           const mkBtn=(onClick,icon,label,type)=>{
                             const busy=currentGen===type;
                             return(
-                              <button onClick={onClick} disabled={!!currentGen}
+                              <button key={type} onClick={onClick} disabled={!!currentGen}
                                 style={{padding:"5px 12px",borderRadius:7,border:`1px solid ${busy?T.terra:T.border}`,background:busy?T.terraL:T.white,color:busy?T.terra:T.inkM,fontSize:11,cursor:currentGen?"not-allowed":"pointer",fontFamily:"'Montserrat',sans-serif",fontWeight:600,display:"flex",alignItems:"center",gap:5,transition:"all .15s",opacity:currentGen&&!busy?0.45:1}}
                                 onMouseEnter={e=>{if(!currentGen){e.currentTarget.style.borderColor=T.terra;e.currentTarget.style.color=T.terra;}}}
-                                onMouseLeave={e=>{if(!busy){e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.inkM;}}}>
-                                {busy?<span className="spin" style={{fontSize:11,display:"inline-block"}}>⟳</span>:icon} {label}
+                                onMouseLeave={e=>{if(!busy){e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.inkM;}}}>{busy?<span className="spin" style={{fontSize:11,display:"inline-block"}}>⟳</span>:icon} {label}
                               </button>
                             );
                           };
