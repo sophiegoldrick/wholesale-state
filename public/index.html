@@ -706,6 +706,64 @@ function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
         })}
       </div>
       <div style={{marginTop:10,fontSize:11,color:T.inkL,textAlign:"right"}}>{filtered.length} of {rows.length} orders</div>
+      {/* ── Fixed selection toolbar ── */}
+      {selected.size>0&&(
+        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:200,background:T.terra,boxShadow:"0 -4px 24px rgba(0,0,0,0.18)",padding:"14px 28px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+            <div style={{background:"rgba(255,255,255,0.2)",borderRadius:"50%",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Montserrat',sans-serif",fontSize:14,fontWeight:800,color:"#fff"}}>{selected.size}</div>
+            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:.5}}>{selected.size===1?"ORDER SELECTED":"ORDERS SELECTED"}</div>
+          </div>
+          <div style={{width:1,height:28,background:"rgba(255,255,255,0.25)",flexShrink:0}}/>
+          {(()=>{
+            const selRows=rows.filter(o=>selected.has(o.orderNumber)).flatMap(o=>o.items.map(it=>({...it,Customer:o.customer,Courier:o.courier,OrderNumber:o.orderNumber,CustomerId:o.customerId||"",Product:it.product||it.Product||"",SKU:it.sku||it.SKU||"",Quantity:it.qty||it.Quantity||0,price:it.price||0,lineTotal:it.lineTotal||0})));
+            const selOrders=rows.filter(o=>selected.has(o.orderNumber));
+            const couriers=[...new Set(selOrders.map(o=>o.courier).filter(Boolean))];
+            const d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
+            const busy=!!selectGen;
+            const mkSelBtn=(label,icon,onClick)=>(
+              <button key={label} disabled={busy} onClick={onClick}
+                style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:9,border:"1.5px solid rgba(255,255,255,0.4)",background:"rgba(255,255,255,0.15)",color:"#fff",fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:busy?"not-allowed":"pointer",transition:"all .15s",opacity:busy?0.6:1,whiteSpace:"nowrap"}}
+                onMouseEnter={e=>{if(!busy){e.currentTarget.style.background="rgba(255,255,255,0.28)";}}}
+                onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.15)";}}>
+                {selectGen===label?<span style={{display:"inline-block",animation:"spin 1s linear infinite",fontSize:12}}>⟳</span>:icon} {label}
+              </button>
+            );
+            const doSelGen=async(label,fn)=>{
+              setSelectGen(label);
+              await new Promise(r=>setTimeout(r,60));
+              try{fn();}catch(e){alert("Export error: "+e.message);}
+              setSelectGen(null);
+            };
+            return(
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",flex:1}}>
+                {mkSelBtn("Production","🏭",()=>doSelGen("Production",()=>dlXlsx(genProduction(selRows),`${d}_Selection_Production.xlsx`)))}
+                {couriers.includes("COLDXPRESS")&&mkSelBtn("ColdXpress","❄️",()=>doSelGen("ColdXpress",()=>dlXlsx(genColdXpress(selRows,d),`${d}_Selection_COLDXPRESS.xlsx`)))}
+                {couriers.includes("DKDISTRIBUTION")&&mkSelBtn("DK Distributions","🚛",()=>doSelGen("DK Distributions",()=>dlXlsx(genDK(selRows),`${d}_Selection_DK.xlsx`)))}
+                {couriers.includes("COOLCOURIERS")&&mkSelBtn("Cool Couriers","🟢",()=>doSelGen("Cool Couriers",()=>dlXlsx(genCoolCouriers(selRows),`${d}_Selection_CoolCouriers.xlsx`)))}
+                {mkSelBtn("Print Files","🖨️",()=>doSelGen("Print Files",()=>{const{f350,b350,fT,bT,f1}=genPrints(selRows);dlZip([[f350,`${d}_Sel_350ml_Fronts.xlsx`],[b350,`${d}_Sel_350ml_Backs.xlsx`],[fT,`${d}_Sel_Tea_Fronts.xlsx`],[bT,`${d}_Sel_Tea_Backs.xlsx`],[f1,`${d}_Sel_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Selection_Print_Files.zip`);}))}
+                {mkSelBtn("All Files","📦",()=>doSelGen("All Files",()=>{
+                  const files=[];
+                  files.push({sheets:genProduction(selRows),name:`${d}_Sel_Production.xlsx`});
+                  if(couriers.includes("COLDXPRESS"))files.push({sheets:genColdXpress(selRows,d),name:`${d}_Sel_COLDXPRESS.xlsx`});
+                  if(couriers.includes("DKDISTRIBUTION"))files.push({sheets:genDK(selRows),name:`${d}_Sel_DK.xlsx`});
+                  if(couriers.includes("COOLCOURIERS"))files.push({sheets:genCoolCouriers(selRows),name:`${d}_Sel_CoolCouriers.xlsx`});
+                  const{f350,b350,fT,bT,f1}=genPrints(selRows);
+                  [[f350,`${d}_Sel_350ml_Fronts.xlsx`],[b350,`${d}_Sel_350ml_Backs.xlsx`],[fT,`${d}_Sel_Tea_Fronts.xlsx`],[bT,`${d}_Sel_Tea_Backs.xlsx`],[f1,`${d}_Sel_1L_Fronts.xlsx`]].forEach(([s,n])=>files.push({sheets:s,name:n}));
+                  dlZip(files,`${d}_Selection_All_Files.zip`);
+                }))}
+              </div>
+            );
+          })()}
+          <div style={{marginLeft:"auto",flexShrink:0}}>
+            <button onClick={()=>setSelected(new Set())}
+              style={{display:"flex",alignItems:"center",gap:5,padding:"7px 13px",borderRadius:8,border:"1.5px solid rgba(255,255,255,0.4)",background:"transparent",color:"rgba(255,255,255,0.8)",fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:600,cursor:"pointer"}}
+              onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.15)"}
+              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              ✕ Clear
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
