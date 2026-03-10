@@ -527,6 +527,42 @@ function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
     });
   };
 
+  // ── Selection export helpers (no async in JSX) ──
+  const runSelExport=(type)=>{
+    const selRows=rows.filter(o=>selected.has(o.orderNumber)).flatMap(o=>o.items.map(it=>({
+      ...it,Customer:o.customer,Courier:o.courier,OrderNumber:o.orderNumber,
+      CustomerId:o.customerId||"",Product:it.product||it.Product||"",
+      SKU:it.sku||it.SKU||"",Quantity:it.qty||it.Quantity||0,
+      price:it.price||0,lineTotal:it.lineTotal||0
+    })));
+    const couriers=[...new Set(rows.filter(o=>selected.has(o.orderNumber)).map(o=>o.courier).filter(Boolean))];
+    const d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
+    setSelectGen(type);
+    setTimeout(()=>{
+      try{
+        if(type==="production") dlXlsx(genProduction(selRows),`${d}_Sel_Production.xlsx`);
+        else if(type==="coldxpress") dlXlsx(genColdXpress(selRows,d),`${d}_Sel_COLDXPRESS.xlsx`);
+        else if(type==="dk") dlXlsx(genDK(selRows),`${d}_Sel_DK.xlsx`);
+        else if(type==="coolcouriers") dlXlsx(genCoolCouriers(selRows),`${d}_Sel_CoolCouriers.xlsx`);
+        else if(type==="prints"){
+          const{f350,b350,fT,bT,f1}=genPrints(selRows);
+          dlZip([[f350,`${d}_Sel_350ml_Fronts.xlsx`],[b350,`${d}_Sel_350ml_Backs.xlsx`],[fT,`${d}_Sel_Tea_Fronts.xlsx`],[bT,`${d}_Sel_Tea_Backs.xlsx`],[f1,`${d}_Sel_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Sel_Print_Files.zip`);
+        }
+        else if(type==="all"){
+          const files=[{sheets:genProduction(selRows),name:`${d}_Sel_Production.xlsx`}];
+          if(couriers.includes("COLDXPRESS")) files.push({sheets:genColdXpress(selRows,d),name:`${d}_Sel_COLDXPRESS.xlsx`});
+          if(couriers.includes("DKDISTRIBUTION")) files.push({sheets:genDK(selRows),name:`${d}_Sel_DK.xlsx`});
+          if(couriers.includes("COOLCOURIERS")) files.push({sheets:genCoolCouriers(selRows),name:`${d}_Sel_CoolCouriers.xlsx`});
+          const{f350,b350,fT,bT,f1}=genPrints(selRows);
+          [[f350,`${d}_Sel_350ml_Fronts.xlsx`],[b350,`${d}_Sel_350ml_Backs.xlsx`],[fT,`${d}_Sel_Tea_Fronts.xlsx`],[bT,`${d}_Sel_Tea_Backs.xlsx`],[f1,`${d}_Sel_1L_Fronts.xlsx`]].forEach(([s,n])=>files.push({sheets:s,name:n}));
+          dlZip(files,`${d}_Sel_All_Files.zip`);
+        }
+      }catch(e){alert("Export error: "+e.message);}
+      setSelectGen(null);
+    },60);
+  };
+  const selCouriers=[...new Set(rows.filter(o=>selected.has(o.orderNumber)).map(o=>o.courier).filter(Boolean))];
+
   if(rows.length===0)return(
     <div style={{textAlign:"center",padding:"70px 0",color:T.inkL}}>
       <div style={{fontSize:48,marginBottom:12}}>📦</div>
@@ -714,54 +750,25 @@ function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
             <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:.5}}>{selected.size===1?"ORDER SELECTED":"ORDERS SELECTED"}</div>
           </div>
           <div style={{width:1,height:28,background:"rgba(255,255,255,0.25)",flexShrink:0}}/>
-          {(()=>{
-            const selRows=rows.filter(o=>selected.has(o.orderNumber)).flatMap(o=>o.items.map(it=>({...it,Customer:o.customer,Courier:o.courier,OrderNumber:o.orderNumber,CustomerId:o.customerId||"",Product:it.product||it.Product||"",SKU:it.sku||it.SKU||"",Quantity:it.qty||it.Quantity||0,price:it.price||0,lineTotal:it.lineTotal||0})));
-            const selOrders=rows.filter(o=>selected.has(o.orderNumber));
-            const couriers=[...new Set(selOrders.map(o=>o.courier).filter(Boolean))];
-            const d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
-            const busy=!!selectGen;
-            const mkSelBtn=(label,icon,onClick)=>(
-              <button key={label} disabled={busy} onClick={onClick}
-                style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:9,border:"1.5px solid rgba(255,255,255,0.4)",background:"rgba(255,255,255,0.15)",color:"#fff",fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:busy?"not-allowed":"pointer",transition:"all .15s",opacity:busy?0.6:1,whiteSpace:"nowrap"}}
-                onMouseEnter={e=>{if(!busy){e.currentTarget.style.background="rgba(255,255,255,0.28)";}}}
-                onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.15)";}}>
-                {selectGen===label?<span style={{display:"inline-block",animation:"spin 1s linear infinite",fontSize:12}}>⟳</span>:icon} {label}
+          <div style={{display:"flex",gap:8,flex:1,flexWrap:"wrap"}}>
+            {[
+              {id:"production",label:"Production",icon:"🏭",show:true},
+              {id:"coldxpress",label:"ColdXpress",icon:"❄️",show:selCouriers.includes("COLDXPRESS")},
+              {id:"dk",label:"DK Distrib.",icon:"🚛",show:selCouriers.includes("DKDISTRIBUTION")},
+              {id:"coolcouriers",label:"Cool Couriers",icon:"🟢",show:selCouriers.includes("COOLCOURIERS")},
+              {id:"prints",label:"Print Files",icon:"🖨️",show:true},
+              {id:"all",label:"All Files",icon:"📦",show:true},
+            ].filter(b=>b.show).map(b=>(
+              <button key={b.id} disabled={!!selectGen} onClick={()=>runSelExport(b.id)}
+                style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:9,border:"1.5px solid rgba(255,255,255,0.4)",background:selectGen===b.id?"rgba(255,255,255,0.35)":"rgba(255,255,255,0.15)",color:"#fff",fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:selectGen?"not-allowed":"pointer",whiteSpace:"nowrap",opacity:selectGen&&selectGen!==b.id?0.5:1}}>
+                {selectGen===b.id?"⟳":b.icon} {b.label}
               </button>
-            );
-            const doSelGen=async(label,fn)=>{
-              setSelectGen(label);
-              await new Promise(r=>setTimeout(r,60));
-              try{fn();}catch(e){alert("Export error: "+e.message);}
-              setSelectGen(null);
-            };
-            return(
-              <div style={{display:"flex",gap:8,flexWrap:"wrap",flex:1}}>
-                {mkSelBtn("Production","🏭",()=>doSelGen("Production",()=>dlXlsx(genProduction(selRows),`${d}_Selection_Production.xlsx`)))}
-                {couriers.includes("COLDXPRESS")&&mkSelBtn("ColdXpress","❄️",()=>doSelGen("ColdXpress",()=>dlXlsx(genColdXpress(selRows,d),`${d}_Selection_COLDXPRESS.xlsx`)))}
-                {couriers.includes("DKDISTRIBUTION")&&mkSelBtn("DK Distributions","🚛",()=>doSelGen("DK Distributions",()=>dlXlsx(genDK(selRows),`${d}_Selection_DK.xlsx`)))}
-                {couriers.includes("COOLCOURIERS")&&mkSelBtn("Cool Couriers","🟢",()=>doSelGen("Cool Couriers",()=>dlXlsx(genCoolCouriers(selRows),`${d}_Selection_CoolCouriers.xlsx`)))}
-                {mkSelBtn("Print Files","🖨️",()=>doSelGen("Print Files",()=>{const{f350,b350,fT,bT,f1}=genPrints(selRows);dlZip([[f350,`${d}_Sel_350ml_Fronts.xlsx`],[b350,`${d}_Sel_350ml_Backs.xlsx`],[fT,`${d}_Sel_Tea_Fronts.xlsx`],[bT,`${d}_Sel_Tea_Backs.xlsx`],[f1,`${d}_Sel_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Selection_Print_Files.zip`);}))}
-                {mkSelBtn("All Files","📦",()=>doSelGen("All Files",()=>{
-                  const files=[];
-                  files.push({sheets:genProduction(selRows),name:`${d}_Sel_Production.xlsx`});
-                  if(couriers.includes("COLDXPRESS"))files.push({sheets:genColdXpress(selRows,d),name:`${d}_Sel_COLDXPRESS.xlsx`});
-                  if(couriers.includes("DKDISTRIBUTION"))files.push({sheets:genDK(selRows),name:`${d}_Sel_DK.xlsx`});
-                  if(couriers.includes("COOLCOURIERS"))files.push({sheets:genCoolCouriers(selRows),name:`${d}_Sel_CoolCouriers.xlsx`});
-                  const{f350,b350,fT,bT,f1}=genPrints(selRows);
-                  [[f350,`${d}_Sel_350ml_Fronts.xlsx`],[b350,`${d}_Sel_350ml_Backs.xlsx`],[fT,`${d}_Sel_Tea_Fronts.xlsx`],[bT,`${d}_Sel_Tea_Backs.xlsx`],[f1,`${d}_Sel_1L_Fronts.xlsx`]].forEach(([s,n])=>files.push({sheets:s,name:n}));
-                  dlZip(files,`${d}_Selection_All_Files.zip`);
-                }))}
-              </div>
-            );
-          })()}
-          <div style={{marginLeft:"auto",flexShrink:0}}>
-            <button onClick={()=>setSelected(new Set())}
-              style={{display:"flex",alignItems:"center",gap:5,padding:"7px 13px",borderRadius:8,border:"1.5px solid rgba(255,255,255,0.4)",background:"transparent",color:"rgba(255,255,255,0.8)",fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:600,cursor:"pointer"}}
-              onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.15)"}
-              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-              ✕ Clear
-            </button>
+            ))}
           </div>
+          <button onClick={()=>setSelected(new Set())}
+            style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5,padding:"7px 13px",borderRadius:8,border:"1.5px solid rgba(255,255,255,0.4)",background:"transparent",color:"rgba(255,255,255,0.85)",fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:600,cursor:"pointer",flexShrink:0}}>
+            ✕ Clear
+          </button>
         </div>
       )}
     </>
