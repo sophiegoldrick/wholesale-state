@@ -1173,7 +1173,7 @@ function App(){
   const piData=analytics?Object.entries(analytics.productTotals).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([name,value])=>({name:name.replace(" 350ml","").replace(" 1L","").slice(0,12),value})):[];
   const TT={contentStyle:{background:T.white,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 13px",fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.ink}};
 
-  const TABS=[{id:"generate",icon:"⚡",label:"Generate"},{id:"tracker",icon:"📦",label:"Orders"},{id:"pallets",icon:"🏗️",label:"Pallets"},{id:"dashboard",icon:"📊",label:"Dashboard"},{id:"reports",icon:"📈",label:"Reports"},{id:"history",icon:"📋",label:"Manifests"},{id:"customers",icon:"🏪",label:"Customers"},{id:"stocktake",icon:"📋",label:"Stocktake"},{id:"discrepancies",icon:"⚠️",label:"Discrepancies"},{id:"email",icon:"✉️",label:"Email Hub"}];
+  const TABS=[{id:"generate",icon:"⚡",label:"Generate"},{id:"tracker",icon:"📦",label:"Orders"},{id:"pallets",icon:"🏗️",label:"Pallets"},{id:"reports",icon:"📈",label:"Reports"},{id:"history",icon:"📋",label:"Manifests"},{id:"customers",icon:"🏪",label:"Customers"},{id:"stocktake",icon:"📋",label:"Stocktake"},{id:"discrepancies",icon:"⚠️",label:"Discrepancies"},{id:"email",icon:"✉️",label:"Email Hub"}];
   const SKUS_350=['Antiox 350ml','Blueberry Glow 350ml','Botanical 350ml','Cloudy Apple 350ml','Energise 350ml','Immunity 350ml','Pure Orange 350ml','Refresh 350ml','Roots 350ml','Tropical Bliss 350ml'];
   const SKUS_TEA=['Organic Lemon Iced Tea 350ml','Organic Peach Iced Tea 350ml','Organic Raspberry Iced Tea 350ml'];
   const SKUS_1L=['Antiox 1L','Blueberry Glow 1L','Botanical 1L','Cloudy Apple 1L','Energise 1L','Immunity 1L','Pure Orange 1L','Refresh 1L','Roots 1L','Tropical Bliss 1L'];
