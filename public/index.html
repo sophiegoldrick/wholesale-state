@@ -1027,7 +1027,6 @@ function App(){
       // Store raw CSV text separately keyed by dateKey (small, ~100KB each)
       try{await window.storage.set("ws-csv-"+dk, e.target.result);}catch(err){console.warn("CSV store failed:",err);}
     };
-    };
     r.readAsText(file);
   },[snapshots]);
 
