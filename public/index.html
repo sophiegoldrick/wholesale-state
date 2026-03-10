@@ -1507,9 +1507,11 @@ function App(){
                             setSnapGen(p=>({...p,[snap.dateKey]:type}));
                             try{
                               const stored=await window.storage.get("ws-csv-"+snap.dateKey);
-                              if(!stored){alert("CSV not stored for this upload — re-upload the original CSV on the Generate tab to restore access.");setSnapGen(p=>({...p,[snap.dateKey]:null}));return;}
-                              const resp=await apiFetch("/api/generate",{method:"POST",body:JSON.stringify({csvData:stored.value,type,dateStr:d2})});
-                              if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.error||"Generation failed");}
+                              if(!stored||!stored.value){alert("CSV not stored for this snapshot — re-upload the original CSV on the Generate tab to restore access.");setSnapGen(p=>({...p,[snap.dateKey]:null}));return;}
+                              const csvPayload=stored.value;
+                              if(csvPayload.length<10){alert("Stored CSV appears empty or corrupted. Please re-upload the original CSV.");setSnapGen(p=>({...p,[snap.dateKey]:null}));return;}
+                              const resp=await apiFetch("/api/generate",{method:"POST",body:JSON.stringify({csvData:csvPayload,type,dateStr:d2})});
+                              if(!resp.ok){const txt=await resp.text().catch(()=>"");const e=txt.startsWith("{")&&JSON.parse(txt);throw new Error((e&&e.error)||`Server error ${resp.status}: ${txt.slice(0,200)}`);}
                               const blob=await resp.blob();
                               const ct=resp.headers.get("content-type")||"";
                               const ext=ct.includes("zip")?".zip":".xlsx";
