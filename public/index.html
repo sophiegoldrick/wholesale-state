@@ -24,7 +24,7 @@
     const _getToken = () => localStorage.getItem('ws-token');
     window.storage = {
       get: async (key) => {
-        const res = await fetch('/api/store/' + key, {
+        const res = await fetch('/api/store/' + encodeURIComponent(key), {
           headers: { Authorization: 'Bearer ' + _getToken() }
         });
         if (!res.ok) throw new Error('Not found');
@@ -36,7 +36,7 @@
         let parsed;
         try { parsed = typeof value === 'string' ? JSON.parse(value) : value; }
         catch(e) { parsed = value; }
-        await fetch('/api/store/' + key, {
+        await fetch('/api/store/' + encodeURIComponent(key), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _getToken() },
           body: JSON.stringify({ value: parsed })
@@ -44,7 +44,7 @@
         return { value };
       },
       delete: async (key) => {
-        await fetch('/api/store/' + key, {
+        await fetch('/api/store/' + encodeURIComponent(key), {
           method: 'DELETE',
           headers: { Authorization: 'Bearer ' + _getToken() }
         });

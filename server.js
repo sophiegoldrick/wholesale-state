@@ -132,19 +132,21 @@ app.post('/api/change-password', auth, async (req, res) => {
 // ── KV Store (replaces window.storage) ─────────────────────────
 app.get('/api/store/:key', auth, async (req, res) => {
   try {
-    const result = await db(`SELECT value FROM kv_store WHERE key = $1`, [req.params.key]);
+    const key = decodeURIComponent(req.params.key);
+    const result = await db(`SELECT value FROM kv_store WHERE key = $1`, [key]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
-    res.json({ key: req.params.key, value: result.rows[0].value });
+    res.json({ key: key, value: result.rows[0].value });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/store/:key', auth, async (req, res) => {
   try {
+    const key = decodeURIComponent(req.params.key);
     let value = req.body.value;
 
     // ── When ws-orders is saved, merge CSV data into any email-sourced orders ──
     // The frontend sends the full orders array; we enrich email orders with CSV fields
-    if (req.params.key === 'ws-orders' && Array.isArray(value)) {
+    if (key === 'ws-orders' && Array.isArray(value)) {
       value = value.map(order => {
         // Only enrich email-sourced orders that are missing CSV fields
         if (order.source !== 'email') return order;
@@ -156,14 +158,15 @@ app.post('/api/store/:key', auth, async (req, res) => {
 
     await db(`INSERT INTO kv_store (key, value, updated_at) VALUES ($1, $2, NOW())
               ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=NOW()`,
-              [req.params.key, JSON.stringify(value)]);
+              [key, JSON.stringify(value)]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.delete('/api/store/:key', auth, async (req, res) => {
   try {
-    await db(`DELETE FROM kv_store WHERE key = $1`, [req.params.key]);
+    const key = decodeURIComponent(req.params.key);
+    await db(`DELETE FROM kv_store WHERE key = $1`, [key]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
