@@ -509,6 +509,8 @@ function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
   const[filterSt,setFilterSt]=useState("All");
   const[search,setSearch]=useState("");
   const[expanded,setExpanded]=useState(null);
+  const[selected,setSelected]=useState(new Set());
+  const[selectGen,setSelectGen]=useState(null);
   const stCounts=ALL_ST.reduce((a,s)=>{a[s]=rows.filter(o=>o.status===s).length;return a},{});
   const filtered=rows.filter(o=>{
     const ms=filterSt==="All"||o.status===filterSt;
@@ -536,7 +538,7 @@ function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
       price:it.price||0,lineTotal:it.lineTotal||0
     })));
     const couriers=[...new Set(rows.filter(o=>selected.has(o.orderNumber)).map(o=>o.courier).filter(Boolean))];
-    const d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
+    const d=new Date().toLocaleDateString("en-AU").split("/").join("-");
     setSelectGen(type);
     setTimeout(()=>{
       try{
@@ -586,7 +588,12 @@ function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
       {/* Table */}
       <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
         {/* Header */}
-        <div style={{display:"grid",gridTemplateColumns:"24px 110px 1fr 120px 80px 90px 130px 100px",gap:0,padding:"10px 18px",background:T.creamD,borderBottom:`1px solid ${T.border}`}}>
+        <div style={{display:"grid",gridTemplateColumns:"36px 24px 110px 1fr 120px 80px 90px 130px 100px",gap:0,padding:"10px 18px",background:T.creamD,borderBottom:`1px solid ${T.border}`}}>
+          <div style={{display:"flex",alignItems:"center"}}>
+            <input type="checkbox" style={{cursor:"pointer",accentColor:T.terra,width:14,height:14}}
+              checked={filtered.length>0&&filtered.every(o=>selected.has(o.orderNumber))}
+              onChange={e=>{if(e.target.checked)setSelected(new Set(filtered.map(o=>o.orderNumber)));else setSelected(new Set());}}/>
+          </div>
           {["","Order","Customer","Courier","Items","Total","Placed / Delivery","Status"].map(h=>(
             <div key={h} style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:.8}}>{h.toUpperCase()}</div>
           ))}
@@ -604,10 +611,16 @@ function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
           return(
             <div key={o.orderNumber} style={{borderBottom:i<filtered.length-1?`1px solid ${T.creamD}`:"none"}}>
               {/* Main row */}
-              <div style={{display:"grid",gridTemplateColumns:"24px 110px 1fr 120px 80px 90px 130px 100px",padding:"13px 18px",alignItems:"center",cursor:"pointer",transition:"background .1s"}}
-                onMouseEnter={e=>e.currentTarget.style.background=T.creamD}
-                onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+              <div style={{display:"grid",gridTemplateColumns:"36px 24px 110px 1fr 120px 80px 90px 130px 100px",padding:"13px 18px",alignItems:"center",cursor:"pointer",transition:"background .1s",background:selected.has(o.orderNumber)?T.terraL:"transparent"}}
+                onMouseEnter={e=>{if(!selected.has(o.orderNumber))e.currentTarget.style.background=T.creamD;}}
+                onMouseLeave={e=>{if(!selected.has(o.orderNumber))e.currentTarget.style.background="transparent";}}
                 onClick={()=>setExpanded(isExp?null:o.orderNumber)}>
+                {/* Checkbox */}
+                <div onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center"}}>
+                  <input type="checkbox" style={{cursor:"pointer",accentColor:T.terra,width:14,height:14}}
+                    checked={selected.has(o.orderNumber)}
+                    onChange={e=>{setSelected(prev=>{const n=new Set(prev);e.target.checked?n.add(o.orderNumber):n.delete(o.orderNumber);return n;});}}/>
+                </div>
                 {/* Expand chevron */}
                 <div style={{fontSize:10,color:T.inkL,transform:isExp?"rotate(90deg)":"none",transition:"transform .15s"}}>▶</div>
                 {/* Order # */}
@@ -638,7 +651,7 @@ function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
 
               {/* Expanded detail */}
               {isExp&&(
-                <div style={{background:T.creamD,borderTop:`1px solid ${T.border}`,padding:"16px 18px 16px 52px"}}>
+                <div style={{background:T.creamD,borderTop:`1px solid ${T.border}`,padding:"16px 18px 16px 88px"}}>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16,marginBottom:14}}>
                     <div>
                       <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:6}}>ORDER DETAILS</div>
