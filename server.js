@@ -405,14 +405,22 @@ function parseOrdermentumEmail(subject, bodyText, receivedDateTime, toRecipientN
 }
 
 // ── POD email parser ────────────────────────────────────────────
-function parsePODEmail(subject, bodyText) {
-  // Must contain OMO reference
-  const omoMatch = (bodyText + ' ' + subject).match(/OMO\d+/g);
+function parsePODEmail(subject, bodyText, fromAddr) {
+  // Search subject AND body for OMO numbers
+  const combined = (subject || '') + ' ' + (bodyText || '');
+  const omoMatch = combined.match(/OMO\d+/gi);
   if (!omoMatch) return null;
-  // POD emails typically come from couriers — subject contains "delivery", "delivered", "POD", "proof"
-  const isPOD = /\b(delivered|delivery confirmation|proof of delivery|POD|signed|completed)\b/i.test(subject + ' ' + bodyText);
+
+  // Cold Xpress sends from notify@xdock.com.au — treat any email from them as a POD
+  const isColdXpress = (fromAddr || '').toLowerCase().includes('xdock.com.au');
+
+  // General POD keyword check
+  const isPOD = isColdXpress ||
+    /\b(delivered|delivery confirmation|proof of delivery|POD|signed|completed|consignment delivered)\b/i
+      .test(subject + ' ' + bodyText);
+
   if (!isPOD) return null;
-  return [...new Set(omoMatch)]; // unique OMO numbers
+  return [...new Set(omoMatch.map(o => o.toUpperCase()))]; // unique OMO numbers, normalised
 }
 
 // ── Poll inbox — orders + PODs ──────────────────────────────────
@@ -454,7 +462,7 @@ async function pollInbox() {
         .split('\n').map(l => l.replace(/\s+/g,' ').trim()).filter(l => l.length > 0).join('\n');
 
       // ── POD emails (from couriers — check first) ──────────────
-      const podOrders = parsePODEmail(subject, bodyText);
+      const podOrders = parsePODEmail(subject, bodyText, fromAddr);
       if (podOrders) {
         // Fetch attachments for this message
         let podFilename = null, podData = null, podContentType = null;
@@ -479,7 +487,7 @@ async function pollInbox() {
         let changed = false;
         const deliveredAt = new Date().toLocaleString('en-AU');
         const updated = orders.map(o => {
-          if (podOrders.includes(o.orderNumber) && o.status !== 'Delivered') {
+          if (podOrders.includes(o.orderNumber?.toUpperCase()) && o.status !== 'Delivered') {
             changed = true;
             podsUpdated++;
             console.log(`📦 POD: ${o.orderNumber} → Delivered${podFilename ? ` (${podFilename})` : ''}`);
