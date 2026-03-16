@@ -1027,6 +1027,46 @@ result = {'paths': generated, 'files': [os.path.basename(p) for p in generated],
 print(json.dumps(result))
 `;
 
+function validateCSV(rows) {
+  const issues = [];
+  const VALID_COURIERS = ['COLDXPRESS','DKDISTRIBUTION','COOLCOURIERS'];
+  const VALID_PRODUCTS = ['350','TEA','1L'];
+  const TEA_SKUS = new Set(['LTEA350','PTEA350','RTEA350']);
+
+  rows.forEach((r, i) => {
+    const line = `Row ${i + 2} (${r.OrderNumber || '?'} — ${r.Customer || '?'})`;
+    const sku = (r.SKU || '').trim();
+
+    // Classify product the same way the generator does
+    let product = r.Product;
+    if (TEA_SKUS.has(sku))                             product = 'TEA';
+    else if (sku.endsWith('350'))                       product = '350';
+    else if (sku.endsWith('1') || sku.endsWith('1L'))   product = '1L';
+
+    if (!product || !VALID_PRODUCTS.includes(product)) {
+      issues.push(`${line}: SKU "${sku}" couldn't be classified as 350ml, Tea, or 1L — check the SKU spelling`);
+    }
+    if (!r.OrderNumber) {
+      issues.push(`${line}: Missing Order Number`);
+    }
+    if (!r.Customer) {
+      issues.push(`${line}: Missing Customer name`);
+    }
+    if (!r.Courier || !VALID_COURIERS.includes((r.Courier || '').trim().toUpperCase())) {
+      issues.push(`${line}: Courier "${r.Courier || ''}" is not recognised — must be COLDXPRESS, DKDISTRIBUTION, or COOLCOURIERS`);
+    }
+    if (!r.Name) {
+      issues.push(`${line}: Missing product Name`);
+    }
+    const qty = parseFloat(r.Quantity);
+    if (isNaN(qty) || qty <= 0) {
+      issues.push(`${line}: Quantity "${r.Quantity}" is not a valid number`);
+    }
+  });
+
+  return issues;
+}
+
 app.post('/api/generate', auth, async (req, res) => {
   try {
     const { csvData, type, dateStr } = req.body;
@@ -1043,15 +1083,35 @@ app.post('/api/generate', auth, async (req, res) => {
 
     // csvData may be JSON array of row objects OR actual CSV text
     let csvText = csvData;
+    let rowsForValidation = [];
     if (csvData.trim().startsWith('[')) {
-      // Convert JSON rows array to CSV
-      const rowsArr = JSON.parse(csvData);
-      if (rowsArr.length > 0) {
-        const headers = Object.keys(rowsArr[0]);
+      rowsForValidation = JSON.parse(csvData);
+      if (rowsForValidation.length > 0) {
+        const headers = Object.keys(rowsForValidation[0]);
         const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-        csvText = [headers.join(','), ...rowsArr.map(r => headers.map(h => esc(r[h])).join(','))].join('\n');
+        csvText = [headers.join(','), ...rowsForValidation.map(r => headers.map(h => esc(r[h])).join(','))].join('\n');
       }
+    } else {
+      const lines = csvText.trim().split('\n');
+      const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g,'').trim());
+      rowsForValidation = lines.slice(1).map(line => {
+        const vals = line.match(/(".*?"|[^,]+|(?<=,)(?=,)|^(?=,)|(?<=,)$)/g) || [];
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = (vals[i] || '').replace(/^"|"$/g,'').trim(); });
+        return obj;
+      });
     }
+
+    // Validate before running — filter FREIGHT rows same as generator does
+    const validatableRows = rowsForValidation.filter(r => r.SKU !== 'FREIGHT');
+    const issues = validateCSV(validatableRows);
+    if (issues.length > 0) {
+      return res.status(400).json({
+        error: `Found ${issues.length} problem${issues.length > 1 ? 's' : ''} in your CSV — fix these before generating:`,
+        issues
+      });
+    }
+
     await _writeFile(csvPath, csvText);
     await _writeFile(pyPath, GEN_SCRIPT);
 

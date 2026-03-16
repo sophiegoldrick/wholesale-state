@@ -1170,7 +1170,19 @@ function App(){
       if(IS_DEPLOYED){
         const csvText=JSON.stringify(rows);
         const resp=await apiFetch("/api/generate",{method:"POST",body:JSON.stringify({csvData:csvText,type,dateStr:d})});
-        if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.error||"Generation failed");}
+        if(!resp.ok){
+          const e=await resp.json().catch(()=>({}));
+          if(e.issues&&e.issues.length){
+            setGen(null);
+            setValModal({result:{
+              errors:e.issues.map(msg=>({severity:"error",message:msg,rule:"CSV_DATA"})),
+              warnings:[],
+              totalOrders:0,coveredOrders:0,canProceed:false
+            },type,label});
+            return;
+          }
+          throw new Error(e.error||"Generation failed");
+        }
         const blob=await resp.blob();
         const url=URL.createObjectURL(blob);
         const a=document.createElement("a");
