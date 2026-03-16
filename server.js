@@ -1032,44 +1032,33 @@ function validateCSV(rows) {
   const VALID_COURIERS = ['COLDXPRESS','DKDISTRIBUTION','COOLCOURIERS'];
   const VALID_PRODUCTS = ['350','TEA','1L'];
   const TEA_SKUS = new Set(['LTEA350','PTEA350','RTEA350']);
-
   rows.forEach((r, i) => {
     const line = `Row ${i + 2} (${r.OrderNumber || '?'} — ${r.Customer || '?'})`;
     const sku = (r.SKU || '').trim();
-
-    // Classify product the same way the generator does
     let product = r.Product;
     if (TEA_SKUS.has(sku))                             product = 'TEA';
     else if (sku.endsWith('350'))                       product = '350';
     else if (sku.endsWith('1') || sku.endsWith('1L'))   product = '1L';
-
-    if (!product || !VALID_PRODUCTS.includes(product)) {
+    if (!product || !VALID_PRODUCTS.includes(product))
       issues.push(`${line}: SKU "${sku}" couldn't be classified as 350ml, Tea, or 1L — check the SKU spelling`);
-    }
-    if (!r.OrderNumber) {
+    if (!r.OrderNumber)
       issues.push(`${line}: Missing Order Number`);
-    }
-    if (!r.Customer) {
+    if (!r.Customer)
       issues.push(`${line}: Missing Customer name`);
-    }
-    if (!r.Courier || !VALID_COURIERS.includes((r.Courier || '').trim().toUpperCase())) {
+    if (!r.Courier || !VALID_COURIERS.includes((r.Courier || '').trim().toUpperCase()))
       issues.push(`${line}: Courier "${r.Courier || ''}" is not recognised — must be COLDXPRESS, DKDISTRIBUTION, or COOLCOURIERS`);
-    }
-    if (!r.Name) {
+    if (!r.Name)
       issues.push(`${line}: Missing product Name`);
-    }
     const qty = parseFloat(r.Quantity);
-    if (isNaN(qty) || qty <= 0) {
+    if (isNaN(qty) || qty <= 0)
       issues.push(`${line}: Quantity "${r.Quantity}" is not a valid number`);
-    }
   });
-
   return issues;
 }
 
 app.post('/api/generate', auth, async (req, res) => {
   try {
-    const { csvData, type, dateStr } = req.body;
+    const { csvData, type, dateStr, force } = req.body;
     if (!csvData) return res.status(400).json({ error: 'No CSV data' });
 
     const tmpDir = '/tmp/ws_gen_' + Date.now();
@@ -1091,25 +1080,18 @@ app.post('/api/generate', auth, async (req, res) => {
         const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
         csvText = [headers.join(','), ...rowsForValidation.map(r => headers.map(h => esc(r[h])).join(','))].join('\n');
       }
-    } else {
-      const lines = csvText.trim().split('\n');
-      const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g,'').trim());
-      rowsForValidation = lines.slice(1).map(line => {
-        const vals = line.match(/(".*?"|[^,]+|(?<=,)(?=,)|^(?=,)|(?<=,)$)/g) || [];
-        const obj = {};
-        headers.forEach((h, i) => { obj[h] = (vals[i] || '').replace(/^"|"$/g,'').trim(); });
-        return obj;
-      });
     }
 
-    // Validate before running — filter FREIGHT rows same as generator does
-    const validatableRows = rowsForValidation.filter(r => r.SKU !== 'FREIGHT');
-    const issues = validateCSV(validatableRows);
-    if (issues.length > 0) {
-      return res.status(400).json({
-        error: `Found ${issues.length} problem${issues.length > 1 ? 's' : ''} in your CSV — fix these before generating:`,
-        issues
-      });
+    // Only validate and block if user hasn't already confirmed via the modal
+    if (!force) {
+      const validatableRows = rowsForValidation.filter(r => r.SKU !== 'FREIGHT');
+      const issues = validateCSV(validatableRows);
+      if (issues.length > 0) {
+        return res.status(400).json({
+          error: `Found ${issues.length} problem${issues.length > 1 ? 's' : ''} in your CSV — fix these before generating:`,
+          issues
+        });
+      }
     }
 
     await _writeFile(csvPath, csvText);
