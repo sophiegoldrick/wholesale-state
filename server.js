@@ -776,11 +776,10 @@ if GEN_TYPE in ('production','all'):
     suffix = 'th' if 11<=d.day<=13 else {1:'st',2:'nd',3:'rd'}.get(d.day%10,'th')
     ws.cell(1,1).value = f"{d.strftime('%A')} - {d.day}{suffix} {d.strftime('%B %Y')}"
 
-    SKUS_350 = ['Antiox 350ml','Blueberry Glow 350ml','Botanical 350ml','Cloudy Apple 350ml',
-                'Energise 350ml','Immunity 350ml','Pure Orange 350ml','Refresh 350ml',
-                'Roots 350ml','Tropical Bliss 350ml']
-    SKUS_TEA = ['Organic Lemon Iced Tea 350ml','Organic Peach Iced Tea 350ml','Organic Raspberry Iced Tea 350ml']
-    SKUS_1L  = ['Botanical 1L','Immunity 1L','Tropical Bliss 1L']
+    # Build SKU lists dynamically from actual CSV data (sorted for consistent column order)
+    SKUS_350 = sorted(set(r['Name'] for r in rows if r.get('Product') == '350'))
+    SKUS_TEA = sorted(set(r['Name'] for r in rows if r.get('Product') == 'TEA'))
+    SKUS_1L  = sorted(set(r['Name'] for r in rows if r.get('Product') == '1L'))
 
     def build_section_rows(skus, product_filter):
         """Build list of row dicts for this product section — couriers sorted, with subtotals + grand total."""
