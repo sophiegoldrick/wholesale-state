@@ -497,7 +497,9 @@ function ValModal({result,label,onProceed,onCancel}){
         </div>
         <div style={{padding:"16px 26px",borderTop:`1px solid ${T.border}`,display:"flex",gap:10,justifyContent:"flex-end",background:T.creamD}}>
           <button className="btn-o" onClick={onCancel}>Cancel</button>
-          {canProceed?<button className="btn-t" onClick={onProceed}>{warnings.length?"⚠️ Proceed anyway":"✅ Generate files"}</button>:<button className="btn-t" disabled style={{background:T.red}}>🚫 Fix errors first</button>}
+          {canProceed
+            ?<button className="btn-t" onClick={onProceed}>{warnings.length?"⚠️ Proceed anyway":"✅ Generate files"}</button>
+            :<button className="btn-t" onClick={onProceed} style={{background:T.red}}>🚫 Generate anyway</button>}
         </div>
       </div>
     </div>
@@ -1361,10 +1363,10 @@ function App(){
                   )}
 
                   {vStats&&(
-                    <div onClick={()=>{if(vStats.errors>0||vStats.warnings>0){const result=validate(rowsRef.current);setValModal({result,type:"all",label:"All Files"});}}} style={{marginTop:14,padding:"11px 16px",background:vStats.errors>0?T.redL:vStats.warnings>0?T.amberL:T.sageL,border:`1px solid ${vStats.errors>0?T.redB:vStats.warnings>0?T.amberB:T.sageD+"44"}`,borderRadius:11,display:"flex",alignItems:"center",gap:9,cursor:vStats.errors>0||vStats.warnings>0?"pointer":"default"}}>
+                    <div style={{marginTop:14,padding:"11px 16px",background:vStats.errors>0?T.redL:vStats.warnings>0?T.amberL:T.sageL,border:`1px solid ${vStats.errors>0?T.redB:vStats.warnings>0?T.amberB:T.sageD+"44"}`,borderRadius:11,display:"flex",alignItems:"center",gap:9}}>
                       <span style={{fontSize:15}}>{vStats.errors>0?"🚫":vStats.warnings>0?"⚠️":"✅"}</span>
                       <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:600,color:vStats.errors>0?T.red:vStats.warnings>0?T.amber:T.sageD}}>
-                        {vStats.errors>0?`${vStats.errors} blocking errors — click to see details`:vStats.warnings>0?`${vStats.warnings} warnings — click to review`:`All ${vStats.orders} orders validated ✓`}
+                        {vStats.errors>0?`${vStats.errors} blocking errors — fix before generating`:vStats.warnings>0?`${vStats.warnings} warnings — review before generating`:`All ${vStats.orders} orders validated ✓`}
                       </span>
                     </div>
                   )}
