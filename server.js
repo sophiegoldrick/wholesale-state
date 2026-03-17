@@ -819,10 +819,34 @@ if GEN_TYPE in ('production','all'):
         """
         Find existing data rows between hrow+1 and Discrepancies row.
         Delete them all, insert exactly as many as needed, then write data.
-        This handles any volume correctly.
         """
-        # Always rewrite the header row with the dynamic SKU names
-        # Columns: Courier, OrderNumber, CustomerId, Customer, [SKUs...], Grand Total, Cartons
+        last_col = 6 + len(skus)  # col 4=Customer + SKUs + GrandTotal + Cartons
+
+        # ── Clear info boxes (LABELS, CUSTOMERGROUP, PRODUCT) top-right ──
+        for info_r in range(max(1, hrow - 6), hrow + 1):
+            for info_c in range(last_col + 1, 20):
+                ws.cell(info_r, info_c).value = None
+
+        # ── Section title: uppercase + bold ──
+        for title_r in range(max(1, hrow - 6), hrow):
+            tv = ws.cell(title_r, 1).value
+            if tv and isinstance(tv, str) and 'order' in tv.lower():
+                ws.cell(title_r, 1).value = tv.upper()
+                ws.cell(title_r, 1).font  = Font(bold=True, name='Calibri', size=11)
+
+        # ── Batch Number box: border spanning col D to last_col ──
+        batch_row = hrow - 1
+        if batch_row >= 1 and ws.cell(batch_row, 4).value == 'Batch Number:':
+            THIN = Side(style='thin')
+            for bc in range(4, last_col + 1):
+                ws.cell(batch_row, bc).border = Border(
+                    top    = THIN,
+                    bottom = THIN,
+                    left   = THIN if bc == 4        else None,
+                    right  = THIN if bc == last_col else None
+                )
+
+        # ── Header row: dynamic SKU names + alignment ──
         ws.cell(hrow, 1).value = 'Courier'
         ws.cell(hrow, 2).value = 'OrderNumber'
         ws.cell(hrow, 3).value = 'CustomerId'
@@ -831,87 +855,107 @@ if GEN_TYPE in ('production','all'):
             ws.cell(hrow, ci).value = sku
         ws.cell(hrow, 5 + len(skus)).value = 'Grand Total'
         ws.cell(hrow, 6 + len(skus)).value = 'Cartons'
-        # Clear any leftover columns beyond what we need
-        for ci in range(7 + len(skus), 17):
+        for ci in range(7 + len(skus), 20):
             ws.cell(hrow, ci).value = None
-        # Find the Discrepancies row for THIS section (first one after hrow)
+        BOLD_F = Font(bold=True, name='Calibri', size=11)
+        for ci in range(1, last_col + 1):
+            ws.cell(hrow, ci).font      = BOLD_F
+            ws.cell(hrow, ci).alignment = Alignment(horizontal='left' if ci <= 4 else 'center')
+
+        # ── Find Discrepancies row ──
         disc_row = None
         for r in range(hrow + 1, ws.max_row + 2):
-            v = ws.cell(r, 1).value
-            if v == 'Discrepancies:':
+            if ws.cell(r, 1).value == 'Discrepancies:':
                 disc_row = r; break
-
         if disc_row is None:
             print(f'  WARNING: no Discrepancies row found after row {hrow}', file=sys.stderr)
             return
 
-        # Build the data we need to write
+        # ── Resize rows ──
         section_rows = build_section_rows(skus, product_filter)
-        rows_needed = len(section_rows)
-
-        # How many data rows exist currently between header and Discrepancies?
-        existing_data_rows = disc_row - hrow - 1  # rows hrow+1 .. disc_row-1
-
+        rows_needed  = len(section_rows)
+        existing_data_rows = disc_row - hrow - 1
         print(f'  Section at row {hrow}: {existing_data_rows} existing rows, need {rows_needed}', file=sys.stderr)
 
         if rows_needed > existing_data_rows:
-            # Need to insert rows — insert at disc_row to push Discrepancies (and everything below) down
             insert_count = rows_needed - existing_data_rows
             ws.insert_rows(disc_row, insert_count)
             print(f'  Inserted {insert_count} rows before row {disc_row}', file=sys.stderr)
-            disc_row += insert_count  # disc_row has moved down
+            disc_row += insert_count
         elif rows_needed < existing_data_rows:
-            # Delete surplus rows
             delete_count = existing_data_rows - rows_needed
             ws.delete_rows(hrow + 1, delete_count)
             print(f'  Deleted {delete_count} surplus rows', file=sys.stderr)
             disc_row -= delete_count
 
-        # Now write exactly rows_needed rows starting at hrow+1
+        # ── Write data ──
+        PLAIN     = Font(bold=False, name='Calibri', size=11)
+        BOLD_F    = Font(bold=True,  name='Calibri', size=11)
+        LEFT      = Alignment(horizontal='left')
+        CENTER    = Alignment(horizontal='center')
+        THIN      = Side(style='thin')
+        NO_BORDER = Border()
+
         for i, (rtype, rdata) in enumerate(section_rows):
             r = hrow + 1 + i
-            # Clear the row first
-            for c in range(1, 17): ws.cell(r, c).value = None
+            # Clear row
+            for c in range(1, 20):
+                ws.cell(r, c).value     = None
+                ws.cell(r, c).font      = PLAIN
+                ws.cell(r, c).border    = NO_BORDER
+                ws.cell(r, c).alignment = Alignment()
 
-            PLAIN = Font(bold=False, name='Calibri', size=11)
-            for c in range(1, 17): ws.cell(r, c).font = PLAIN
             if rtype == 'data':
-                ws.cell(r, 1).value = rdata['courier']
-                ws.cell(r, 2).value = rdata['onum']
-                ws.cell(r, 3).value = rdata['cid']
-                ws.cell(r, 4).value = rdata['cust']
+                for ci, val in enumerate([rdata['courier'], rdata['onum'], rdata['cid'], rdata['cust']], 1):
+                    ws.cell(r, ci).value     = val
+                    ws.cell(r, ci).alignment = LEFT
                 for ci, sku in enumerate(skus, 5):
                     q = rdata['sq'].get(sku, 0)
-                    if q: ws.cell(r, ci).value = q
-                ws.cell(r, 5 + len(skus)).value = rdata['tq']
-                ws.cell(r, 6 + len(skus)).value = rdata['tc']
+                    if q:
+                        ws.cell(r, ci).value     = q
+                        ws.cell(r, ci).alignment = CENTER
+                ws.cell(r, 5 + len(skus)).value     = rdata['tq']; ws.cell(r, 5 + len(skus)).alignment = CENTER
+                ws.cell(r, 6 + len(skus)).value     = rdata['tc']; ws.cell(r, 6 + len(skus)).alignment = CENTER
 
             elif rtype == 'subtotal':
-                ws.cell(r, 4).value = 'Total'
+                # Only cells with values get a border — dynamic, not fixed columns
+                ws.cell(r, 4).value     = 'Total'
+                ws.cell(r, 4).font      = BOLD_F
+                ws.cell(r, 4).alignment = LEFT
+                ws.cell(r, 4).border    = Border(top=THIN, bottom=THIN)
                 for ci, sku in enumerate(skus, 5):
                     v = rdata['cst'].get(sku, 0)
-                    if v: ws.cell(r, ci).value = v
-                ws.cell(r, 5 + len(skus)).value = rdata['cqt']
-                ws.cell(r, 6 + len(skus)).value = rdata['cct']
-                # Bold + top border to visually separate orders from subtotal
-                TOP = Side(style='thin')
-                for c in range(1, 17):
-                    ws.cell(r, c).font = Font(bold=True, name='Calibri', size=11)
-                    ws.cell(r, c).border = Border(top=TOP)
+                    if v:
+                        ws.cell(r, ci).value     = v
+                        ws.cell(r, ci).font       = BOLD_F
+                        ws.cell(r, ci).alignment  = CENTER
+                        ws.cell(r, ci).border     = Border(top=THIN, bottom=THIN)
+                for ci in [5 + len(skus), 6 + len(skus)]:
+                    val = rdata['cqt'] if ci == 5 + len(skus) else rdata['cct']
+                    ws.cell(r, ci).value     = val
+                    ws.cell(r, ci).font      = BOLD_F
+                    ws.cell(r, ci).alignment = CENTER
+                    ws.cell(r, ci).border    = Border(top=THIN, bottom=THIN)
 
             elif rtype == 'grandtotal':
-                ws.cell(r, 4).value = 'Grand Total'
+                ws.cell(r, 4).value     = 'Grand Total'
+                ws.cell(r, 4).font      = BOLD_F
+                ws.cell(r, 4).alignment = LEFT
+                ws.cell(r, 4).border    = Border(top=THIN, bottom=THIN)
                 for ci, sku in enumerate(skus, 5):
                     v = rdata['grand_totals'].get(sku, 0)
-                    if v: ws.cell(r, ci).value = v
+                    if v:
+                        ws.cell(r, ci).value     = v
+                        ws.cell(r, ci).font      = BOLD_F
+                        ws.cell(r, ci).alignment = CENTER
+                        ws.cell(r, ci).border    = Border(top=THIN, bottom=THIN)
                 gt = sum(rdata['grand_totals'].values())
-                ws.cell(r, 5 + len(skus)).value = gt
-                ws.cell(r, 6 + len(skus)).value = rdata['grand_cartons']
-                # Bold entire grand total row + top border across all columns
-                TOP = Side(style='thin')
-                for c in range(1, 17):
-                    ws.cell(r, c).font = Font(bold=True, name='Calibri', size=11)
-                    ws.cell(r, c).border = Border(top=TOP)
+                for ci, val in [(5 + len(skus), gt), (6 + len(skus), rdata['grand_cartons'])]:
+                    ws.cell(r, ci).value     = val
+                    ws.cell(r, ci).font      = BOLD_F
+                    ws.cell(r, ci).alignment = CENTER
+                    ws.cell(r, ci).border    = Border(top=THIN, bottom=THIN)
+
 
     # Find section headers dynamically
     courier_rows = []
@@ -1017,8 +1061,8 @@ if GEN_TYPE in ('prints','all'):
         print(f'✅ {os.path.basename(out_path)} — {len(data)} lines, order 1–{total}', file=sys.stderr)
 
     # Courier Z→A (OTHER, DKDISTRIBUTION, COOLCOURIERS, COLDXPRESS), customer A→Z within each courier
-    sr = sorted(rows, key=lambda r:([-ord(c) for c in r.get('Courier','').upper()], r.get('Customer','').upper(), r.get('OrderNumber',''), r.get('SKU','')))
     # Exclude SPECIAL customers from print files — they use different label stock
+    sr = sorted(rows, key=lambda r:([-ord(c) for c in r.get('Courier','').upper()], r.get('Customer','').upper(), r.get('OrderNumber',''), r.get('SKU','')))
     sr_regular = [r for r in sr if (r.get('Customergroup','') or '').strip().upper() != 'SPECIAL']
     r350=[r for r in sr_regular if r.get('Product')=='350']
     rtea=[r for r in sr_regular if r.get('Product')=='TEA']
@@ -1042,9 +1086,34 @@ result = {'paths': generated, 'files': [os.path.basename(p) for p in generated],
 print(json.dumps(result))
 `;
 
+function validateCSV(rows) {
+  const issues = [];
+  const VALID_COURIERS = ['COLDXPRESS','DKDISTRIBUTION','COOLCOURIERS'];
+  const VALID_PRODUCTS = ['350','TEA','1L'];
+  const TEA_SKUS = new Set(['LTEA350','PTEA350','RTEA350']);
+  rows.forEach((r, i) => {
+    const line = `Row ${i + 2} (${r.OrderNumber || '?'} — ${r.Customer || '?'})`;
+    const sku = (r.SKU || '').trim();
+    let product = r.Product;
+    if (TEA_SKUS.has(sku))                             product = 'TEA';
+    else if (sku.endsWith('350'))                       product = '350';
+    else if (sku.endsWith('1') || sku.endsWith('1L'))   product = '1L';
+    if (!product || !VALID_PRODUCTS.includes(product))
+      issues.push(`${line}: SKU "${sku}" couldn't be classified as 350ml, Tea, or 1L`);
+    if (!r.OrderNumber) issues.push(`${line}: Missing Order Number`);
+    if (!r.Customer)    issues.push(`${line}: Missing Customer name`);
+    if (!r.Courier || !VALID_COURIERS.includes((r.Courier || '').trim().toUpperCase()))
+      issues.push(`${line}: Courier "${r.Courier || ''}" not recognised — must be COLDXPRESS, DKDISTRIBUTION, or COOLCOURIERS`);
+    if (!r.Name) issues.push(`${line}: Missing product Name`);
+    const qty = parseFloat(r.Quantity);
+    if (isNaN(qty) || qty <= 0) issues.push(`${line}: Quantity "${r.Quantity}" is not valid`);
+  });
+  return issues;
+}
+
 app.post('/api/generate', auth, async (req, res) => {
   try {
-    const { csvData, type, dateStr } = req.body;
+    const { csvData, type, dateStr, force } = req.body;
     if (!csvData) return res.status(400).json({ error: 'No CSV data' });
 
     const tmpDir = '/tmp/ws_gen_' + Date.now();
@@ -1058,15 +1127,27 @@ app.post('/api/generate', auth, async (req, res) => {
 
     // csvData may be JSON array of row objects OR actual CSV text
     let csvText = csvData;
+    let rowsForValidation = [];
     if (csvData.trim().startsWith('[')) {
-      // Convert JSON rows array to CSV
-      const rowsArr = JSON.parse(csvData);
-      if (rowsArr.length > 0) {
-        const headers = Object.keys(rowsArr[0]);
+      rowsForValidation = JSON.parse(csvData);
+      if (rowsForValidation.length > 0) {
+        const headers = Object.keys(rowsForValidation[0]);
         const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-        csvText = [headers.join(','), ...rowsArr.map(r => headers.map(h => esc(r[h])).join(','))].join('\n');
+        csvText = [headers.join(','), ...rowsForValidation.map(r => headers.map(h => esc(r[h])).join(','))].join('\n');
       }
     }
+
+    if (!force) {
+      const validatableRows = rowsForValidation.filter(r => r.SKU !== 'FREIGHT');
+      const issues = validateCSV(validatableRows);
+      if (issues.length > 0) {
+        return res.status(400).json({
+          error: `Found ${issues.length} problem${issues.length > 1 ? 's' : ''} in your CSV — fix these before generating:`,
+          issues
+        });
+      }
+    }
+
     await _writeFile(csvPath, csvText);
     await _writeFile(pyPath, GEN_SCRIPT);
 
