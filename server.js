@@ -817,27 +817,40 @@ if GEN_TYPE in ('production','all'):
 
     def write_section(ws, hrow, skus, product_filter):
         """
-        Find existing data rows between hrow+1 and Discrepancies row.
-        Delete them all, insert exactly as many as needed, then write data.
+        Write section data with correct formatting:
+        - Info boxes (LABELS/CUSTOMERGROUP/PRODUCT) removed including borders
+        - Section title uppercase, size 14, bold
+        - Batch Number box border spans col D to last data col
+        - Header row: left-aligned A-D, centre-aligned SKU/total cols
+        - Data rows: left-aligned A-D, centre-aligned quantities
+        - Subtotal/GrandTotal: top+bottom border on ALL cols A through last_col
         """
-        last_col = 6 + len(skus)  # col 4=Customer + SKUs + GrandTotal + Cartons
+        THIN      = Side(style='thin')
+        NO_BORDER = Border()
+        PLAIN     = Font(bold=False, name='Calibri', size=11)
+        BOLD_F    = Font(bold=True,  name='Calibri', size=11)
+        LEFT      = Alignment(horizontal='left')
+        CENTER    = Alignment(horizontal='center')
+        last_col  = 6 + len(skus)  # D=4, SKUs, Grand Total, Cartons
 
-        # ── Clear info boxes (LABELS, CUSTOMERGROUP, PRODUCT) top-right ──
+        # ── Remove info boxes (LABELS/CUSTOMERGROUP/PRODUCT) in cols O/P ──
+        # They sit in the 3 rows before the Labelling Date row (hrow-3 to hrow-1 approx)
         for info_r in range(max(1, hrow - 6), hrow + 1):
             for info_c in range(last_col + 1, 20):
-                ws.cell(info_r, info_c).value = None
+                cell = ws.cell(info_r, info_c)
+                cell.value  = None
+                cell.border = NO_BORDER
 
-        # ── Section title: uppercase + bold ──
+        # ── Section title: uppercase, bold, size 14 ──
         for title_r in range(max(1, hrow - 6), hrow):
             tv = ws.cell(title_r, 1).value
             if tv and isinstance(tv, str) and 'order' in tv.lower():
                 ws.cell(title_r, 1).value = tv.upper()
-                ws.cell(title_r, 1).font  = Font(bold=True, name='Calibri', size=11)
+                ws.cell(title_r, 1).font  = Font(bold=True, name='Calibri', size=14)
 
-        # ── Batch Number box: border spanning col D to last_col ──
+        # ── Batch Number box: outline border spanning col D to last_col ──
         batch_row = hrow - 1
         if batch_row >= 1 and ws.cell(batch_row, 4).value == 'Batch Number:':
-            THIN = Side(style='thin')
             for bc in range(4, last_col + 1):
                 ws.cell(batch_row, bc).border = Border(
                     top    = THIN,
@@ -855,12 +868,12 @@ if GEN_TYPE in ('production','all'):
             ws.cell(hrow, ci).value = sku
         ws.cell(hrow, 5 + len(skus)).value = 'Grand Total'
         ws.cell(hrow, 6 + len(skus)).value = 'Cartons'
-        for ci in range(7 + len(skus), 20):
-            ws.cell(hrow, ci).value = None
-        BOLD_F = Font(bold=True, name='Calibri', size=11)
+        for ci in range(last_col + 1, 20):
+            ws.cell(hrow, ci).value  = None
+            ws.cell(hrow, ci).border = NO_BORDER
         for ci in range(1, last_col + 1):
             ws.cell(hrow, ci).font      = BOLD_F
-            ws.cell(hrow, ci).alignment = Alignment(horizontal='left' if ci <= 4 else 'center')
+            ws.cell(hrow, ci).alignment = LEFT if ci <= 4 else CENTER
 
         # ── Find Discrepancies row ──
         disc_row = None
@@ -888,17 +901,10 @@ if GEN_TYPE in ('production','all'):
             print(f'  Deleted {delete_count} surplus rows', file=sys.stderr)
             disc_row -= delete_count
 
-        # ── Write data ──
-        PLAIN     = Font(bold=False, name='Calibri', size=11)
-        BOLD_F    = Font(bold=True,  name='Calibri', size=11)
-        LEFT      = Alignment(horizontal='left')
-        CENTER    = Alignment(horizontal='center')
-        THIN      = Side(style='thin')
-        NO_BORDER = Border()
-
+        # ── Write data rows ──
         for i, (rtype, rdata) in enumerate(section_rows):
             r = hrow + 1 + i
-            # Clear row
+            # Clear entire row first
             for c in range(1, 20):
                 ws.cell(r, c).value     = None
                 ws.cell(r, c).font      = PLAIN
@@ -914,48 +920,34 @@ if GEN_TYPE in ('production','all'):
                     if q:
                         ws.cell(r, ci).value     = q
                         ws.cell(r, ci).alignment = CENTER
-                ws.cell(r, 5 + len(skus)).value     = rdata['tq']; ws.cell(r, 5 + len(skus)).alignment = CENTER
-                ws.cell(r, 6 + len(skus)).value     = rdata['tc']; ws.cell(r, 6 + len(skus)).alignment = CENTER
+                ws.cell(r, 5 + len(skus)).value     = rdata['tq']
+                ws.cell(r, 5 + len(skus)).alignment = CENTER
+                ws.cell(r, 6 + len(skus)).value     = rdata['tc']
+                ws.cell(r, 6 + len(skus)).alignment = CENTER
 
-            elif rtype == 'subtotal':
-                # Only cells with values get a border — dynamic, not fixed columns
-                ws.cell(r, 4).value     = 'Total'
-                ws.cell(r, 4).font      = BOLD_F
+            elif rtype in ('subtotal', 'grandtotal'):
+                label = 'Total' if rtype == 'subtotal' else 'Grand Total'
+                is_sub = rtype == 'subtotal'
+                totals_by_sku = rdata['cst']        if is_sub else rdata['grand_totals']
+                qty_total     = rdata['cqt']         if is_sub else sum(rdata['grand_totals'].values())
+                cartons       = rdata['cct']         if is_sub else rdata['grand_cartons']
+
+                # Border + bold across ALL cols A through last_col
+                for c in range(1, last_col + 1):
+                    ws.cell(r, c).font   = BOLD_F
+                    ws.cell(r, c).border = Border(top=THIN, bottom=THIN)
+
+                ws.cell(r, 4).value     = label
                 ws.cell(r, 4).alignment = LEFT
-                ws.cell(r, 4).border    = Border(top=THIN, bottom=THIN)
                 for ci, sku in enumerate(skus, 5):
-                    v = rdata['cst'].get(sku, 0)
+                    v = totals_by_sku.get(sku, 0)
                     if v:
                         ws.cell(r, ci).value     = v
-                        ws.cell(r, ci).font       = BOLD_F
-                        ws.cell(r, ci).alignment  = CENTER
-                        ws.cell(r, ci).border     = Border(top=THIN, bottom=THIN)
-                for ci in [5 + len(skus), 6 + len(skus)]:
-                    val = rdata['cqt'] if ci == 5 + len(skus) else rdata['cct']
-                    ws.cell(r, ci).value     = val
-                    ws.cell(r, ci).font      = BOLD_F
-                    ws.cell(r, ci).alignment = CENTER
-                    ws.cell(r, ci).border    = Border(top=THIN, bottom=THIN)
-
-            elif rtype == 'grandtotal':
-                ws.cell(r, 4).value     = 'Grand Total'
-                ws.cell(r, 4).font      = BOLD_F
-                ws.cell(r, 4).alignment = LEFT
-                ws.cell(r, 4).border    = Border(top=THIN, bottom=THIN)
-                for ci, sku in enumerate(skus, 5):
-                    v = rdata['grand_totals'].get(sku, 0)
-                    if v:
-                        ws.cell(r, ci).value     = v
-                        ws.cell(r, ci).font      = BOLD_F
                         ws.cell(r, ci).alignment = CENTER
-                        ws.cell(r, ci).border    = Border(top=THIN, bottom=THIN)
-                gt = sum(rdata['grand_totals'].values())
-                for ci, val in [(5 + len(skus), gt), (6 + len(skus), rdata['grand_cartons'])]:
-                    ws.cell(r, ci).value     = val
-                    ws.cell(r, ci).font      = BOLD_F
-                    ws.cell(r, ci).alignment = CENTER
-                    ws.cell(r, ci).border    = Border(top=THIN, bottom=THIN)
-
+                ws.cell(r, 5 + len(skus)).value     = qty_total
+                ws.cell(r, 5 + len(skus)).alignment = CENTER
+                ws.cell(r, 6 + len(skus)).value     = cartons
+                ws.cell(r, 6 + len(skus)).alignment = CENTER
 
     # Find section headers dynamically
     courier_rows = []
@@ -1060,8 +1052,8 @@ if GEN_TYPE in ('prints','all'):
         generated.append(out_path)
         print(f'✅ {os.path.basename(out_path)} — {len(data)} lines, order 1–{total}', file=sys.stderr)
 
-    # Courier Z→A (OTHER, DKDISTRIBUTION, COOLCOURIERS, COLDXPRESS), customer A→Z within each courier
-    # Exclude SPECIAL customers from print files — they use different label stock
+    # Courier Z→A (OTHER, DKDISTRIBUTION, COOLCOURIERS, COLDXPRESS), customer A→Z within each
+    # Exclude SPECIAL customers — they use different label stock
     sr = sorted(rows, key=lambda r:([-ord(c) for c in r.get('Courier','').upper()], r.get('Customer','').upper(), r.get('OrderNumber',''), r.get('SKU','')))
     sr_regular = [r for r in sr if (r.get('Customergroup','') or '').strip().upper() != 'SPECIAL']
     r350=[r for r in sr_regular if r.get('Product')=='350']
