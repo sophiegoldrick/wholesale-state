@@ -1028,7 +1028,6 @@ if GEN_TYPE in ('prints','all'):
     if rtea: make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Fronts.xlsx')
     if rtea: make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
     if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
-    if r1l:  make_print_file('BACKS',  True,  r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Backs.xlsx')
 
 # ══ ZIP all generated files ══
 zip_path = f'{OUT_DIR}/{DATE_STR}_Wholesale_State_Files.zip'
