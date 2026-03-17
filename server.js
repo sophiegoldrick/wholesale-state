@@ -1016,10 +1016,12 @@ if GEN_TYPE in ('prints','all'):
         generated.append(out_path)
         print(f'✅ {os.path.basename(out_path)} — {len(data)} lines, order 1–{total}', file=sys.stderr)
 
-    sr = sorted(rows, key=lambda r:(r.get('Courier',''),r.get('Customer',''),r.get('OrderNumber',''),r.get('SKU','')))
-    r350=[r for r in sr if r.get('Product')=='350']
-    rtea=[r for r in sr if r.get('Product')=='TEA']
-    r1l =[r for r in sr if r.get('Product')=='1L']
+    sr = sorted(rows, key=lambda r:(r.get('Courier','').upper(),r.get('Customer','').upper(),r.get('OrderNumber',''),r.get('SKU','')))
+    # Exclude SPECIAL customers from print files — they use different label stock
+    sr_regular = [r for r in sr if (r.get('Customergroup','') or '').strip().upper() != 'SPECIAL']
+    r350=[r for r in sr_regular if r.get('Product')=='350']
+    rtea=[r for r in sr_regular if r.get('Product')=='TEA']
+    r1l =[r for r in sr_regular if r.get('Product')=='1L']
 
     make_print_file('FRONTS', False, r350, f'{OUT_DIR}/{DATE_STR}_350ml_Fronts.xlsx')
     make_print_file('BACKS',  True,  r350, f'{OUT_DIR}/{DATE_STR}_350ml_Backs.xlsx')
