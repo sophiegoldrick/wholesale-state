@@ -803,7 +803,7 @@ if GEN_TYPE in ('production','all'):
         grand_totals = defaultdict(int)
         grand_cartons = 0
 
-        for courier in sorted(couriers_data.keys()):
+        for courier in sorted(couriers_data.keys(), reverse=True):
             items = couriers_data[courier]
             cst = defaultdict(int); cqt = 0; cct = 0
             for it in items:
@@ -1016,7 +1016,8 @@ if GEN_TYPE in ('prints','all'):
         generated.append(out_path)
         print(f'✅ {os.path.basename(out_path)} — {len(data)} lines, order 1–{total}', file=sys.stderr)
 
-    sr = sorted(rows, key=lambda r:(r.get('Courier','').upper(),r.get('Customer','').upper(),r.get('OrderNumber',''),r.get('SKU','')))
+    # Courier Z→A (OTHER, DKDISTRIBUTION, COOLCOURIERS, COLDXPRESS), customer A→Z within each courier
+    sr = sorted(rows, key=lambda r:([-ord(c) for c in r.get('Courier','').upper()], r.get('Customer','').upper(), r.get('OrderNumber',''), r.get('SKU','')))
     # Exclude SPECIAL customers from print files — they use different label stock
     sr_regular = [r for r in sr if (r.get('Customergroup','') or '').strip().upper() != 'SPECIAL']
     r350=[r for r in sr_regular if r.get('Product')=='350']
