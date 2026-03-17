@@ -821,6 +821,19 @@ if GEN_TYPE in ('production','all'):
         Delete them all, insert exactly as many as needed, then write data.
         This handles any volume correctly.
         """
+        # Always rewrite the header row with the dynamic SKU names
+        # Columns: Courier, OrderNumber, CustomerId, Customer, [SKUs...], Grand Total, Cartons
+        ws.cell(hrow, 1).value = 'Courier'
+        ws.cell(hrow, 2).value = 'OrderNumber'
+        ws.cell(hrow, 3).value = 'CustomerId'
+        ws.cell(hrow, 4).value = 'Customer'
+        for ci, sku in enumerate(skus, 5):
+            ws.cell(hrow, ci).value = sku
+        ws.cell(hrow, 5 + len(skus)).value = 'Grand Total'
+        ws.cell(hrow, 6 + len(skus)).value = 'Cartons'
+        # Clear any leftover columns beyond what we need
+        for ci in range(7 + len(skus), 17):
+            ws.cell(hrow, ci).value = None
         # Find the Discrepancies row for THIS section (first one after hrow)
         disc_row = None
         for r in range(hrow + 1, ws.max_row + 2):
@@ -1003,7 +1016,7 @@ if GEN_TYPE in ('prints','all'):
         generated.append(out_path)
         print(f'✅ {os.path.basename(out_path)} — {len(data)} lines, order 1–{total}', file=sys.stderr)
 
-    sr = sorted(rows, key=lambda r:(r.get('Courier','').upper(),r.get('Customer','').upper(),r.get('OrderNumber',''),r.get('SKU','')))
+    sr = sorted(rows, key=lambda r:(r.get('Courier',''),r.get('Customer',''),r.get('OrderNumber',''),r.get('SKU','')))
     r350=[r for r in sr if r.get('Product')=='350']
     rtea=[r for r in sr if r.get('Product')=='TEA']
     r1l =[r for r in sr if r.get('Product')=='1L']
@@ -1027,38 +1040,9 @@ result = {'paths': generated, 'files': [os.path.basename(p) for p in generated],
 print(json.dumps(result))
 `;
 
-function validateCSV(rows) {
-  const issues = [];
-  const VALID_COURIERS = ['COLDXPRESS','DKDISTRIBUTION','COOLCOURIERS'];
-  const VALID_PRODUCTS = ['350','TEA','1L'];
-  const TEA_SKUS = new Set(['LTEA350','PTEA350','RTEA350']);
-  rows.forEach((r, i) => {
-    const line = `Row ${i + 2} (${r.OrderNumber || '?'} — ${r.Customer || '?'})`;
-    const sku = (r.SKU || '').trim();
-    let product = r.Product;
-    if (TEA_SKUS.has(sku))                             product = 'TEA';
-    else if (sku.endsWith('350'))                       product = '350';
-    else if (sku.endsWith('1') || sku.endsWith('1L'))   product = '1L';
-    if (!product || !VALID_PRODUCTS.includes(product))
-      issues.push(`${line}: SKU "${sku}" couldn't be classified as 350ml, Tea, or 1L — check the SKU spelling`);
-    if (!r.OrderNumber)
-      issues.push(`${line}: Missing Order Number`);
-    if (!r.Customer)
-      issues.push(`${line}: Missing Customer name`);
-    if (!r.Courier || !VALID_COURIERS.includes((r.Courier || '').trim().toUpperCase()))
-      issues.push(`${line}: Courier "${r.Courier || ''}" is not recognised — must be COLDXPRESS, DKDISTRIBUTION, or COOLCOURIERS`);
-    if (!r.Name)
-      issues.push(`${line}: Missing product Name`);
-    const qty = parseFloat(r.Quantity);
-    if (isNaN(qty) || qty <= 0)
-      issues.push(`${line}: Quantity "${r.Quantity}" is not a valid number`);
-  });
-  return issues;
-}
-
 app.post('/api/generate', auth, async (req, res) => {
   try {
-    const { csvData, type, dateStr, force } = req.body;
+    const { csvData, type, dateStr } = req.body;
     if (!csvData) return res.status(400).json({ error: 'No CSV data' });
 
     const tmpDir = '/tmp/ws_gen_' + Date.now();
@@ -1070,28 +1054,17 @@ app.post('/api/generate', auth, async (req, res) => {
     const pyPath  = tmpDir + '/gen.py';
     const d = (dateStr || new Date().toLocaleDateString('en-AU')).replace(/\//g, '-');
 
+    // csvData may be JSON array of row objects OR actual CSV text
     let csvText = csvData;
-    let rowsForValidation = [];
     if (csvData.trim().startsWith('[')) {
-      rowsForValidation = JSON.parse(csvData);
-      if (rowsForValidation.length > 0) {
-        const headers = Object.keys(rowsForValidation[0]);
+      // Convert JSON rows array to CSV
+      const rowsArr = JSON.parse(csvData);
+      if (rowsArr.length > 0) {
+        const headers = Object.keys(rowsArr[0]);
         const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-        csvText = [headers.join(','), ...rowsForValidation.map(r => headers.map(h => esc(r[h])).join(','))].join('\n');
+        csvText = [headers.join(','), ...rowsArr.map(r => headers.map(h => esc(r[h])).join(','))].join('\n');
       }
     }
-
-    if (!force) {
-      const validatableRows = rowsForValidation.filter(r => r.SKU !== 'FREIGHT');
-      const issues = validateCSV(validatableRows);
-      if (issues.length > 0) {
-        return res.status(400).json({
-          error: `Found ${issues.length} problem${issues.length > 1 ? 's' : ''} in your CSV — fix these before generating:`,
-          issues
-        });
-      }
-    }
-
     await _writeFile(csvPath, csvText);
     await _writeFile(pyPath, GEN_SCRIPT);
 
