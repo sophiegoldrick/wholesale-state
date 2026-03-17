@@ -1003,7 +1003,7 @@ if GEN_TYPE in ('prints','all'):
         generated.append(out_path)
         print(f'✅ {os.path.basename(out_path)} — {len(data)} lines, order 1–{total}', file=sys.stderr)
 
-    sr = sorted(rows, key=lambda r:(r.get('Courier',''),r.get('Customer',''),r.get('OrderNumber',''),r.get('SKU','')))
+    sr = sorted(rows, key=lambda r:(r.get('Courier','').upper(),r.get('Customer','').upper(),r.get('OrderNumber',''),r.get('SKU','')))
     r350=[r for r in sr if r.get('Product')=='350']
     rtea=[r for r in sr if r.get('Product')=='TEA']
     r1l =[r for r in sr if r.get('Product')=='1L']
@@ -1070,7 +1070,6 @@ app.post('/api/generate', auth, async (req, res) => {
     const pyPath  = tmpDir + '/gen.py';
     const d = (dateStr || new Date().toLocaleDateString('en-AU')).replace(/\//g, '-');
 
-    // csvData may be JSON array of row objects OR actual CSV text
     let csvText = csvData;
     let rowsForValidation = [];
     if (csvData.trim().startsWith('[')) {
@@ -1082,7 +1081,6 @@ app.post('/api/generate', auth, async (req, res) => {
       }
     }
 
-    // Only validate and block if user hasn't already confirmed via the modal
     if (!force) {
       const validatableRows = rowsForValidation.filter(r => r.SKU !== 'FREIGHT');
       const issues = validateCSV(validatableRows);
