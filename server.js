@@ -1013,12 +1013,12 @@ if GEN_TYPE in ('prints','all'):
     XBOLD = XFont(bold=True, name='Calibri', size=11)
     HEADS = ['Order','#file','SKU','#copies','Customer','Customer ID','.PDF','CODE',
              '#pages','#papersize','#duplex','#orientation','#trayname']
-    ADDR  = r'J:\\My Drive\\Print Files'
+    ADDR  = r'G:\\My Drive\\Print Files'
 
     def write_prow(ws, ri, order_n, sku, copies, customer, folder):
         ws.cell(ri,1).value = order_n
-        # Col B: plain text computed path e.g. J:\\My Drive\\Print Files\\1073\\ANTIOX350.PDF
-        ws.cell(ri,2).value = 'J:\\\\My Drive\\\\Print Files\\\\' + str(folder) + '\\\\' + sku + '.PDF'
+        # Col B: plain text computed path e.g. G:\\My Drive\\Print Files\\1073\\ANTIOX350.PDF
+        ws.cell(ri,2).value = 'G:\\\\My Drive\\\\Print Files\\\\' + str(folder) + '\\\\' + sku + '.PDF'
         ws.cell(ri,3).value = sku
         ws.cell(ri,4).value = int(float(copies)) if copies else 24
         ws.cell(ri,5).value = customer if customer else None
