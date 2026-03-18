@@ -472,8 +472,9 @@ const f$=v=>`$${(v||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",")}`;
 const fN=v=>(v||0).toLocaleString();
 
 /* ── VAL MODAL ── */
-function ValModal({result,label,onProceed,onCancel}){
+function ValModal({result,label,onProceed,onCancel,onRequestLabels,labelRequestSent}){
   const{errors,warnings,totalOrders,coveredOrders,canProceed}=result;
+  const hasMissingLabels=warnings.some(w=>w.rule==="MISSING_LABEL_FOLDER");
   return(
     <div className="modal-overlay">
       <div className="modal fu">
@@ -497,6 +498,12 @@ function ValModal({result,label,onProceed,onCancel}){
         </div>
         <div style={{padding:"16px 26px",borderTop:`1px solid ${T.border}`,display:"flex",gap:10,justifyContent:"flex-end",background:T.creamD}}>
           <button className="btn-o" onClick={onCancel}>Cancel</button>
+          {hasMissingLabels&&(
+            <button className="btn-o" onClick={onRequestLabels}
+              style={{borderColor:labelRequestSent?T.sageD+"55":T.amberB,color:labelRequestSent?T.sage:T.amber,background:labelRequestSent?T.sageL:"transparent"}}>
+              {labelRequestSent?"✅ Labels Requested":"✉️ Request Labels"}
+            </button>
+          )}
           {canProceed?<button className="btn-t" onClick={onProceed}>{warnings.length?"⚠️ Proceed anyway":"✅ Generate files"}</button>:<button className="btn-t" onClick={onProceed} style={{background:T.red}}>🚫 Generate anyway</button>}
         </div>
       </div>
@@ -1279,7 +1286,7 @@ function App(){
   return(
     <>
       <style>{CSS}</style>
-      {valModal&&<ValModal result={valModal.result} label={valModal.label} onProceed={()=>doGen(valModal.type,true)} onCancel={()=>setValModal(null)}/>}
+      {valModal&&<ValModal result={valModal.result} label={valModal.label} onProceed={()=>doGen(valModal.type,true)} onCancel={()=>setValModal(null)} labelRequestSent={labelRequestSent} onRequestLabels={async()=>{try{const resp=await apiFetch("/api/request-labels",{method:"POST",body:JSON.stringify({customers:driveWarnings})});if(resp.ok){setLabelRequestSent(true);}else{const e=await resp.json();alert("Failed to send: "+(e.error||"Unknown error"));}}catch(e){alert("Failed to send: "+e.message);}}}/>}
       <div style={{minHeight:"100vh",background:T.cream,display:"flex",flexDirection:"column"}}>
 
         {/* HEADER */}
@@ -1378,31 +1385,18 @@ function App(){
                         const activeRules=[...new Set(allIssues.map(i=>i.rule))];
                         const tileLabel=activeRules.length>0?activeRules.map(r=>RULE_LABELS[r]||r).join(", "):"All Clear";
                         const tileVal=hasErr?errors.length:hasWarn?warnings.length:"✓";
-                        const hasMissingLabels=driveWarnings.length>0;
                         return(
-                          <div style={{background:bg,border:`1px solid ${borderC}`,borderRadius:14,padding:"18px 20px",transition:"all .15s",gridColumn:"span 2"}}>
-                            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
-                              <div style={{flex:1,minWidth:0,cursor:clickable?"pointer":"default"}} onClick={()=>{if(clickable){const result=validate(rowsRef.current);result.warnings=[...result.warnings,...dwIssues];result.issues=[...result.issues,...dwIssues];setValModal({result,type:"all",label:"All Files"});}}}>
-                                <div style={{fontSize:22,marginBottom:10}}>{icon}</div>
-                                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:26,fontWeight:700,color:ac,lineHeight:1}}>{tileVal}</div>
-                                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:ac,marginTop:6,letterSpacing:.5,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tileLabel}</div>
-                                {clickable&&<div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:ac,opacity:.6,marginTop:4}}>click to review details →</div>}
-                              </div>
-                              {hasMissingLabels&&(
-                                <button
-                                  onClick={async()=>{
-                                    if(labelRequestSent)return;
-                                    try{
-                                      const resp=await apiFetch("/api/request-labels",{method:"POST",body:JSON.stringify({customers:driveWarnings})});
-                                      if(resp.ok){setLabelRequestSent(true);}
-                                      else{const e=await resp.json();alert("Failed to send: "+(e.error||"Unknown error"));}
-                                    }catch(e){alert("Failed to send: "+e.message);}
-                                  }}
-                                  style={{flexShrink:0,padding:"8px 14px",borderRadius:9,border:`1px solid ${labelRequestSent?T.sageD+"55":T.amberB}`,background:labelRequestSent?T.sageL:T.white,color:labelRequestSent?T.sage:T.amber,fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:labelRequestSent?"default":"pointer",whiteSpace:"nowrap",transition:"all .15s",marginTop:4}}>
-                                  {labelRequestSent?"✅ Requested":"✉️ Request Labels"}
-                                </button>
-                              )}
+                          <div
+                            onClick={()=>{if(clickable){const result=validate(rowsRef.current);result.warnings=[...result.warnings,...dwIssues];result.issues=[...result.issues,...dwIssues];setValModal({result,type:"all",label:"All Files"});}}}
+                            style={{background:bg,border:`1px solid ${borderC}`,borderRadius:14,padding:"18px 20px",transition:"all .15s",cursor:clickable?"pointer":"default",gridColumn:"span 2",display:"flex",alignItems:"center",justifyContent:"space-between"}}
+                            onMouseEnter={e=>{if(clickable){e.currentTarget.style.boxShadow=`0 4px 16px ${ac}22`;e.currentTarget.style.transform="translateY(-2px)"}}}
+                            onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none"}}>
+                            <div>
+                              <div style={{fontSize:22,marginBottom:10}}>{icon}</div>
+                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:26,fontWeight:700,color:ac,lineHeight:1}}>{tileVal}</div>
+                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:ac,marginTop:6,letterSpacing:.5,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tileLabel}</div>
                             </div>
+                            {clickable&&<div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,color:ac,fontWeight:600,opacity:.7}}>click to review →</div>}
                           </div>
                         );
                       })()}

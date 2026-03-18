@@ -649,22 +649,16 @@ app.post('/api/drive/check-labels', auth, async (req, res) => {
 app.post('/api/request-labels', auth, async (req, res) => {
   try {
     const { customers } = req.body;
-    // customers: [{ id, name, accountManager }]
     if (!customers || !customers.length) return res.status(400).json({ error: 'No customers provided' });
-
     const accessToken = await getAccessToken();
-
-    // Account manager email map
     const AM_EMAILS = {
-      'tess m':   'tess@pressedjuices.com.au',
-      'tess':     'tess@pressedjuices.com.au',
-      'barbara s':'barbara@pressedjuices.com.au',
-      'barbara':  'barbara@pressedjuices.com.au',
-      'marlee p': 'marlee@pressedjuices.com.au',
-      'marlee':   'marlee@pressedjuices.com.au',
+      'tess m':    'tess@pressedjuices.com.au',
+      'tess':      'tess@pressedjuices.com.au',
+      'barbara s': 'barbara@pressedjuices.com.au',
+      'barbara':   'barbara@pressedjuices.com.au',
+      'marlee p':  'marlee@pressedjuices.com.au',
+      'marlee':    'marlee@pressedjuices.com.au',
     };
-
-    // Collect unique AM emails (skip Sophie / blank)
     const amEmails = new Set();
     customers.forEach(c => {
       const am = (c.accountManager || '').trim().toLowerCase();
@@ -672,49 +666,21 @@ app.post('/api/request-labels', auth, async (req, res) => {
       const email = AM_EMAILS[am] || Object.entries(AM_EMAILS).find(([k]) => am.startsWith(k))?.[1];
       if (email) amEmails.add(email);
     });
-
     const toRecipients = [
       'jasmin@pressedjuices.com.au',
       'sophie@pressedjuices.com.au',
       'info@wholesalestate.com.au',
       ...amEmails,
     ].map(addr => ({ emailAddress: { address: addr } }));
-
-    // Build email body
     const rows = customers.map(c =>
       `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee">${c.id}</td><td style="padding:8px 12px;border-bottom:1px solid #eee">${c.name}</td><td style="padding:8px 12px;border-bottom:1px solid #eee">${c.accountManager || '—'}</td></tr>`
     ).join('');
-
-    const html = `
-      <div style="font-family:Arial,sans-serif;max-width:600px">
-        <h2 style="color:#333">⚠️ Missing Label Folders — Action Required</h2>
-        <p>The following customers have orders in today's production run but are missing label folders in Google Drive. Please create their label assets before printing.</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0">
-          <thead>
-            <tr style="background:#f5f5f5">
-              <th style="padding:8px 12px;text-align:left;border-bottom:2px solid #ddd">Customer ID</th>
-              <th style="padding:8px 12px;text-align:left;border-bottom:2px solid #ddd">Customer Name</th>
-              <th style="padding:8px 12px;text-align:left;border-bottom:2px solid #ddd">Account Manager</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-        <p style="color:#888;font-size:12px">Sent automatically from Wholesale State Dashboard</p>
-      </div>`;
-
+    const html = `<div style="font-family:Arial,sans-serif;max-width:600px"><h2 style="color:#333">⚠️ Missing Label Folders — Action Required</h2><p>The following customers have orders in today's production run but are missing label folders in Google Drive. Please create their label assets before printing.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><thead><tr style="background:#f5f5f5"><th style="padding:8px 12px;text-align:left;border-bottom:2px solid #ddd">Customer ID</th><th style="padding:8px 12px;text-align:left;border-bottom:2px solid #ddd">Customer Name</th><th style="padding:8px 12px;text-align:left;border-bottom:2px solid #ddd">Account Manager</th></tr></thead><tbody>${rows}</tbody></table><p style="color:#888;font-size:12px">Sent automatically from Wholesale State Dashboard</p></div>`;
     await fetch(`https://graph.microsoft.com/v1.0/users/${MAILBOX}/sendMail`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: {
-          subject: `⚠️ Missing Labels — ${customers.length} customer${customers.length > 1 ? 's' : ''} need label folders`,
-          body: { contentType: 'HTML', content: html },
-          toRecipients,
-        },
-        saveToSentItems: true,
-      }),
+      body: JSON.stringify({ message: { subject: `⚠️ Missing Labels — ${customers.length} customer${customers.length > 1 ? 's' : ''} need label folders`, body: { contentType: 'HTML', content: html }, toRecipients }, saveToSentItems: true }),
     });
-
     res.json({ ok: true, sent: toRecipients.length });
   } catch (e) {
     console.error('Request labels error:', e.message);
