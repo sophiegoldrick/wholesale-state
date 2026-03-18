@@ -1384,6 +1384,30 @@ function App(){
                           <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:T.inkL,marginTop:6,letterSpacing:.5,fontWeight:600}}>{l}</div>
                         </div>
                       ))}
+                      {(()=>{
+                        const hasErr=vStats.errors>0,hasWarn=vStats.warnings>0;
+                        const ac=hasErr?T.red:hasWarn?T.amber:T.sage;
+                        const borderC=hasErr?T.redB:hasWarn?T.amberB:T.sageD+"55";
+                        const bg=hasErr?T.redL:hasWarn?T.amberL:T.sageL;
+                        const icon=hasErr?"🚫":hasWarn?"⚠️":"✅";
+                        const label=hasErr?"Errors Found":hasWarn?"Warnings":"All Clear";
+                        const val=hasErr?vStats.errors:hasWarn?vStats.warnings:"✓";
+                        const clickable=hasErr||hasWarn;
+                        return(
+                          <div
+                            onClick={()=>{if(clickable){const result=validate(rowsRef.current);if(typeof driveWarnings!=="undefined"&&driveWarnings.length>0){const dw=driveWarnings.map(msg=>({severity:"warning",message:`Missing label folder in Google Drive: ${msg}`,rule:"MISSING_LABEL_FOLDER"}));result.warnings=[...result.warnings,...dw];result.issues=[...result.issues,...dw];}setValModal({result,type:"all",label:"All Files"});}}}
+                            style={{background:bg,border:`1px solid ${borderC}`,borderRadius:14,padding:"18px 20px",transition:"all .15s",cursor:clickable?"pointer":"default",gridColumn:"span 2",display:"flex",alignItems:"center",justifyContent:"space-between"}}
+                            onMouseEnter={e=>{if(clickable){e.currentTarget.style.boxShadow=`0 4px 16px ${ac}22`;e.currentTarget.style.transform="translateY(-2px)"}}}
+                            onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none"}}>
+                            <div>
+                              <div style={{fontSize:22,marginBottom:10}}>{icon}</div>
+                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:26,fontWeight:700,color:ac,lineHeight:1}}>{val}</div>
+                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:ac,marginTop:6,letterSpacing:.5,fontWeight:600}}>{label}</div>
+                            </div>
+                            {clickable&&<div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,color:ac,fontWeight:600,opacity:.7}}>click to review →</div>}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ):(
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -1394,15 +1418,6 @@ function App(){
                           <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:T.inkL,marginTop:6,letterSpacing:.5,fontWeight:600}}>{l}</div>
                         </div>
                       ))}
-                    </div>
-                  )}
-
-                  {vStats&&(
-                    <div onClick={()=>{if(vStats.errors>0||vStats.warnings>0){const result=validate(rowsRef.current);if(driveWarnings.length>0){const dw=driveWarnings.map(msg=>({severity:"warning",message:`Missing label folder in Google Drive: ${msg}`,rule:"MISSING_LABEL_FOLDER"}));result.warnings=[...result.warnings,...dw];result.issues=[...result.issues,...dw];}setValModal({result,type:"all",label:"All Files"});}}} style={{marginTop:14,padding:"11px 16px",background:vStats.errors>0?T.redL:vStats.warnings>0?T.amberL:T.sageL,border:`1px solid ${vStats.errors>0?T.redB:vStats.warnings>0?T.amberB:T.sageD+"44"}`,borderRadius:11,display:"flex",alignItems:"center",gap:9,cursor:vStats.errors>0||vStats.warnings>0?"pointer":"default"}}>
-                      <span style={{fontSize:15}}>{vStats.errors>0?"🚫":vStats.warnings>0?"⚠️":"✅"}</span>
-                      <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:600,color:vStats.errors>0?T.red:vStats.warnings>0?T.amber:T.sageD}}>
-                        {vStats.errors>0?`${vStats.errors} blocking errors — click to see details`:vStats.warnings>0?`${vStats.warnings} warnings — click to review`:`All ${vStats.orders} orders validated ✓`}
-                      </span>
                     </div>
                   )}
                 </div>
