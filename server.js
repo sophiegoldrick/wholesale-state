@@ -607,6 +607,61 @@ app.post('/api/graph/poll', auth, async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Google Drive — label folder check ──────────────────────────
+app.post('/api/drive/check-labels', auth, async (req, res) => {
+  try {
+    const { customerIds } = req.body;
+    if (!customerIds || !customerIds.length) return res.json({ missing: [] });
+
+    const folderId = process.env.DRIVE_LABELS_FOLDER_ID;
+    const credsRaw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (!folderId || !credsRaw) return res.json({ missing: [], unconfigured: true });
+
+    const creds = JSON.parse(credsRaw);
+    const now   = Math.floor(Date.now() / 1000);
+    const header  = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+    const payload = Buffer.from(JSON.stringify({
+      iss: creds.client_email,
+      scope: 'https://www.googleapis.com/auth/drive.readonly',
+      aud: 'https://oauth2.googleapis.com/token',
+      exp: now + 3600,
+      iat: now,
+    })).toString('base64url');
+
+    const { createSign } = await import('crypto');
+    const sign = createSign('RSA-SHA256');
+    sign.update(`${header}.${payload}`);
+    const sig = sign.sign(creds.private_key, 'base64url');
+    const jwt = `${header}.${payload}.${sig}`;
+
+    const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt }),
+    });
+    const tokenData = await tokenResp.json();
+    if (!tokenData.access_token) throw new Error('Failed to get Drive access token');
+
+    // List all subfolders (paginate)
+    const existingFolders = new Set();
+    let pageToken = '';
+    do {
+      const q = encodeURIComponent(`'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+      const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=nextPageToken,files(name)&pageSize=1000${pageToken ? `&pageToken=${pageToken}` : ''}`;
+      const driveResp = await fetch(url, { headers: { Authorization: `Bearer ${tokenData.access_token}` } });
+      const driveData = await driveResp.json();
+      (driveData.files || []).forEach(f => existingFolders.add(f.name.trim()));
+      pageToken = driveData.nextPageToken || '';
+    } while (pageToken);
+
+    const missing = customerIds.filter(id => !existingFolders.has(String(id).trim()));
+    res.json({ missing, total: existingFolders.size });
+  } catch (e) {
+    console.error('Drive check error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Poll every 3 minutes
 cron.schedule('*/3 * * * *', pollInbox);
 

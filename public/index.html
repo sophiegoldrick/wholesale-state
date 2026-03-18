@@ -905,6 +905,7 @@ function App(){
   const[csvName,setCsvName]=useState(null);
   const[csvOrderDate,setCsvOrderDate]=useState(null);
   const[csvRows,setCsvRows]=useState([]);
+  const[driveWarnings,setDriveWarnings]=useState([]);
   const[orders,setOrders]=useState([]);
   const[graphConnected,setGraphConnected]=useState(false);
   const[graphConnectedAt,setGraphConnectedAt]=useState(null);
@@ -1146,6 +1147,26 @@ function App(){
       try{await window.storage.set("ws-snaps",JSON.stringify(updated));}catch(e){}
       // Store raw CSV text separately keyed by dateKey (small, ~100KB each)
       try{await window.storage.set("ws-csv-"+dk, e.target.result);}catch(err){console.warn("CSV store failed:",err);}
+      // ── Check Google Drive for missing label folders (REGULAR customers only) ──
+      setDriveWarnings([]);
+      if(IS_DEPLOYED){
+        try{
+          const uniqueCustomers=[...new Map(
+            rows.filter(r=>r.SKU!=="FREIGHT"&&r.CustomerId&&(r.Customergroup||'').toUpperCase()!=='SPECIAL')
+                .map(r=>[r.CustomerId,{id:r.CustomerId,name:r.Customer}])
+          ).values()];
+          const driveResp=await apiFetch("/api/drive/check-labels",{method:"POST",body:JSON.stringify({customerIds:uniqueCustomers.map(c=>c.id)})});
+          if(driveResp.ok){
+            const driveData=await driveResp.json();
+            if(!driveData.unconfigured&&driveData.missing&&driveData.missing.length>0){
+              setDriveWarnings(driveData.missing.map(id=>{
+                const c=uniqueCustomers.find(x=>x.id===id);
+                return `${c?c.name:id} (ID: ${id})`;
+              }));
+            }
+          }
+        }catch(e){console.warn("Drive check failed:",e.message);}
+      }
     };
     r.readAsText(file);
   },[snapshots]);
@@ -1154,6 +1175,11 @@ function App(){
 
   const triggerGen=(type,label)=>{
     const result=validate(rowsRef.current);
+    if(driveWarnings.length>0){
+      const dw=driveWarnings.map(msg=>({severity:"warning",message:`Missing label folder in Google Drive: ${msg}`,rule:"MISSING_LABEL_FOLDER"}));
+      result.warnings=[...result.warnings,...dw];
+      result.issues=[...result.issues,...dw];
+    }
     if(result.errors.length||result.warnings.length)setValModal({result,type,label});
     else doGen(type);
   };
@@ -1250,7 +1276,7 @@ function App(){
   const vStats=csvRows.length?(()=>{
     const nf=csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.Product);
     const v=validate(csvRows);
-    return{orders:[...new Set(nf.map(r=>r.OrderNumber))].length,bottles:nf.reduce((s,r)=>s+(parseInt(r.Quantity)||0),0),revenue:nf.reduce((s,r)=>s+(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0),0),pallets:new Set(nf.filter(r=>isPallet(r)).map(r=>r.OrderNumber)).size,errors:v.errors.length,warnings:v.warnings.length};
+    return{orders:[...new Set(nf.map(r=>r.OrderNumber))].length,bottles:nf.reduce((s,r)=>s+(parseInt(r.Quantity)||0),0),revenue:nf.reduce((s,r)=>s+(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0),0),pallets:new Set(nf.filter(r=>isPallet(r)).map(r=>r.OrderNumber)).size,errors:v.errors.length,warnings:v.warnings.length+driveWarnings.length};
   })():null;
 
   const regularOrders=orders.filter(o=>!o.isPallet);
@@ -1372,7 +1398,7 @@ function App(){
                   )}
 
                   {vStats&&(
-                    <div onClick={()=>{if(vStats.errors>0||vStats.warnings>0){const result=validate(rowsRef.current);setValModal({result,type:"all",label:"All Files"});}}} style={{marginTop:14,padding:"11px 16px",background:vStats.errors>0?T.redL:vStats.warnings>0?T.amberL:T.sageL,border:`1px solid ${vStats.errors>0?T.redB:vStats.warnings>0?T.amberB:T.sageD+"44"}`,borderRadius:11,display:"flex",alignItems:"center",gap:9,cursor:vStats.errors>0||vStats.warnings>0?"pointer":"default"}}>
+                    <div onClick={()=>{if(vStats.errors>0||vStats.warnings>0){const result=validate(rowsRef.current);if(driveWarnings.length>0){const dw=driveWarnings.map(msg=>({severity:"warning",message:`Missing label folder in Google Drive: ${msg}`,rule:"MISSING_LABEL_FOLDER"}));result.warnings=[...result.warnings,...dw];result.issues=[...result.issues,...dw];}setValModal({result,type:"all",label:"All Files"});}}} style={{marginTop:14,padding:"11px 16px",background:vStats.errors>0?T.redL:vStats.warnings>0?T.amberL:T.sageL,border:`1px solid ${vStats.errors>0?T.redB:vStats.warnings>0?T.amberB:T.sageD+"44"}`,borderRadius:11,display:"flex",alignItems:"center",gap:9,cursor:vStats.errors>0||vStats.warnings>0?"pointer":"default"}}>
                       <span style={{fontSize:15}}>{vStats.errors>0?"🚫":vStats.warnings>0?"⚠️":"✅"}</span>
                       <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:600,color:vStats.errors>0?T.red:vStats.warnings>0?T.amber:T.sageD}}>
                         {vStats.errors>0?`${vStats.errors} blocking errors — click to see details`:vStats.warnings>0?`${vStats.warnings} warnings — click to review`:`All ${vStats.orders} orders validated ✓`}
