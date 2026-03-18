@@ -172,7 +172,7 @@ app.delete('/api/store/:key', auth, async (req, res) => {
 });
 
 // ── Microsoft Graph OAuth ───────────────────────────────────────
-const GRAPH_SCOPES = 'offline_access Mail.Read Mail.ReadWrite';
+const GRAPH_SCOPES = 'offline_access Mail.Read Mail.ReadWrite Mail.Send';
 const authBase = () => `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0`;
 
 app.get('/api/graph/connect', (req, res) => {
@@ -675,12 +675,19 @@ app.post('/api/request-labels', auth, async (req, res) => {
     const rows = customers.map(c =>
       `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee">${c.id}</td><td style="padding:8px 12px;border-bottom:1px solid #eee">${c.name}</td><td style="padding:8px 12px;border-bottom:1px solid #eee">${c.accountManager || '—'}</td></tr>`
     ).join('');
-    const html = `<div style="font-family:Arial,sans-serif;max-width:600px"><h2 style="color:#333">⚠️ Missing Label Folders — Action Required</h2><p>The following customers have orders in today's production run but are missing label folders in Google Drive. Please create their label assets before printing.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><thead><tr style="background:#f5f5f5"><th style="padding:8px 12px;text-align:left;border-bottom:2px solid #ddd">Customer ID</th><th style="padding:8px 12px;text-align:left;border-bottom:2px solid #ddd">Customer Name</th><th style="padding:8px 12px;text-align:left;border-bottom:2px solid #ddd">Account Manager</th></tr></thead><tbody>${rows}</tbody></table><p style="color:#888;font-size:12px">Sent automatically from Wholesale State Dashboard</p></div>`;
-    await fetch(`https://graph.microsoft.com/v1.0/users/${MAILBOX}/sendMail`, {
+    const html = `<div style="font-family:Arial,sans-serif;max-width:600px"><h2 style="color:#333">&#9888;&#65039; Missing Label Folders — Action Required</h2><p>The following customers have orders in today's production run but are missing label folders in Google Drive. Please create their label assets before printing.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><thead><tr style="background:#f5f5f5"><th style="padding:8px 12px;text-align:left;border-bottom:2px solid #ddd">Customer ID</th><th style="padding:8px 12px;text-align:left;border-bottom:2px solid #ddd">Customer Name</th><th style="padding:8px 12px;text-align:left;border-bottom:2px solid #ddd">Account Manager</th></tr></thead><tbody>${rows}</tbody></table><p style="color:#888;font-size:12px">Sent automatically from Wholesale State Dashboard</p></div>`;
+    const sendResp = await fetch(`https://graph.microsoft.com/v1.0/users/${MAILBOX}/sendMail`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: { subject: `⚠️ Missing Labels — ${customers.length} customer${customers.length > 1 ? 's' : ''} need label folders`, body: { contentType: 'HTML', content: html }, toRecipients }, saveToSentItems: true }),
+      body: JSON.stringify({ message: { subject: `Missing Labels — ${customers.length} customer${customers.length > 1 ? 's' : ''} need label folders`, body: { contentType: 'HTML', content: html }, toRecipients }, saveToSentItems: true }),
     });
+    if (!sendResp.ok) {
+      const errBody = await sendResp.json().catch(() => ({}));
+      const errMsg = errBody?.error?.message || `Graph error ${sendResp.status}`;
+      console.error('sendMail failed:', errMsg);
+      return res.status(500).json({ error: errMsg });
+    }
+    console.log(`✅ Label request email sent to ${toRecipients.length} recipients`);
     res.json({ ok: true, sent: toRecipients.length });
   } catch (e) {
     console.error('Request labels error:', e.message);
