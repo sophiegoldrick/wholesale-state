@@ -1147,26 +1147,8 @@ function App(){
       try{await window.storage.set("ws-snaps",JSON.stringify(updated));}catch(e){}
       // Store raw CSV text separately keyed by dateKey (small, ~100KB each)
       try{await window.storage.set("ws-csv-"+dk, e.target.result);}catch(err){console.warn("CSV store failed:",err);}
-      // ── Check Google Drive for missing label folders (REGULAR customers only) ──
       setDriveWarnings([]);
-      if(IS_DEPLOYED){
-        try{
-          const uniqueCustomers=[...new Map(
-            rows.filter(r=>r.SKU!=="FREIGHT"&&r.CustomerId&&(r.Customergroup||'').toUpperCase()!=='SPECIAL')
-                .map(r=>[r.CustomerId,{id:r.CustomerId,name:r.Customer}])
-          ).values()];
-          const driveResp=await apiFetch("/api/drive/check-labels",{method:"POST",body:JSON.stringify({customerIds:uniqueCustomers.map(c=>c.id)})});
-          if(driveResp.ok){
-            const driveData=await driveResp.json();
-            if(!driveData.unconfigured&&driveData.missing&&driveData.missing.length>0){
-              setDriveWarnings(driveData.missing.map(id=>{
-                const c=uniqueCustomers.find(x=>x.id===id);
-                return `${c?c.name:id} (ID: ${id})`;
-              }));
-            }
-          }
-        }catch(e){console.warn("Drive check failed:",e.message);}
-      }
+      if(IS_DEPLOYED){try{const uc=[...new Map(rows.filter(r=>r.SKU!=="FREIGHT"&&r.CustomerId&&(r.Customergroup||'').toUpperCase()!=='SPECIAL').map(r=>[r.CustomerId,{id:r.CustomerId,name:r.Customer}])).values()];const dr=await apiFetch("/api/drive/check-labels",{method:"POST",body:JSON.stringify({customerIds:uc.map(c=>c.id)})});if(dr.ok){const dd=await dr.json();if(!dd.unconfigured&&dd.missing&&dd.missing.length>0)setDriveWarnings(dd.missing.map(id=>{const c=uc.find(x=>x.id===id);return`${c?c.name:id} (ID: ${id})`;}));}}catch(e){console.warn("Drive check failed:",e.message);}}
     };
     r.readAsText(file);
   },[snapshots]);
@@ -1175,11 +1157,7 @@ function App(){
 
   const triggerGen=(type,label)=>{
     const result=validate(rowsRef.current);
-    if(driveWarnings.length>0){
-      const dw=driveWarnings.map(msg=>({severity:"warning",message:`Missing label folder in Google Drive: ${msg}`,rule:"MISSING_LABEL_FOLDER"}));
-      result.warnings=[...result.warnings,...dw];
-      result.issues=[...result.issues,...dw];
-    }
+    if(driveWarnings.length>0){const dw=driveWarnings.map(msg=>({severity:"warning",message:`Missing label folder in Google Drive: ${msg}`,rule:"MISSING_LABEL_FOLDER"}));result.warnings=[...result.warnings,...dw];result.issues=[...result.issues,...dw];}
     if(result.errors.length||result.warnings.length)setValModal({result,type,label});
     else doGen(type);
   };
@@ -1385,26 +1363,33 @@ function App(){
                         </div>
                       ))}
                       {(()=>{
-                        const hasErr=vStats.errors>0,hasWarn=vStats.warnings>0;
+                        const RULE_LABELS={"NO_COURIER":"Missing Courier","NO_CUSTOMER":"Missing Customer","NO_ADDRESS":"Missing Address","MISSING_PRODUCTS":"Missing Products","BAD_QTY":"Invalid Quantity","DUPE_ORDER":"Duplicate Order","CSV_DATA":"CSV Data Error","MISSING_LABEL_FOLDER":"Missing Customer Labels","NO_SUBURB":"Missing Suburb","NO_POSTCODE":"Missing Postcode"};
+                        const allIssues=[...validate(rowsRef.current).issues,...(typeof driveWarnings!=="undefined"?driveWarnings.map(msg=>({severity:"warning",message:`Missing label folder: ${msg}`,rule:"MISSING_LABEL_FOLDER"})):[])];
+                        const errors=allIssues.filter(i=>i.severity==="error");
+                        const warnings=allIssues.filter(i=>i.severity==="warning");
+                        const hasErr=errors.length>0,hasWarn=warnings.length>0;
                         const ac=hasErr?T.red:hasWarn?T.amber:T.sage;
                         const borderC=hasErr?T.redB:hasWarn?T.amberB:T.sageD+"55";
                         const bg=hasErr?T.redL:hasWarn?T.amberL:T.sageL;
                         const icon=hasErr?"🚫":hasWarn?"⚠️":"✅";
-                        const label=hasErr?"Errors Found":hasWarn?"Warnings":"All Clear";
-                        const val=hasErr?vStats.errors:hasWarn?vStats.warnings:"✓";
                         const clickable=hasErr||hasWarn;
+                        // Get unique rule types present, map to friendly names
+                        const activeRules=[...new Set(allIssues.map(i=>i.rule))];
+                        const friendlyLabels=activeRules.map(r=>RULE_LABELS[r]||r).filter(Boolean);
+                        const tileLabel=friendlyLabels.length>0?friendlyLabels.join(", "):"All Clear";
+                        const tileVal=hasErr?errors.length:hasWarn?warnings.length:"✓";
                         return(
                           <div
                             onClick={()=>{if(clickable){const result=validate(rowsRef.current);if(typeof driveWarnings!=="undefined"&&driveWarnings.length>0){const dw=driveWarnings.map(msg=>({severity:"warning",message:`Missing label folder in Google Drive: ${msg}`,rule:"MISSING_LABEL_FOLDER"}));result.warnings=[...result.warnings,...dw];result.issues=[...result.issues,...dw];}setValModal({result,type:"all",label:"All Files"});}}}
                             style={{background:bg,border:`1px solid ${borderC}`,borderRadius:14,padding:"18px 20px",transition:"all .15s",cursor:clickable?"pointer":"default",gridColumn:"span 2",display:"flex",alignItems:"center",justifyContent:"space-between"}}
                             onMouseEnter={e=>{if(clickable){e.currentTarget.style.boxShadow=`0 4px 16px ${ac}22`;e.currentTarget.style.transform="translateY(-2px)"}}}
                             onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none"}}>
-                            <div>
+                            <div style={{flex:1,minWidth:0}}>
                               <div style={{fontSize:22,marginBottom:10}}>{icon}</div>
-                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:26,fontWeight:700,color:ac,lineHeight:1}}>{val}</div>
-                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:ac,marginTop:6,letterSpacing:.5,fontWeight:600}}>{label}</div>
+                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:26,fontWeight:700,color:ac,lineHeight:1}}>{tileVal}</div>
+                              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:ac,marginTop:6,letterSpacing:.5,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tileLabel}</div>
                             </div>
-                            {clickable&&<div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,color:ac,fontWeight:600,opacity:.7}}>click to review →</div>}
+                            {clickable&&<div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,color:ac,fontWeight:600,opacity:.7,flexShrink:0,marginLeft:12}}>click to review →</div>}
                           </div>
                         );
                       })()}
