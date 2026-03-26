@@ -80,6 +80,18 @@ async function initDB() {
       message_id TEXT PRIMARY KEY,
       processed_at TIMESTAMPTZ DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'staff',
+      password_hash TEXT,
+      invite_token TEXT,
+      invite_expires_at TIMESTAMPTZ,
+      last_login_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      is_active BOOLEAN DEFAULT TRUE
+    );
   `);
   // Seed default password
   const existing = await db(`SELECT value FROM kv_store WHERE key = 'auth_password'`);
@@ -104,16 +116,30 @@ function auth(req, res, next) {
 // ── Auth routes ─────────────────────────────────────────────────
 app.post('/api/login', async (req, res) => {
   try {
-    const { password } = req.body;
+    const { password, email } = req.body;
+
+    // ── New per-user login (email + password) ──
+    if (email) {
+      const ur = await db(`SELECT * FROM users WHERE email = $1 AND is_active = TRUE`, [email.toLowerCase()]);
+      if (ur.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
+      const user = ur.rows[0];
+      if (!user.password_hash) return res.status(401).json({ error: 'Account not activated — check your invite email' });
+      const valid = await bcrypt.compare(password, user.password_hash);
+      if (!valid) return res.status(401).json({ error: 'Incorrect password' });
+      await db(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [user.id]);
+      const token = jwt.sign({ role: user.role, userId: user.id, email: user.email, name: user.name }, process.env.JWT_SECRET || 'ws-secret-change-me', { expiresIn: '30d' });
+      return res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+    }
+
+    // ── Legacy shared-password login ──
     const result = await db(`SELECT value FROM kv_store WHERE key = 'auth_password'`);
     if (result.rows.length === 0) return res.status(401).json({ error: 'No password set' });
-    // value may be stored as a JSON string or raw string — handle both
     let hash = result.rows[0].value;
     if (typeof hash === 'object') hash = JSON.stringify(hash);
-    hash = hash.replace(/^"|"$/g, ''); // strip surrounding quotes if double-encoded
+    hash = hash.replace(/^"|"$/g, '');
     const valid = await bcrypt.compare(password, hash);
     if (!valid) return res.status(401).json({ error: 'Incorrect password' });
-    const token = jwt.sign({ role: 'staff' }, process.env.JWT_SECRET || 'ws-secret-change-me', { expiresIn: '30d' });
+    const token = jwt.sign({ role: 'admin' }, process.env.JWT_SECRET || 'ws-secret-change-me', { expiresIn: '30d' });
     res.json({ token });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -125,6 +151,90 @@ app.post('/api/change-password', auth, async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
     await db(`INSERT INTO kv_store (key, value, updated_at) VALUES ('auth_password', $1, NOW())
               ON CONFLICT (key) DO UPDATE SET value=$1, updated_at=NOW()`, [JSON.stringify(hash)]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin-only middleware ────────────────────────────────────────
+function adminOnly(req, res, next) {
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  next();
+}
+
+// ── User management ─────────────────────────────────────────────
+app.get('/api/users', auth, adminOnly, async (req, res) => {
+  try {
+    const result = await db(`SELECT id, email, name, role, last_login_at, created_at, is_active FROM users ORDER BY created_at DESC`);
+    res.json({ users: result.rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/users/invite', auth, adminOnly, async (req, res) => {
+  try {
+    const { email, name, role = 'staff' } = req.body;
+    if (!email || !name) return res.status(400).json({ error: 'Email and name required' });
+    if (!['admin','staff','viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+    const token = require('crypto').randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    await db(`INSERT INTO users (email, name, role, invite_token, invite_expires_at)
+              VALUES ($1, $2, $3, $4, $5)
+              ON CONFLICT (email) DO UPDATE SET name=$2, role=$3, invite_token=$4, invite_expires_at=$5, is_active=TRUE`,
+              [email.toLowerCase(), name, role, token, expires]);
+    const inviteUrl = `${process.env.APP_URL || 'https://your-app.render.com'}/accept-invite?token=${token}`;
+    res.json({ ok: true, inviteUrl, token });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/users/accept-invite', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password || password.length < 6) return res.status(400).json({ error: 'Token and password (min 6 chars) required' });
+    const result = await db(`SELECT * FROM users WHERE invite_token = $1 AND invite_expires_at > NOW() AND is_active = TRUE`, [token]);
+    if (result.rows.length === 0) return res.status(400).json({ error: 'Invalid or expired invite link' });
+    const user = result.rows[0];
+    const hash = await bcrypt.hash(password, 10);
+    await db(`UPDATE users SET password_hash=$1, invite_token=NULL, invite_expires_at=NULL WHERE id=$2`, [hash, user.id]);
+    const jwtToken = jwt.sign({ role: user.role, userId: user.id, email: user.email, name: user.name }, process.env.JWT_SECRET || 'ws-secret-change-me', { expiresIn: '30d' });
+    res.json({ ok: true, token: jwtToken, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/users/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const { name, role, is_active } = req.body;
+    await db(`UPDATE users SET name=COALESCE($1,name), role=COALESCE($2,role), is_active=COALESCE($3,is_active) WHERE id=$4`,
+              [name, role, is_active, req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/users/:id', auth, adminOnly, async (req, res) => {
+  try {
+    if (req.user?.userId === parseInt(req.params.id)) return res.status(400).json({ error: 'Cannot delete your own account' });
+    await db(`UPDATE users SET is_active=FALSE WHERE id=$1`, [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/users/me', auth, async (req, res) => {
+  try {
+    if (!req.user?.userId) return res.json({ role: req.user?.role || 'staff' });
+    const result = await db(`SELECT id, email, name, role, last_login_at FROM users WHERE id=$1`, [req.user.userId]);
+    res.json(result.rows[0] || { role: req.user?.role || 'staff' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/users/change-own-password', auth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Min 6 characters' });
+    if (!req.user?.userId) return res.status(400).json({ error: 'No user account' });
+    const result = await db(`SELECT password_hash FROM users WHERE id=$1`, [req.user.userId]);
+    if (!result.rows[0]?.password_hash) return res.status(400).json({ error: 'No password set' });
+    const valid = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
+    if (!valid) return res.status(401).json({ error: 'Current password incorrect' });
+    const hash = await bcrypt.hash(newPassword, 10);
+    await db(`UPDATE users SET password_hash=$1 WHERE id=$2`, [hash, req.user.userId]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
