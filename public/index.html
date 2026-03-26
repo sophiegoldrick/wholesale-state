@@ -127,15 +127,12 @@ const THEMES = {
   },
 };
 
-// Load saved theme from storage or default to arctic
+// Load saved theme - plain variable, no hooks outside components
 let _savedTheme = 'arctic';
 try { const st=localStorage.getItem('ws-theme'); if(st&&THEMES[st]) _savedTheme=st; } catch(e) {}
 
-const[_themeKey,_setThemeKeyRaw]=React.useState(_savedTheme);
-function useTheme(){ return _themeKey; }
-
-// T is reactive — always reflects current theme
-let T = THEMES[_savedTheme];
+// T is a plain mutable object - gets Object.assign'd inside App on every render
+let T = Object.assign({}, THEMES[_savedTheme]);
 
 // Inject Inter font for arctic/executive
 if (!document.getElementById("ws-inter-font")) {
