@@ -805,6 +805,76 @@ app.post('/api/request-labels', auth, async (req, res) => {
   }
 });
 
+// ── Send production files via email ────────────────────────────
+app.post('/api/send-production-files', auth, async (req, res) => {
+  try {
+    const { zipBase64, zipName, dateLabel, recipients } = req.body;
+    if (!zipBase64 || !zipName) return res.status(400).json({ error: 'Missing zip data' });
+
+    const accessToken = await getAccessToken();
+
+    const toRecipients = (recipients || [
+      'leopegoli@gmail.com',
+      'production@pressedjuices.com.au',
+      'sophie@pressedjuices.com.au',
+      'leopegoli@bigpond.com',
+    ]).map(addr => ({ emailAddress: { address: addr } }));
+
+    const subject = `Wholesale State Production Files — ${dateLabel || new Date().toLocaleDateString('en-AU')}`;
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;color:#333">
+        <h2 style="color:#2D1B14;margin-bottom:8px">Wholesale State — Production Files</h2>
+        <p style="color:#6B4A3E;margin-bottom:16px">
+          The production files for <strong>${dateLabel || 'today'}</strong> have been generated and are attached to this email.
+        </p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px">
+          <thead>
+            <tr style="background:#FEF9F5">
+              <th style="text-align:left;padding:8px 12px;border-bottom:2px solid #F0E4D8">Files included</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${['Production Sheet','ColdXpress Manifest','DK Distributions','Cool Couriers Manifest','350ml Fronts & Backs','Tea Fronts & Backs','1L Fronts'].map(f=>`<tr><td style="padding:7px 12px;border-bottom:1px solid #F0E4D8">📄 ${f}</td></tr>`).join('')}
+          </tbody>
+        </table>
+        <p style="color:#A07A6E;font-size:12px">Sent automatically from the Wholesale State Operations Platform</p>
+      </div>
+    `;
+
+    const message = {
+      subject,
+      body: { contentType: 'HTML', content: html },
+      toRecipients,
+      attachments: [{
+        '@odata.type': '#microsoft.graph.fileAttachment',
+        name: zipName,
+        contentType: 'application/zip',
+        contentBytes: zipBase64,
+      }],
+    };
+
+    const sendResp = await fetch(`https://graph.microsoft.com/v1.0/users/${MAILBOX}/sendMail`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, saveToSentItems: true }),
+    });
+
+    if (!sendResp.ok) {
+      const errBody = await sendResp.json().catch(() => ({}));
+      const errMsg = errBody?.error?.message || `Graph error ${sendResp.status}`;
+      console.error('Production file email failed:', errMsg);
+      return res.status(500).json({ error: errMsg });
+    }
+
+    console.log(`✅ Production files emailed to ${toRecipients.length} recipients`);
+    res.json({ ok: true, sent: toRecipients.length });
+  } catch (e) {
+    console.error('Send production files error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Poll every 3 minutes
 cron.schedule('*/3 * * * *', pollInbox);
 
@@ -842,9 +912,6 @@ for r in rows:
     try: r['Quantity'] = str(int(float(r['Quantity'])))
     except: pass
 today = datetime.date.today().strftime('%d/%m/%Y')
-# Build day-prefixed date string for filenames e.g. Monday-26-03-2026
-_d = datetime.date.today()
-DAY_DATE_STR = _d.strftime('%A') + '-' + DATE_STR
 
 by_order = defaultdict(list)
 for r in rows:
@@ -864,7 +931,7 @@ def inv_value(ords):
     return sum(float(r.get('UnitPrice',0) or 0)*int(r.get('Quantity',0) or 0) for r in ords if r.get('Product'))
 
 def courier_orders(courier):
-    return {k:v for k,v in by_order.items() if v[0].get('Courier','')==courier and (v[0].get('Customergroup','') or '').strip().upper() != 'SPECIAL'}
+    return {k:v for k,v in by_order.items() if v[0].get('Courier','')==courier}
 
 GREY = PatternFill('solid', fgColor='D3D3D3')
 BOLD = Font(bold=True, name='Calibri', size=11)
@@ -875,7 +942,7 @@ generated = []
 # ══════════════════════════════════════════════
 if GEN_TYPE in ('coldxpress','all'):
     src = f'{TPL_DIR}/COLDXPRESS.xlsx'
-    dst = f'{OUT_DIR}/{DAY_DATE_STR}_COLDXPRESS.xlsx'
+    dst = f'{OUT_DIR}/{DATE_STR}_COLDXPRESS.xlsx'
     shutil.copy(src, dst)
     wb = load_workbook(dst)
     ws = wb.active
@@ -905,7 +972,7 @@ if GEN_TYPE in ('coldxpress','all'):
 # ══════════════════════════════════════════════
 if GEN_TYPE in ('dk','all'):
     src = f'{TPL_DIR}/DK_DISTRIBUTIONS.xlsx'
-    dst = f'{OUT_DIR}/{DAY_DATE_STR}_DK_DISTRIBUTIONS.xlsx'
+    dst = f'{OUT_DIR}/{DATE_STR}_DK_DISTRIBUTIONS.xlsx'
     shutil.copy(src, dst)
     wb = load_workbook(dst)
     ws = wb['jobs']
@@ -935,7 +1002,7 @@ if GEN_TYPE in ('dk','all'):
 # ══════════════════════════════════════════════
 if GEN_TYPE in ('coolcouriers','all'):
     src = f'{TPL_DIR}/COOLCOURIERS.xlsx'
-    dst = f'{OUT_DIR}/{DAY_DATE_STR}_COOLCOURIERS.xlsx'
+    dst = f'{OUT_DIR}/{DATE_STR}_COOLCOURIERS.xlsx'
     shutil.copy(src, dst)
     wb = load_workbook(dst)
     ws = wb['jobs']
@@ -966,7 +1033,7 @@ if GEN_TYPE in ('coolcouriers','all'):
 # ══════════════════════════════════════════════
 if GEN_TYPE in ('production','all'):
     src = f'{TPL_DIR}/Production_Sheet.xlsx'
-    dst = f'{OUT_DIR}/{DAY_DATE_STR}_Production_Sheet.xlsx'
+    dst = f'{OUT_DIR}/{DATE_STR}_Production_Sheet.xlsx'
     shutil.copy(src, dst)
     wb = load_workbook(dst)
     ws = wb['Sheet1']
@@ -1261,43 +1328,14 @@ if GEN_TYPE in ('prints','all'):
     rtea=[r for r in sr_regular if r.get('Product')=='TEA']
     r1l =[r for r in sr_regular if r.get('Product')=='1L']
 
-    make_print_file('FRONTS', False, r350, f'{OUT_DIR}/{DAY_DATE_STR}_350ml_Fronts.xlsx')
-    make_print_file('BACKS',  True,  r350, f'{OUT_DIR}/{DAY_DATE_STR}_350ml_Backs.xlsx')
-    if rtea: make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DAY_DATE_STR}_Tea_Fronts.xlsx')
-    if rtea: make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DAY_DATE_STR}_Tea_Backs.xlsx')
-    if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DAY_DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
-
-# ══════════════════════════════════════════════
-# SPECIAL CUSTOMER PRINT FILES
-# One Fronts + Backs pair per unique SPECIAL customer
-# Excluded from courier manifests but get their own labelled print files
-# ══════════════════════════════════════════════
-if GEN_TYPE in ('prints','all'):
-    SPECIAL_GROUPS = {'SPECIAL'}
-    special_rows = [r for r in rows if (r.get('Customergroup','') or '').strip().upper() in SPECIAL_GROUPS
-                    or (r.get('CustomerPriceGroup','') or '').strip().upper() in SPECIAL_GROUPS
-                    or (r.get('CustomerVisibilityGroup','') or '').strip().upper() in SPECIAL_GROUPS]
-
-    by_special_customer = defaultdict(list)
-    for r in special_rows:
-        by_special_customer[r.get('Customer','UNKNOWN')].append(r)
-
-    for customer_name, cust_rows in by_special_customer.items():
-        label = customer_name.upper().replace(' ', '_')
-        # Sort: Courier A→Z, OrderNumber A→Z, SKU A→Z
-        cust_rows_sorted = sorted(cust_rows, key=lambda r: (
-            r.get('Courier',''), r.get('OrderNumber',''), r.get('SKU','')))
-
-        make_print_file('FRONTS', False, cust_rows_sorted,
-                        f'{OUT_DIR}/{DAY_DATE_STR}_{label}_Fronts.xlsx')
-        make_print_file('BACKS',  True,  cust_rows_sorted,
-                        f'{OUT_DIR}/{DAY_DATE_STR}_{label}_Backs.xlsx')
-
-    if by_special_customer:
-        print(f'✅ Special customer print files — {len(by_special_customer)} customer(s): {", ".join(by_special_customer.keys())}', file=sys.stderr)
+    make_print_file('FRONTS', False, r350, f'{OUT_DIR}/{DATE_STR}_350ml_Fronts.xlsx')
+    make_print_file('BACKS',  True,  r350, f'{OUT_DIR}/{DATE_STR}_350ml_Backs.xlsx')
+    if rtea: make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Fronts.xlsx')
+    if rtea: make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
+    if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
 
 # ══ ZIP all generated files ══
-zip_path = f'{OUT_DIR}/{DAY_DATE_STR}_Wholesale_State_Files.zip'
+zip_path = f'{OUT_DIR}/{DATE_STR}_Wholesale_State_Files.zip'
 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
     for fp in generated:
         z.write(fp, os.path.basename(fp))
@@ -1345,12 +1383,7 @@ app.post('/api/generate', auth, async (req, res) => {
 
     const csvPath = tmpDir + '/orders.csv';
     const pyPath  = tmpDir + '/gen.py';
-    // d is the raw date passed to Python as DATE_STR; Python builds DAY_DATE_STR itself
     const d = (dateStr || new Date().toLocaleDateString('en-AU')).replace(/\//g, '-');
-    // Day-prefixed string used for browser download filenames to match Python output
-    const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-    const dayName = dayNames[new Date().getDay()];
-    const dd = `${dayName}-${d}`;
 
     // csvData may be JSON array of row objects OR actual CSV text
     let csvText = csvData;
@@ -1389,7 +1422,7 @@ app.post('/api/generate', auth, async (req, res) => {
 
     if ((type === 'all' || type === 'prints') && result.zip) {
       const zipData = await _readFile(result.zip);
-      const zipName = type === 'prints' ? `${dd}_Print_Files.zip` : `${dd}_Wholesale_State_Files.zip`;
+      const zipName = type === 'prints' ? `${d}_Print_Files.zip` : `${d}_Wholesale_State_Files.zip`;
       res.setHeader('Content-Type', 'application/zip');
       res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
       return res.send(zipData);

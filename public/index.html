@@ -69,30 +69,88 @@ if (!document.getElementById("ws-fonts")) {
   document.head.appendChild(fl);
 }
 
-/* ── TOKENS ── */
-const T = {
-  cream:"#FEF9F5", creamD:"#FDF4EE", creamDD:"#F5EBE0",
-  terra:"#E07A5F", terraD:"#C4614A", terraL:"#FCEAE5",
-  sage:"#7BB87A",  sageD:"#5A9A59",  sageL:"#EDF7ED",
-  sand:"#C4A882",  sandL:"#F5EDE0",
-  ink:"#2D1B14",   inkM:"#6B4A3E",   inkL:"#A07A6E",
-  white:"#FFFFFF",
-  border:"#F0E4D8", borderM:"#E0C8B4",
-  amber:"#D97706", amberL:"#FFFBEB", amberB:"#FDE68A",
-  red:"#DC2626",   redL:"#FEF2F2",   redB:"#FECACA",
-  blue:"#2563EB",  blueL:"#EFF6FF",
-  teal:"#0D9488",  tealL:"#F0FDFA",
+/* ── THEMES ── */
+const THEMES = {
+  warm: {
+    name:"Warm & Natural",
+    cream:"#FEF9F5", creamD:"#FDF4EE", creamDD:"#F5EBE0",
+    terra:"#E07A5F", terraD:"#C4614A", terraL:"#FCEAE5",
+    sage:"#7BB87A",  sageD:"#5A9A59",  sageL:"#EDF7ED",
+    sand:"#C4A882",  sandL:"#F5EDE0",
+    ink:"#2D1B14",   inkM:"#6B4A3E",   inkL:"#A07A6E",
+    white:"#FFFFFF",
+    border:"#F0E4D8", borderM:"#E0C8B4",
+    amber:"#D97706", amberL:"#FFFBEB", amberB:"#FDE68A",
+    red:"#DC2626",   redL:"#FEF2F2",   redB:"#FECACA",
+    blue:"#2563EB",  blueL:"#EFF6FF",
+    teal:"#0D9488",  tealL:"#F0FDFA",
+    accent:"#E07A5F", accentD:"#C4614A", accentL:"#FCEAE5",
+    navBg:"#FFFFFF", navBorder:"#F0E4D8", navActive:"#E07A5F",
+    headerBg:"#FFFFFF",
+    font:"'Montserrat',sans-serif", fontBody:"'DM Sans',sans-serif",
+  },
+  arctic: {
+    name:"Arctic Precision",
+    cream:"#F6F8FA", creamD:"#EFF2F5", creamDD:"#E8ECF0",
+    terra:"#4F46E5", terraD:"#3730A3", terraL:"#EEF2FF",
+    sage:"#10B981",  sageD:"#059669",  sageL:"#D1FAE5",
+    sand:"#6366F1",  sandL:"#EEF2FF",
+    ink:"#111827",   inkM:"#374151",   inkL:"#6B7280",
+    white:"#FFFFFF",
+    border:"#E5E7EB", borderM:"#D1D5DB",
+    amber:"#D97706", amberL:"#FEF3C7", amberB:"#FDE68A",
+    red:"#EF4444",   redL:"#FEF2F2",   redB:"#FECACA",
+    blue:"#3B82F6",  blueL:"#EFF6FF",
+    teal:"#0891B2",  tealL:"#E0F2FE",
+    accent:"#4F46E5", accentD:"#3730A3", accentL:"#EEF2FF",
+    navBg:"#FFFFFF", navBorder:"#E5E7EB", navActive:"#4F46E5",
+    headerBg:"#FFFFFF",
+    font:"'Inter',sans-serif", fontBody:"'Inter',sans-serif",
+  },
+  executive: {
+    name:"Executive Blue",
+    cream:"#EEF2F8", creamD:"#E2E8F0", creamDD:"#CBD5E1",
+    terra:"#0EA5E9", terraD:"#0284C7", terraL:"#E0F2FE",
+    sage:"#16A34A",  sageD:"#15803D",  sageL:"#DCFCE7",
+    sand:"#64748B",  sandL:"#F1F5F9",
+    ink:"#032D60",   inkM:"#1E3A5F",   inkL:"#475569",
+    white:"#FFFFFF",
+    border:"#CBD5E1", borderM:"#94A3B8",
+    amber:"#D97706", amberL:"#FEF3C7", amberB:"#FDE68A",
+    red:"#DC2626",   redL:"#FEF2F2",   redB:"#FECACA",
+    blue:"#0EA5E9",  blueL:"#E0F2FE",
+    teal:"#0891B2",  tealL:"#E0F2FE",
+    accent:"#0EA5E9", accentD:"#0284C7", accentL:"#E0F2FE",
+    navBg:"#032D60", navBorder:"#0D3A72", navActive:"#0EA5E9",
+    headerBg:"#032D60",
+    font:"'Inter',sans-serif", fontBody:"'Inter',sans-serif",
+  },
 };
+
+// Load saved theme - plain variable, no hooks outside components
+let _savedTheme = 'arctic';
+try { const st=localStorage.getItem('ws-theme'); if(st&&THEMES[st]) _savedTheme=st; } catch(e) {}
+
+// T is a plain mutable object - gets Object.assign'd inside App on every render
+let T = Object.assign({}, THEMES[_savedTheme]);
+
+// Inject Inter font for arctic/executive
+if (!document.getElementById("ws-inter-font")) {
+  const fl = document.createElement("link");
+  fl.id = "ws-inter-font";
+  fl.rel = "stylesheet";
+  fl.href = "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap";
+  document.head.appendChild(fl);
+}
 
 const CHART_COLORS = ["#E07A5F","#7BB87A","#C4A882","#6B9EC9","#D4749F","#A8C5DA","#F4C07A","#9BB87A","#E0A87A","#7ABFB8"];
 
-/* ── CSS ── */
-const CSS = `
+function buildCSS(T) { return `
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{background:${T.cream};color:${T.ink};font-family:'DM Sans',sans-serif;-webkit-font-smoothing:antialiased;font-size:14px}
+html,body{background:${T.cream};color:${T.ink};font-family:${T.fontBody};-webkit-font-smoothing:antialiased;font-size:14px}
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:${T.creamD}}::-webkit-scrollbar-thumb{background:${T.border};border-radius:4px}
-.pf{font-family:'Montserrat',sans-serif;font-weight:800;letter-spacing:-.3px}
-.mt{font-family:'Montserrat',sans-serif}
+.pf{font-family:${T.font};font-weight:800;letter-spacing:-.3px}
+.mt{font-family:${T.font}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spinA{to{transform:rotate(360deg)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
@@ -107,26 +165,26 @@ html,body{background:${T.cream};color:${T.ink};font-family:'DM Sans',sans-serif;
 #ws-print-stocktake{display:none}
 .card{background:${T.white};border:1px solid ${T.border};border-radius:16px;padding:24px}
 .card-sm{background:${T.white};border:1px solid ${T.border};border-radius:12px;padding:16px 18px}
-.tab-btn{background:none;border:none;cursor:pointer;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:600;padding:9px 14px;border-radius:8px;color:${T.inkL};transition:all .15s;letter-spacing:.4px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.tab-btn{background:none;border:none;cursor:pointer;font-family:${T.font};font-size:11px;font-weight:600;padding:9px 14px;border-radius:8px;color:${T.inkL};transition:all .15s;letter-spacing:.4px;display:flex;align-items:center;gap:6px;white-space:nowrap}
 .tab-btn:hover{color:${T.ink};background:${T.creamDD}}
-.tab-btn.active{background:${T.terra};color:#fff}
-.btn-t{background:${T.terra};color:#fff;border:none;border-radius:10px;padding:10px 20px;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:7px;letter-spacing:.3px}
-.btn-t:hover{background:${T.terraD};transform:translateY(-1px);box-shadow:0 5px 16px rgba(224,122,95,.28)}
+.tab-btn.active{background:${T.accent};color:#fff}
+.btn-t{background:${T.accent};color:#fff;border:none;border-radius:10px;padding:10px 20px;font-family:${T.font};font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:7px;letter-spacing:.3px}
+.btn-t:hover{background:${T.accentD};transform:translateY(-1px);box-shadow:0 5px 16px ${T.accent}44}
 .btn-t:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
-.btn-o{background:none;border:1.5px solid ${T.border};border-radius:9px;padding:7px 15px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:600;cursor:pointer;color:${T.inkM};transition:all .15s}
-.btn-o:hover{border-color:${T.terra};color:${T.terra}}
-.disc-flag-btn{font-size:10px;padding:2px 7px;border-radius:6px;border:1.5px solid ${T.border};background:transparent;color:${T.inkL};cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;transition:all .15s;white-space:nowrap}
+.btn-o{background:none;border:1.5px solid ${T.border};border-radius:9px;padding:7px 15px;font-family:${T.font};font-size:11px;font-weight:600;cursor:pointer;color:${T.inkM};transition:all .15s}
+.btn-o:hover{border-color:${T.accent};color:${T.accent}}
+.disc-flag-btn{font-size:10px;padding:2px 7px;border-radius:6px;border:1.5px solid ${T.border};background:transparent;color:${T.inkL};cursor:pointer;font-family:${T.font};font-weight:700;transition:all .15s;white-space:nowrap}
 .disc-flag-btn:hover{border-color:${T.red};color:${T.red}}
 .disc-flag-btn.flagged{border-color:${T.red};background:${T.redL};color:${T.red}}
 .disc-row{background:${T.white};border-radius:14px;overflow:hidden;transition:border-color .2s}
-.btn-full{width:100%;padding:15px;border:none;border-radius:12px;background:linear-gradient(135deg,${T.terra},${T.terraD});color:#fff;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800;cursor:pointer;transition:all .18s;letter-spacing:.4px;display:flex;align-items:center;justify-content:center;gap:10px}
-.btn-full:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(224,122,95,.3)}
+.btn-full{width:100%;padding:15px;border:none;border-radius:12px;background:linear-gradient(135deg,${T.accent},${T.accentD});color:#fff;font-family:${T.font};font-size:13px;font-weight:800;cursor:pointer;transition:all .18s;letter-spacing:.4px;display:flex;align-items:center;justify-content:center;gap:10px}
+.btn-full:hover{transform:translateY(-2px);box-shadow:0 8px 24px ${T.accent}44}
 .btn-full:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
 .upload-zone{border:2px dashed ${T.border};border-radius:18px;padding:48px 40px;text-align:center;cursor:pointer;transition:all .2s;background:${T.white}}
-.upload-zone:hover,.upload-zone.drag{border-color:${T.terra};background:${T.terraL}}
+.upload-zone:hover,.upload-zone.drag{border-color:${T.accent};background:${T.accentL}}
 input[type=file]{display:none}
 .gen-card{background:${T.white};border:1.5px solid ${T.border};border-radius:14px;padding:16px 18px;cursor:pointer;transition:all .17s;display:flex;align-items:center;gap:14px;width:100%;text-align:left}
-.gen-card:hover{border-color:${T.terra};box-shadow:0 4px 14px rgba(224,122,95,.1);transform:translateY(-1px)}
+.gen-card:hover{border-color:${T.accent};box-shadow:0 4px 14px ${T.accent}18;transform:translateY(-1px)}
 .gen-card.done{border-color:${T.sage};background:${T.sageL}}
 .gen-card:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .tbl-head{display:grid;padding:10px 20px;background:${T.creamD};border-bottom:1px solid ${T.border}}
@@ -135,23 +193,25 @@ input[type=file]{display:none}
 .tbl-row:last-child{border-bottom:none}
 .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.2px;white-space:nowrap}
 .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.inp{background:${T.creamD};border:1px solid ${T.border};border-radius:8px;padding:8px 13px;font-family:'DM Sans',sans-serif;font-size:13px;color:${T.ink};outline:none;transition:border-color .15s}
-.inp:focus{border-color:${T.terra}}
+.inp{background:${T.creamD};border:1px solid ${T.border};border-radius:8px;padding:8px 13px;font-family:${T.fontBody};font-size:13px;color:${T.ink};outline:none;transition:border-color .15s}
+.inp:focus{border-color:${T.accent}}
 .inp::placeholder{color:${T.inkL}}
-.sel{background:${T.creamD};border:1px solid ${T.border};border-radius:7px;padding:4px 8px;font-size:12px;color:${T.ink};cursor:pointer;font-family:'DM Sans',sans-serif;outline:none}
-.chip{padding:5px 13px;border-radius:40px;border:1px solid ${T.border};background:${T.white};color:${T.inkL};font-size:11px;font-weight:600;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .12s;letter-spacing:.3px;white-space:nowrap}
-.chip:hover{border-color:${T.terra};color:${T.terra}}
-.chip.active{border-color:${T.terra};background:${T.terra};color:#fff}
-.modal-overlay{position:fixed;inset:0;background:rgba(45,27,20,.5);display:flex;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(5px)}
-.modal{background:${T.white};border-radius:20px;width:100%;max-width:620px;max-height:84vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(45,27,20,.2)}
-.sc{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:800;letter-spacing:-.5px;color:${T.ink};margin-bottom:5px}
-.ss{font-family:'Montserrat',sans-serif;font-size:11px;color:${T.inkL};letter-spacing:.5px}
-.rt{font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;color:${T.inkL};letter-spacing:1.4px;margin-bottom:14px}
+.sel{background:${T.creamD};border:1px solid ${T.border};border-radius:7px;padding:4px 8px;font-size:12px;color:${T.ink};cursor:pointer;font-family:${T.fontBody};outline:none}
+.chip{padding:5px 13px;border-radius:40px;border:1px solid ${T.border};background:${T.white};color:${T.inkL};font-size:11px;font-weight:600;cursor:pointer;font-family:${T.font};transition:all .12s;letter-spacing:.3px;white-space:nowrap}
+.chip:hover{border-color:${T.accent};color:${T.accent}}
+.chip.active{border-color:${T.accent};background:${T.accent};color:#fff}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(5px)}
+.modal{background:${T.white};border-radius:20px;width:100%;max-width:620px;max-height:84vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.sc{font-family:${T.font};font-size:22px;font-weight:800;letter-spacing:-.5px;color:${T.ink};margin-bottom:5px}
+.ss{font-family:${T.font};font-size:11px;color:${T.inkL};letter-spacing:.5px}
+.rt{font-family:${T.font};font-size:11px;font-weight:700;color:${T.inkL};letter-spacing:1.4px;margin-bottom:14px}
 .stat-card{background:${T.white};border:1px solid ${T.border};border-radius:16px;padding:20px 22px;transition:all .15s;position:relative;overflow:hidden}
-.stat-card:hover{border-color:${T.terra}55;box-shadow:0 5px 18px rgba(224,122,95,.09);transform:translateY(-2px)}
+.stat-card:hover{border-color:${T.accent}55;box-shadow:0 5px 18px ${T.accent}14;transform:translateY(-2px)}
 .rc{background:${T.white};border:1px solid ${T.border};border-radius:14px;padding:20px 22px;margin-bottom:16px}
-.ebadge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.7px;font-family:'Montserrat',sans-serif}
-`;
+.ebadge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.7px;font-family:${T.font}}
+`; }
+
+const CSS = buildCSS(THEMES[_savedTheme]);
 
 /* ── XLSX ── */
 function ex(s){if(s==null)return"";return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
@@ -277,6 +337,22 @@ function dlZip(files, zipName){
     setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
   }).catch(err=>alert("Zip error: "+err.message));
 }
+// Like dlZip but returns Promise<Blob> without triggering download — used for modal
+function buildZipBlob(files){
+  return Promise.all(files.map(({sheets,name})=>{
+    const{wb,wbR,rR,ct,sty,ssX,sxml}=buildXlsx(sheets);
+    const xlsxBlob=mkZip([
+      {name:"[Content_Types].xml",        data:u8(ct)},
+      {name:"_rels/.rels",                data:u8(rR)},
+      {name:"xl/workbook.xml",            data:u8(wb)},
+      {name:"xl/_rels/workbook.xml.rels", data:u8(wbR)},
+      {name:"xl/styles.xml",              data:u8(sty)},
+      {name:"xl/sharedStrings.xml",       data:u8(ssX)},
+      ...sxml.map((x,i)=>({name:`xl/worksheets/sheet${i+1}.xml`,data:u8(x)})),
+    ]);
+    return xlsxBlob.arrayBuffer().then(buf=>({name,data:new Uint8Array(buf)}));
+  })).then(entries=>mkZip(entries));
+}
 
 function parseCSV(text){
   const lines=text.split(/\r?\n/).filter(Boolean);
@@ -294,7 +370,6 @@ const packSize=p=>p==="TEA"?18:p==="1L"?12:24;
 const cartons=(qty,p)=>Math.ceil((parseInt(qty)||0)/packSize(p));
 const totalC=rows=>rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product).reduce((s,r)=>s+cartons(r.Quantity,r.Product),0);
 const isPallet=r=>(r.CustomerVisibilityGroup&&r.CustomerVisibilityGroup.toUpperCase()!=="REGULAR"&&r.CustomerVisibilityGroup!=="")||(r.CustomerPriceGroup&&r.CustomerPriceGroup.toUpperCase()!=="REGULAR"&&r.CustomerPriceGroup!=="")||(r.Customergroup&&r.Customergroup.toUpperCase()!=="REGULAR"&&r.Customergroup!=="");
-const isSpecial=r=>(r.Customergroup||'').trim().toUpperCase()==='SPECIAL'||(r.CustomerPriceGroup||'').trim().toUpperCase()==='SPECIAL'||(r.CustomerVisibilityGroup||'').trim().toUpperCase()==='SPECIAL';
 
 /* ── ANALYTICS ── */
 function buildAnalytics(rows,prevIds=[]){
@@ -396,7 +471,7 @@ function genProduction(rows,palletOnly=false){
   return[{name:palletOnly?"Pallet Production":"Production",rows:[[{v:today.toUpperCase(),bold:true,bg:"FF1F4E79",align:"left"}],[E],...section(nf.filter(r=>r.Product==="350"),"350ml Orders","WHITE","350"),...section(nf.filter(r=>r.Product==="TEA"),"Tea Orders","CLEAR","TEA"),...section(nf.filter(r=>r.Product==="1L"),"1L Orders","WHITE","1L")],colWidths:[18,14,13,28,...Array(20).fill(16),13,10]}];
 }
 function genColdXpress(rows,date){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="COLDXPRESS"&&!isPallet(r)&&!isSpecial(r));
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="COLDXPRESS"&&!isPallet(r));
   if(!nf.length)return[{name:"Sheet1",rows:[[Cv("No COLDXPRESS orders")]]}];
   const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
   const sr=[];
@@ -410,7 +485,7 @@ function genColdXpress(rows,date){
   return[{name:"Sheet1",rows:sr,colWidths:[14,16,10,28,28,18,8,10,10,10,13,12,10,10,20]}];
 }
 function genDK(rows){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="DKDISTRIBUTION"&&!isPallet(r)&&!isSpecial(r));
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="DKDISTRIBUTION"&&!isPallet(r));
   if(!nf.length)return[{name:"jobs",rows:[[Cv("No DK orders")]]}];
   const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
   const sr=[["Order ID","Date","Order Type","Notes","Address 1","Address 2","Address 3","Postal Code","City","State","Country","Location","Last Name","Phone","Delivery Instructions","Email","GROUP","Volume"].map(h=>H(h,true,"FFBDD7EE","center"))];
@@ -418,7 +493,7 @@ function genDK(rows){
   return[{name:"jobs",rows:sr,colWidths:[14,12,12,28,28,20,12,12,18,8,10,12,14,14,28,20,8,10]}];
 }
 function genCoolCouriers(rows){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="COOLCOURIERS"&&!isPallet(r)&&!isSpecial(r));
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="COOLCOURIERS"&&!isPallet(r));
   if(!nf.length)return[{name:"Manifest",rows:[[Cv("No COOLCOURIERS orders")]]}];
   const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
   const sr=[];
@@ -447,19 +522,6 @@ function genPrints(rows,palletOnly=false){
   const sort=pr=>[...pr].sort((a,b)=>{for(const k of['Courier','Customer','OrderNumber','SKU']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
   const r350=sort(nf.filter(r=>r.Product==="350")),rT=sort(nf.filter(r=>r.Product==="TEA")),r1=sort(nf.filter(r=>r.Product==="1L"));
   return{f350:buildPrint(r350,false,"FRONTS"),b350:buildPrint(r350,true,"BACKS"),fT:buildPrint(rT,false,"FRONTS"),bT:buildPrint(rT,true,"BACKS"),f1:buildPrint(r1,false,"FRONTS","1L")};
-}
-function genSpecialPrints(rows){
-  // Returns [{customerName, front, back}] — one pair per unique SPECIAL customer
-  const sr=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&isSpecial(r));
-  if(!sr.length)return[];
-  const byCustomer={};
-  sr.forEach(r=>{const k=r.Customer||"UNKNOWN";if(!byCustomer[k])byCustomer[k]=[];byCustomer[k].push(r);});
-  const sort=pr=>[...pr].sort((a,b)=>{for(const k of['Courier','OrderNumber','SKU']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
-  return Object.entries(byCustomer).map(([customerName,custRows])=>{
-    const sorted=sort(custRows);
-    const label=customerName.toUpperCase();
-    return{customerName:label,front:buildPrint(sorted,false,"FRONTS"),back:buildPrint(sorted,true,"BACKS")};
-  });
 }
 
 /* ── STATUS ── */
@@ -864,13 +926,138 @@ function TemplateUploader({apiFetch,T}){
   );
 }
 
+/* ── GENERATE ALL SUCCESS MODAL ── */
+function GenSuccessModal({modal, onClose, apiFetch, T}){
+  const[emailSending,setEmailSending]=useState(false);
+  const[emailSent,setEmailSent]=useState(false);
+  const[emailErr,setEmailErr]=useState(null);
+
+  const PRODUCTION_RECIPIENTS=[
+    'leopegoli@gmail.com',
+    'production@pressedjuices.com.au',
+    'sophie@pressedjuices.com.au',
+    'leopegoli@bigpond.com',
+  ];
+
+  async function handleDownload(){
+    const url=URL.createObjectURL(modal.zipBlob);
+    const a=document.createElement("a");
+    a.href=url;a.download=modal.zipName;
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
+  }
+
+  async function handleEmail(){
+    setEmailSending(true);setEmailErr(null);
+    try{
+      // Convert blob to base64 for transport
+      const buf=await modal.zipBlob.arrayBuffer();
+      const bytes=new Uint8Array(buf);
+      let b64='';
+      const chunk=8192;
+      for(let i=0;i<bytes.length;i+=chunk){
+        b64+=String.fromCharCode(...bytes.subarray(i,i+chunk));
+      }
+      const base64=btoa(b64);
+      const resp=await apiFetch('/api/send-production-files',{
+        method:'POST',
+        body:JSON.stringify({
+          zipBase64:base64,
+          zipName:modal.zipName,
+          dateLabel:modal.dateLabel,
+          recipients:PRODUCTION_RECIPIENTS,
+        }),
+      });
+      const data=await resp.json();
+      if(!resp.ok||data.error) throw new Error(data.error||'Send failed');
+      setEmailSent(true);
+    }catch(e){
+      setEmailErr(e.message);
+    }
+    setEmailSending(false);
+  }
+
+  return(
+    <div className="modal-overlay">
+      <div className="modal fu" style={{maxWidth:480}}>
+        {/* Header */}
+        <div style={{padding:"22px 26px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"flex-start",gap:14}}>
+          <div style={{width:44,height:44,borderRadius:12,background:T.sageL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>✅</div>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:15,color:T.ink,marginBottom:3}}>Files generated successfully</div>
+            <div style={{fontSize:12,color:T.inkL}}>{modal.zipName}</div>
+          </div>
+          <button className="btn-o" onClick={onClose} style={{flexShrink:0,padding:"5px 10px"}}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{padding:"20px 26px"}}>
+          <div style={{fontSize:13,color:T.inkM,marginBottom:18,lineHeight:1.6}}>
+            All 9 files have been generated. Choose how to distribute them:
+          </div>
+
+          {/* Recipients list */}
+          <div style={{background:T.creamD,borderRadius:10,padding:"12px 14px",marginBottom:18}}>
+            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:8}}>EMAIL RECIPIENTS</div>
+            {PRODUCTION_RECIPIENTS.map(r=>(
+              <div key={r} style={{fontSize:12,color:T.inkM,padding:"3px 0",display:"flex",alignItems:"center",gap:7}}>
+                <div style={{width:5,height:5,borderRadius:"50%",background:T.sage,flexShrink:0}}/>
+                {r}
+              </div>
+            ))}
+          </div>
+
+          {/* Email status */}
+          {emailSent&&(
+            <div style={{background:T.sageL,border:`1px solid ${T.sageD}33`,borderRadius:9,padding:"10px 14px",marginBottom:14,fontSize:13,color:T.sageD,fontWeight:600}}>
+              ✅ Files emailed successfully to {PRODUCTION_RECIPIENTS.length} recipients
+            </div>
+          )}
+          {emailErr&&(
+            <div style={{background:T.redL,border:`1px solid ${T.redB}`,borderRadius:9,padding:"10px 14px",marginBottom:14,fontSize:12,color:T.red}}>
+              ⚠️ Email failed: {emailErr}
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <button className="btn-t" onClick={handleEmail} disabled={emailSending||emailSent} style={{justifyContent:"center",fontSize:13}}>
+              {emailSending?<><span className="spin" style={{fontSize:13}}>⟳</span> Sending…</>
+               :emailSent?"✅ Sent"
+               :"📧 Email Files"}
+            </button>
+            <button className="btn-o" onClick={handleDownload} style={{fontSize:13,textAlign:"center",justifyContent:"center",display:"flex",alignItems:"center",gap:6}}>
+              ⬇ Download ZIP
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function App(){
   // ── Auth ──────────────────────────────────────────────────────
   const[token,setToken]=useState(()=>localStorage.getItem('ws-token')||null);
   const[loginPw,setLoginPw]=useState('');
+  const[loginEmail,setLoginEmail]=useState('');
   const[loginErr,setLoginErr]=useState('');
   const[loginLoading,setLoginLoading]=useState(false);
+  const[themeKey,setThemeKeyState]=useState(()=>{try{const s=localStorage.getItem('ws-theme');return(s&&THEMES[s])?s:'arctic';}catch(e){return'arctic';}});
+  const currentT=THEMES[themeKey]||THEMES.arctic;
+  // Make T always point to current theme for all existing code
+  Object.assign(T,currentT);
+  const currentCSS=buildCSS(currentT);
+
+  function setTheme(key){
+    if(!THEMES[key]) return;
+    try{localStorage.setItem('ws-theme',key);}catch(e){}
+    // Persist to server too so all users see it
+    window.storage.set('ws-theme',key).catch(()=>{});
+    setThemeKeyState(key);
+    Object.assign(T,THEMES[key]);
+  }
 
   const IS_DEPLOYED = window.location.hostname !== 'localhost' && !window.location.hostname.includes('claudeusercontent');
 
@@ -887,7 +1074,8 @@ function App(){
     e.preventDefault();
     setLoginLoading(true); setLoginErr('');
     try{
-      const res = await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:loginPw})});
+      const body = loginEmail ? {email:loginEmail, password:loginPw} : {password:loginPw};
+      const res = await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const data = await res.json();
       if(!res.ok) throw new Error(data.error||'Login failed');
       localStorage.setItem('ws-token', data.token);
@@ -898,26 +1086,34 @@ function App(){
 
   // Show login screen when deployed and not authenticated
   if(IS_DEPLOYED && !token) return(
-    <div style={{minHeight:'100vh',background:T.cream,display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style={{background:T.white,borderRadius:20,padding:'40px 36px',width:340,boxShadow:'0 4px 32px rgba(0,0,0,.08)'}}>
+    <div style={{minHeight:'100vh',background:currentT.cream,display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{background:currentT.white,borderRadius:20,padding:'40px 36px',width:360,boxShadow:'0 4px 32px rgba(0,0,0,.08)',border:`1px solid ${currentT.border}`}}>
         <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:28}}>
-          <div style={{width:40,height:40,borderRadius:11,background:T.terra,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>🌿</div>
+          <div style={{width:40,height:40,borderRadius:11,background:`linear-gradient(135deg,${currentT.accent},${currentT.accentD})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>🧃</div>
           <div>
-            <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:16,color:T.ink}}>WHOLESALE STATE</div>
-            <div style={{fontSize:11,color:T.inkL,letterSpacing:.5}}>ORDER MANAGEMENT</div>
+            <div style={{fontFamily:currentT.font,fontWeight:800,fontSize:16,color:currentT.ink}}>WHOLESALE STATE</div>
+            <div style={{fontSize:11,color:currentT.inkL,letterSpacing:.5}}>ORDER MANAGEMENT</div>
           </div>
         </div>
         <form onSubmit={handleLogin}>
-          <div style={{marginBottom:14}}>
-            <div style={{fontSize:12,fontWeight:600,color:T.inkM,marginBottom:6}}>Password</div>
-            <input type="password" value={loginPw} onChange={e=>setLoginPw(e.target.value)}
-              className="inp" style={{width:'100%',fontSize:14}} placeholder="Enter team password" autoFocus/>
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:12,fontWeight:600,color:currentT.inkM,marginBottom:6,fontFamily:currentT.font}}>Email</div>
+            <input type="email" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)}
+              className="inp" style={{width:'100%',fontSize:14}} placeholder="your@email.com" autoFocus/>
           </div>
-          {loginErr&&<div style={{fontSize:12,color:T.red,marginBottom:10}}>⚠ {loginErr}</div>}
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:12,fontWeight:600,color:currentT.inkM,marginBottom:6,fontFamily:currentT.font}}>Password</div>
+            <input type="password" value={loginPw} onChange={e=>setLoginPw(e.target.value)}
+              className="inp" style={{width:'100%',fontSize:14}} placeholder="Enter your password"/>
+          </div>
+          {loginErr&&<div style={{fontSize:12,color:currentT.red,marginBottom:10}}>⚠ {loginErr}</div>}
           <button type="submit" className="btn-t" style={{width:'100%',justifyContent:'center'}} disabled={loginLoading}>
             {loginLoading?'Signing in…':'Sign In'}
           </button>
         </form>
+        <div style={{marginTop:16,paddingTop:14,borderTop:`1px solid ${currentT.border}`,textAlign:'center',fontSize:11,color:currentT.inkL}}>
+          Having trouble? Contact your admin for a new invite link.
+        </div>
       </div>
     </div>
   );
@@ -956,6 +1152,7 @@ function App(){
     });
   };
   const[gen,setGen]=useState(null);
+  const[genModal,setGenModal]=useState(null); // {zipBlob, zipName, dateLabel} shown after Generate All
   const[done,setDone]=useState({});
   const[drag,setDrag]=useState(false);
   const[valModal,setValModal]=useState(null);
@@ -995,6 +1192,7 @@ function App(){
       window.history.replaceState({},'','/');
     }
     try{const r=await window.storage.get("ws-snaps");if(r){const all=JSON.parse(r.value);const valid=all.filter(s=>Array.isArray(s.manifests)&&s.manifests.length>0);setSnapshots(valid);if(valid.length!==all.length)window.storage.set("ws-snaps",JSON.stringify(valid)).catch(()=>{});}}catch(e){}
+    try{const r=await window.storage.get("ws-theme");if(r){let tk=r.value;if(typeof tk==="string"&&tk.startsWith('"'))tk=tk.replace(/^\"|\"$/g,"");if(THEMES[tk]){setThemeKeyState(tk);Object.assign(T,THEMES[tk]);localStorage.setItem("ws-theme",tk);}}}catch(e){}
     try{const r=await window.storage.get("ws-orders");if(r){const o=JSON.parse(r.value);setOrders(o);ordersRef.current=o;}}catch(e){}
     try{const r=await window.storage.get("ws-customers");if(r)setCustomers(JSON.parse(r.value));}catch(e){}
     try{const r=await window.storage.get("ws-stock");if(r)setStock(JSON.parse(r.value));}catch(e){}
@@ -1190,9 +1388,7 @@ function App(){
     try{
       const rows=rowsRef.current;
       if(!rows||rows.length===0){alert("No CSV data loaded. Please drop your CSV file first.");setGen(null);return;}
-      const now=new Date();
-      const dayName=now.toLocaleDateString("en-AU",{weekday:"long"});
-      const d=dayName+"-"+now.toLocaleDateString("en-AU").replace(/\//g,"-");
+      const d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
 
       // Server-side generation via Python + openpyxl
       if(IS_DEPLOYED){
@@ -1211,12 +1407,18 @@ function App(){
           throw new Error(e.error||"Generation failed");
         }
         const blob=await resp.blob();
-        const url=URL.createObjectURL(blob);
-        const a=document.createElement("a");
-        a.href=url;a.download=type==="all"?d+"_Wholesale_State_Files.zip":type==="prints"?d+"_Print_Files.zip":d+"_"+type+".xlsx";
-        document.body.appendChild(a);a.click();
-        setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
-        setDone(p=>({...p,[type]:true}));
+        if(type==="all"){
+          // Show success modal with Email / Download options
+          setGenModal({zipBlob:blob,zipName:d+"_Wholesale_State_Files.zip",dateLabel:d});
+          setDone(p=>({...p,[type]:true}));
+        } else {
+          const url=URL.createObjectURL(blob);
+          const a=document.createElement("a");
+          a.href=url;a.download=type==="prints"?d+"_Print_Files.zip":d+"_"+type+".xlsx";
+          document.body.appendChild(a);a.click();
+          setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
+          setDone(p=>({...p,[type]:true}));
+        }
         // Record generated files in snap
         const d2=new Date().toLocaleDateString("en-AU");
         const fileMap={production:[d+"_Production_Sheet.xlsx"],coldxpress:[d+"_COLDXPRESS.xlsx"],dk:[d+"_DK_DISTRIBUTIONS.xlsx"],coolcouriers:[d+"_COOLCOURIERS.xlsx"],prints:[d+"_350ml_Fronts.xlsx",d+"_350ml_Backs.xlsx",d+"_Tea_Fronts.xlsx",d+"_Tea_Backs.xlsx",d+"_1L_Fronts.xlsx"],all:[d+"_Production_Sheet.xlsx",d+"_COLDXPRESS.xlsx",d+"_DK_DISTRIBUTIONS.xlsx",d+"_COOLCOURIERS.xlsx",d+"_350ml_Fronts.xlsx",d+"_350ml_Backs.xlsx",d+"_Tea_Fronts.xlsx",d+"_Tea_Backs.xlsx",d+"_1L_Fronts.xlsx"]};
@@ -1235,8 +1437,8 @@ function App(){
       else if(type==="pallet-prints"){const{f350,b350,fT,bT,f1}=genPrints(rows,true);dlZip([[f350,`${d}_Pallet_350ml_Fronts.xlsx`],[b350,`${d}_Pallet_350ml_Backs.xlsx`],[fT,`${d}_Pallet_Tea_Fronts.xlsx`],[bT,`${d}_Pallet_Tea_Backs.xlsx`],[f1,`${d}_Pallet_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Pallet_Print_Files.zip`);}
       else if(type==="all"){
         const{f350,b350,fT,bT,f1}=genPrints(rows);
-        const specialFiles=genSpecialPrints(rows);
-        const allFiles=[
+        const zipName=`${d}_Wholesale_State_Files.zip`;
+        buildZipBlob([
           {sheets:genProduction(rows),       name:`${d}_Production_Sheet.xlsx`},
           {sheets:genColdXpress(rows,d),     name:`${d}_COLDXPRESS.xlsx`},
           {sheets:genDK(rows),               name:`${d}_DK_DISTRIBUTIONS.xlsx`},
@@ -1246,12 +1448,12 @@ function App(){
           {sheets:fT,                        name:`${d}_Tea_Fronts.xlsx`},
           {sheets:bT,                        name:`${d}_Tea_Backs.xlsx`},
           {sheets:f1,                        name:`${d}_1L_Fronts.xlsx`},
-          ...specialFiles.flatMap(sp=>[
-            {sheets:sp.front, name:`${d}_${sp.customerName}_Fronts.xlsx`},
-            {sheets:sp.back,  name:`${d}_${sp.customerName}_Backs.xlsx`},
-          ]),
-        ];
-        dlZip(allFiles,`${d}_Wholesale_State_Files.zip`);
+        ]).then(blob=>{
+          setGenModal({zipBlob:blob,zipName,dateLabel:d});
+          setDone(p=>({...p,[type]:true}));
+          setGen(null);
+        }).catch(err=>{ alert("Error: "+err.message); setGen(null); });
+        return;
       }
       setDone(p=>({...p,[type]:true}));
       // Record this file in the current snap's generatedFiles registry
@@ -1298,7 +1500,7 @@ function App(){
   const piData=analytics?Object.entries(analytics.productTotals).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([name,value])=>({name:name.replace(" 350ml","").replace(" 1L","").slice(0,12),value})):[];
   const TT={contentStyle:{background:T.white,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 13px",fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.ink}};
 
-  const TABS=[{id:"generate",icon:"⚡",label:"Generate"},{id:"tracker",icon:"📦",label:"Orders"},{id:"pallets",icon:"🏗️",label:"Pallets"},{id:"reports",icon:"📈",label:"Reports"},{id:"history",icon:"📋",label:"Manifests"},{id:"customers",icon:"🏪",label:"Customers"},{id:"stocktake",icon:"📋",label:"Stocktake"},{id:"discrepancies",icon:"⚠️",label:"Discrepancies"},{id:"email",icon:"✉️",label:"Email Hub"}];
+  const TABS=[{id:"generate",icon:"⚡",label:"Generate"},{id:"tracker",icon:"📦",label:"Orders"},{id:"pallets",icon:"🏗️",label:"Pallets"},{id:"reports",icon:"📈",label:"Reports"},{id:"history",icon:"📋",label:"Manifests"},{id:"customers",icon:"🏪",label:"Customers"},{id:"stocktake",icon:"📋",label:"Stocktake"},{id:"discrepancies",icon:"⚠️",label:"Discrepancies"},{id:"email",icon:"✉️",label:"Email Hub"},{id:"settings",icon:"⚙️",label:"Settings"}];
   const SKUS_350=['Antiox 350ml','Blueberry Glow 350ml','Botanical 350ml','Cloudy Apple 350ml','Energise 350ml','Immunity 350ml','Pure Orange 350ml','Refresh 350ml','Roots 350ml','Tropical Bliss 350ml'];
   const SKUS_TEA=['Organic Lemon Iced Tea 350ml','Organic Peach Iced Tea 350ml','Organic Raspberry Iced Tea 350ml'];
   const SKUS_1L=['Antiox 1L','Blueberry Glow 1L','Botanical 1L','Cloudy Apple 1L','Energise 1L','Immunity 1L','Pure Orange 1L','Refresh 1L','Roots 1L','Tropical Bliss 1L'];
@@ -1307,29 +1509,29 @@ function App(){
 
   return(
     <>
-      <style>{CSS}</style>
+      <style>{currentCSS}</style>
       {valModal&&<ValModal result={valModal.result} label={valModal.label} onProceed={()=>doGen(valModal.type,true)} onCancel={()=>setValModal(null)} labelRequestSent={labelRequestSent} onRequestLabels={async()=>{try{const resp=await apiFetch("/api/request-labels",{method:"POST",body:JSON.stringify({customers:driveWarnings})});if(resp.ok){setLabelRequestSent(true);}else{const e=await resp.json();alert("Failed to send: "+(e.error||"Unknown error"));}}catch(e){alert("Failed to send: "+e.message);}}}/>}
+      {genModal&&<GenSuccessModal modal={genModal} onClose={()=>setGenModal(null)} apiFetch={apiFetch} T={T}/>}
       <div style={{minHeight:"100vh",background:T.cream,display:"flex",flexDirection:"column"}}>
 
-        {/* HEADER */}
-        <header style={{background:T.white,borderBottom:`1px solid ${T.border}`,position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 10px rgba(45,27,20,.05)"}}>
+        <header style={{background:currentT.headerBg,borderBottom:`1px solid ${currentT.navBorder}`,position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 10px rgba(0,0,0,.07)"}}>
           <div style={{maxWidth:1200,margin:"0 auto",padding:"0 24px",height:60,display:"flex",alignItems:"center",justifyContent:"space-between",gap:14}}>
             <div style={{display:"flex",alignItems:"center",gap:11,flexShrink:0}}>
-              <div style={{width:32,height:32,borderRadius:9,background:`linear-gradient(135deg,${T.terra},${T.terraD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🧃</div>
+              <div style={{width:32,height:32,borderRadius:9,background:`linear-gradient(135deg,${currentT.accent},${currentT.accentD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🧃</div>
               <div>
-                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:800,color:T.ink,letterSpacing:1.5}}>WHOLESALE STATE</div>
-                <div className="mt" style={{fontSize:8,fontWeight:700,color:T.sand,letterSpacing:2.5,marginTop:1}}>ORDER MANAGEMENT</div>
+                <div style={{fontFamily:currentT.font,fontSize:13,fontWeight:800,color:themeKey==="executive"?"#fff":currentT.ink,letterSpacing:1.5}}>WHOLESALE STATE</div>
+                <div style={{fontFamily:currentT.font,fontSize:8,fontWeight:700,color:themeKey==="executive"?"#7EB8F7":currentT.sand,letterSpacing:2.5,marginTop:1}}>ORDER MANAGEMENT</div>
               </div>
             </div>
-            <nav style={{display:"flex",gap:2,background:T.creamD,padding:3,borderRadius:10,border:`1px solid ${T.border}`}}>
-              {TABS.map(t=><button key={t.id} className={`tab-btn${tab===t.id?" active":""}`} onClick={()=>setTab(t.id)}><span>{t.icon}</span>{t.label}{t.id==="discrepancies"&&discrepancies.filter(d=>d.status==="open").length>0&&<span style={{background:T.red,color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:9,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",marginLeft:2,fontFamily:"'Montserrat',sans-serif"}}>{discrepancies.filter(d=>d.status==="open").length}</span>}</button>)}
+            <nav style={{display:"flex",gap:2,background:themeKey==="executive"?"rgba(255,255,255,0.08)":currentT.creamD,padding:3,borderRadius:10,border:`1px solid ${currentT.navBorder}`}}>
+              {TABS.map(t=><button key={t.id} className={`tab-btn${tab===t.id?" active":""}`} onClick={()=>setTab(t.id)} style={{color:tab===t.id?"#fff":themeKey==="executive"?"#93C5FD":currentT.inkL}}><span>{t.icon}</span>{t.label}{t.id==="discrepancies"&&discrepancies.filter(d=>d.status==="open").length>0&&<span style={{background:currentT.red,color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:9,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",marginLeft:2,fontFamily:currentT.font}}>{discrepancies.filter(d=>d.status==="open").length}</span>}</button>)}
             </nav>
             <div style={{display:"flex",alignItems:"center",gap:7}}>
-              {vStats&&vStats.errors>0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:T.redL,border:`1px solid ${T.redB}`,borderRadius:20}}><span style={{fontSize:11}}>🚫</span><span className="mt" style={{fontSize:11,color:T.red,fontWeight:700}}>{vStats.errors} error{vStats.errors>1?"s":""}</span></div>}
-              {vStats&&vStats.warnings>0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:T.amberL,border:`1px solid ${T.amberB}`,borderRadius:20}}><span style={{fontSize:11}}>⚠️</span><span className="mt" style={{fontSize:11,color:T.amber,fontWeight:700}}>{vStats.warnings}</span></div>}
-              <div style={{display:"flex",alignItems:"center",gap:7,padding:"5px 11px",background:T.creamD,border:`1px solid ${T.border}`,borderRadius:8}}>
-                <div className="dot" style={{background:csvName?T.sage:T.sand}}/>
-                <span style={{fontSize:12,color:csvName?T.inkM:T.inkL,maxWidth:170,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'Montserrat',sans-serif",fontWeight:500}}>{csvName||"No file loaded"}</span>
+              {vStats&&vStats.errors>0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:currentT.redL,border:`1px solid ${currentT.redB}`,borderRadius:20}}><span style={{fontSize:11}}>🚫</span><span style={{fontFamily:currentT.font,fontSize:11,color:currentT.red,fontWeight:700}}>{vStats.errors} error{vStats.errors>1?"s":""}</span></div>}
+              {vStats&&vStats.warnings>0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:currentT.amberL,border:`1px solid ${currentT.amberB}`,borderRadius:20}}><span style={{fontSize:11}}>⚠️</span><span style={{fontFamily:currentT.font,fontSize:11,color:currentT.amber,fontWeight:700}}>{vStats.warnings}</span></div>}
+              <div style={{display:"flex",alignItems:"center",gap:7,padding:"5px 11px",background:themeKey==="executive"?"rgba(255,255,255,0.1)":currentT.creamD,border:`1px solid ${currentT.navBorder}`,borderRadius:8}}>
+                <div className="dot" style={{background:csvName?currentT.sage:currentT.sand}}/>
+                <span style={{fontSize:12,color:themeKey==="executive"?"#e0e0e0":csvName?currentT.inkM:currentT.inkL,maxWidth:170,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:currentT.font,fontWeight:500}}>{csvName||"No file loaded"}</span>
               </div>
             </div>
           </div>
@@ -1732,76 +1934,6 @@ function App(){
                       </button>
                     ))}
                   </div>
-
-                  {/* Per-customer SPECIAL print files */}
-                  {(()=>{
-                    const specialCustomers=[...new Set(palletOrders.filter(o=>isSpecial(csvRows.find(r=>r.OrderNumber===o.orderNumber)||{})||csvRows.some(r=>r.OrderNumber===o.orderNumber&&isSpecial(r))).map(o=>o.customer))];
-                    const specialRows=csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&isSpecial(r));
-                    const specialByCustomer={};
-                    specialRows.forEach(r=>{const k=r.Customer||"UNKNOWN";if(!specialByCustomer[k])specialByCustomer[k]=[];specialByCustomer[k].push(r);});
-                    const customers=Object.keys(specialByCustomer);
-                    if(!customers.length) return null;
-                    return(
-                      <div style={{marginBottom:18}}>
-                        <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:2,marginBottom:10}}>SPECIAL CUSTOMER PRINT FILES</div>
-                        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                          {customers.map(customerName=>{
-                            const label=customerName.toUpperCase();
-                            const frontKey=`special-front-${label}`;
-                            const backKey=`special-back-${label}`;
-                            const allKey=`special-all-${label}`;
-                            return(
-                              <div key={label} style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 18px"}}>
-                                <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:13,color:T.ink,marginBottom:10}}>{label}</div>
-                                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                                  <button className={`btn-o${done[frontKey]?" btn-done":""}`} disabled={!!gen||!csvName} onClick={()=>{
-                                    if(!csvName){alert("Upload a CSV first.");return;}
-                                    const now=new Date();
-                                    const dayName=now.toLocaleDateString("en-AU",{weekday:"long"});
-                                    const fd=dayName+"-"+now.toLocaleDateString("en-AU").replace(/\//g,"-");
-                                    const custRows=csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&isSpecial(r)&&r.Customer===customerName);
-                                    const sort=pr=>[...pr].sort((a,b)=>{for(const k of['Courier','OrderNumber','SKU']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
-                                    dlXlsx(buildPrint(sort(custRows),false,"FRONTS"),`${fd}_${label}_Fronts.xlsx`);
-                                    setDone(p=>({...p,[frontKey]:true}));
-                                  }} style={{fontSize:11,padding:"7px 14px"}}>
-                                    {done[frontKey]?"✅ Fronts":"🖨️ Fronts ↓"}
-                                  </button>
-                                  <button className="btn-o" disabled={!!gen||!csvName} onClick={()=>{
-                                    if(!csvName){alert("Upload a CSV first.");return;}
-                                    const now=new Date();
-                                    const dayName=now.toLocaleDateString("en-AU",{weekday:"long"});
-                                    const fd=dayName+"-"+now.toLocaleDateString("en-AU").replace(/\//g,"-");
-                                    const custRows=csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&isSpecial(r)&&r.Customer===customerName);
-                                    const sort=pr=>[...pr].sort((a,b)=>{for(const k of['Courier','OrderNumber','SKU']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
-                                    dlXlsx(buildPrint(sort(custRows),true,"BACKS"),`${fd}_${label}_Backs.xlsx`);
-                                    setDone(p=>({...p,[backKey]:true}));
-                                  }} style={{fontSize:11,padding:"7px 14px"}}>
-                                    {done[backKey]?"✅ Backs":"🖨️ Backs ↓"}
-                                  </button>
-                                  <button className="btn-t" disabled={!!gen||!csvName} onClick={()=>{
-                                    if(!csvName){alert("Upload a CSV first.");return;}
-                                    const now=new Date();
-                                    const dayName=now.toLocaleDateString("en-AU",{weekday:"long"});
-                                    const fd=dayName+"-"+now.toLocaleDateString("en-AU").replace(/\//g,"-");
-                                    const custRows=csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&isSpecial(r)&&r.Customer===customerName);
-                                    const sort=pr=>[...pr].sort((a,b)=>{for(const k of['Courier','OrderNumber','SKU']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
-                                    const sorted=sort(custRows);
-                                    dlZip([
-                                      {sheets:buildPrint(sorted,false,"FRONTS"),name:`${fd}_${label}_Fronts.xlsx`},
-                                      {sheets:buildPrint(sorted,true,"BACKS"), name:`${fd}_${label}_Backs.xlsx`},
-                                    ],`${fd}_${label}_Print_Files.zip`);
-                                    setDone(p=>({...p,[allKey]:true}));
-                                  }} style={{fontSize:11,padding:"7px 14px"}}>
-                                    {done[allKey]?"✅ Both downloaded":"⚡ Both ↓"}
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()}
 
                   {/* Special order delivery confirmation */}
                   <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden",marginBottom:18}}>
@@ -2443,9 +2575,586 @@ function App(){
             </div>
           )}
 
+          {/* ═══ SETTINGS ═══ */}
+          {tab==="settings"&&(
+            <SettingsPanel T={currentT} apiFetch={apiFetch} themeKey={themeKey} setTheme={setTheme} token={token} setToken={setToken}/>
+          )}
+
         </main>
       </div>
     </>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   SETTINGS PANEL
+   ───────────────────────────────────────────────────────────────── */
+function SettingsPanel({T, apiFetch, themeKey, setTheme, token, setToken}){
+  const[settingsTab,setSettingsTab]=useState("display");
+  const[users,setUsers]=useState([]);
+  const[usersLoading,setUsersLoading]=useState(false);
+  const[inviteEmail,setInviteEmail]=useState('');
+  const[inviteName,setInviteName]=useState('');
+  const[inviteRole,setInviteRole]=useState('staff');
+  const[inviteResult,setInviteResult]=useState(null);
+  const[inviteLoading,setInviteLoading]=useState(false);
+  const[notifSettings,setNotifSettings]=useState({newOrder:true,lowStock:true,deliveryConf:true,discrepancy:true,dailySummary:false,emailDigest:false,digestEmail:''});
+  const[notifSaved,setNotifSaved]=useState(false);
+  const[pwCurrent,setPwCurrent]=useState('');
+  const[pwNew,setPwNew]=useState('');
+  const[pwConfirm,setPwConfirm]=useState('');
+  const[pwMsg,setPwMsg]=useState(null);
+  const[bizSettings,setBizSettings]=useState({companyName:'Wholesale State',abn:'',contactEmail:'',contactPhone:'',address:'',defaultCourier:'',orderPrefix:'OMO',timezone:'Australia/Melbourne'});
+  const[bizSaved,setBizSaved]=useState(false);
+  const[currentUser,setCurrentUser]=useState(null);
+
+  useEffect(()=>{
+    // Load current user info
+    apiFetch('/api/users/me').then(r=>r.json()).then(u=>setCurrentUser(u)).catch(()=>{});
+    // Load notifications settings
+    window.storage.get('ws-notif-settings').then(r=>{if(r)setNotifSettings(JSON.parse(r.value));}).catch(()=>{});
+    // Load biz settings
+    window.storage.get('ws-biz-settings').then(r=>{if(r)setBizSettings(s=>({...s,...JSON.parse(r.value)}));}).catch(()=>{});
+  },[]);
+
+  useEffect(()=>{
+    if(settingsTab==='users') loadUsers();
+  },[settingsTab]);
+
+  async function loadUsers(){
+    setUsersLoading(true);
+    try{const r=await apiFetch('/api/users');const d=await r.json();setUsers(d.users||[]);}
+    catch(e){}
+    setUsersLoading(false);
+  }
+
+  async function sendInvite(){
+    if(!inviteEmail||!inviteName)return;
+    setInviteLoading(true);setInviteResult(null);
+    try{
+      const r=await apiFetch('/api/users/invite',{method:'POST',body:JSON.stringify({email:inviteEmail,name:inviteName,role:inviteRole})});
+      const d=await r.json();
+      if(d.ok){setInviteResult({ok:true,url:d.inviteUrl});setInviteEmail('');setInviteName('');loadUsers();}
+      else setInviteResult({ok:false,msg:d.error});
+    }catch(e){setInviteResult({ok:false,msg:e.message});}
+    setInviteLoading(false);
+  }
+
+  async function toggleUserActive(id,active){
+    await apiFetch(`/api/users/${id}`,{method:'PUT',body:JSON.stringify({is_active:active})});
+    loadUsers();
+  }
+
+  async function changeUserRole(id,role){
+    await apiFetch(`/api/users/${id}`,{method:'PUT',body:JSON.stringify({role})});
+    loadUsers();
+  }
+
+  async function saveNotifSettings(){
+    await window.storage.set('ws-notif-settings',JSON.stringify(notifSettings));
+    setNotifSaved(true);setTimeout(()=>setNotifSaved(false),2000);
+  }
+
+  async function saveBizSettings(){
+    await window.storage.set('ws-biz-settings',JSON.stringify(bizSettings));
+    setBizSaved(true);setTimeout(()=>setBizSaved(false),2000);
+  }
+
+  async function changePassword(){
+    setPwMsg(null);
+    if(pwNew!==pwConfirm){setPwMsg({ok:false,msg:'Passwords do not match'});return;}
+    if(pwNew.length<6){setPwMsg({ok:false,msg:'Min 6 characters'});return;}
+    try{
+      const r=await apiFetch('/api/users/change-own-password',{method:'POST',body:JSON.stringify({currentPassword:pwCurrent,newPassword:pwNew})});
+      const d=await r.json();
+      if(d.ok){setPwMsg({ok:true,msg:'Password updated'});setPwCurrent('');setPwNew('');setPwConfirm('');}
+      else setPwMsg({ok:false,msg:d.error});
+    }catch(e){setPwMsg({ok:false,msg:e.message});}
+  }
+
+  const isAdmin=currentUser?.role==='admin';
+
+  const STabs=[
+    {id:'display',label:'Display & Theme',icon:'🎨'},
+    {id:'users',label:'Users & Access',icon:'👥'},
+    {id:'notifications',label:'Notifications',icon:'🔔'},
+    {id:'business',label:'Business Settings',icon:'🏢'},
+    {id:'account',label:'My Account',icon:'🔑'},
+  ];
+
+  const cardStyle={background:T.white,border:`1px solid ${T.border}`,borderRadius:16,padding:24,marginBottom:16};
+  const labelStyle={fontSize:11,fontWeight:700,color:T.inkL,letterSpacing:1,fontFamily:T.font,marginBottom:8,display:'block',textTransform:'uppercase'};
+  const inputStyle={background:T.creamD,border:`1px solid ${T.border}`,borderRadius:8,padding:'9px 13px',fontFamily:T.fontBody,fontSize:13,color:T.ink,outline:'none',width:'100%',marginBottom:12};
+  const sectionHead={fontSize:16,fontWeight:700,color:T.ink,fontFamily:T.font,marginBottom:4};
+  const sectionSub={fontSize:12,color:T.inkL,marginBottom:20};
+
+  return(
+    <div className="fu">
+      <div style={{marginBottom:24}}>
+        <div className="sc">Settings</div>
+        <div className="ss">MANAGE YOUR PLATFORM</div>
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'200px 1fr',gap:20,alignItems:'start'}}>
+
+        {/* Sidebar nav */}
+        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,padding:8,position:'sticky',top:80}}>
+          {STabs.map(st=>(
+            <button key={st.id} onClick={()=>setSettingsTab(st.id)}
+              style={{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'10px 12px',borderRadius:8,border:'none',cursor:'pointer',fontFamily:T.font,fontSize:12,fontWeight:600,letterSpacing:.3,
+                background:settingsTab===st.id?T.accentL:'transparent',
+                color:settingsTab===st.id?T.accent:T.inkM,
+                marginBottom:2,textAlign:'left',transition:'all .15s'}}>
+              <span style={{fontSize:15}}>{st.icon}</span>{st.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content area */}
+        <div>
+
+          {/* ── DISPLAY & THEME ── */}
+          {settingsTab==='display'&&(
+            <div>
+              <div style={cardStyle}>
+                <div style={sectionHead}>Display Theme</div>
+                <div style={sectionSub}>Choose how Wholesale State looks. Your data is never affected by theme changes.</div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14}}>
+                  {Object.entries(THEMES).map(([key,th])=>{
+                    const active=themeKey===key;
+                    return(
+                      <button key={key} onClick={()=>setTheme(key)}
+                        style={{border:`2px solid ${active?th.accent:T.border}`,borderRadius:14,padding:0,cursor:'pointer',background:'transparent',overflow:'hidden',transition:'all .2s',
+                          boxShadow:active?`0 0 0 3px ${th.accent}33`:'none',textAlign:'left'}}>
+                        {/* Mini preview */}
+                        <div style={{background:th.cream,padding:'12px 14px 0'}}>
+                          {/* Fake header bar */}
+                          <div style={{background:th.headerBg,borderRadius:'8px 8px 0 0',padding:'6px 10px',display:'flex',alignItems:'center',gap:6,marginBottom:6,border:`1px solid ${th.navBorder}`}}>
+                            <div style={{width:8,height:8,borderRadius:'50%',background:`linear-gradient(135deg,${th.accent},${th.accentD})`}}/>
+                            <div style={{height:4,width:40,borderRadius:2,background:key==='executive'?'#7EB8F7':th.inkL,opacity:.4}}/>
+                            <div style={{marginLeft:'auto',height:4,width:20,borderRadius:2,background:th.accent}}/>
+                          </div>
+                          {/* Fake cards */}
+                          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5,marginBottom:10}}>
+                            {[th.accent,th.sage,th.sand,th.teal].map((c,i)=>(
+                              <div key={i} style={{background:th.white,border:`1px solid ${th.border}`,borderRadius:6,padding:'6px 8px'}}>
+                                <div style={{height:3,width:20,borderRadius:2,background:c,marginBottom:4}}/>
+                                <div style={{height:6,width:28,borderRadius:2,background:c,fontWeight:900}}/>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{padding:'10px 14px',borderTop:`1px solid ${th.border}`,background:th.white,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                          <div>
+                            <div style={{fontSize:12,fontWeight:700,color:th.ink,fontFamily:th.font}}>{th.name}</div>
+                          </div>
+                          {active&&<div style={{width:16,height:16,borderRadius:'50%',background:th.accent,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:'#fff',fontWeight:900}}>✓</div>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{marginTop:14,padding:'10px 14px',background:T.sageL,border:`1px solid ${T.sageD}33`,borderRadius:9,fontSize:12,color:T.inkM}}>
+                  ✅ Theme changes apply instantly and save automatically. All your orders, stock, and data remain untouched.
+                </div>
+              </div>
+
+              <div style={cardStyle}>
+                <div style={sectionHead}>Interface Options</div>
+                <div style={sectionSub}>Fine-tune how the platform behaves.</div>
+                {[
+                  ['Compact table rows','Show more orders per screen with reduced row height'],
+                  ['Show order value in tracker','Display $ totals in the orders list'],
+                  ['Auto-save CSV on upload','Automatically persist uploaded CSV data to the server'],
+                ].map(([label,desc])=>(
+                  <div key={label} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 0',borderBottom:`1px solid ${T.border}`}}>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{label}</div>
+                      <div style={{fontSize:11,color:T.inkL,marginTop:2}}>{desc}</div>
+                    </div>
+                    <div style={{width:38,height:22,borderRadius:11,background:T.accentL,border:`2px solid ${T.accent}`,cursor:'pointer',position:'relative',flexShrink:0}}>
+                      <div style={{width:16,height:16,borderRadius:'50%',background:T.accent,position:'absolute',top:1,right:1,transition:'all .2s'}}/>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── USERS & ACCESS ── */}
+          {settingsTab==='users'&&(
+            <div>
+              {!isAdmin&&(
+                <div style={{...cardStyle,background:T.amberL,border:`1px solid ${T.amberB}`}}>
+                  <div style={{fontSize:13,color:T.amber,fontWeight:600}}>⚠️ Admin access required to manage users. Contact your administrator.</div>
+                </div>
+              )}
+
+              {/* Invite new user */}
+              <div style={cardStyle}>
+                <div style={sectionHead}>Invite a Team Member</div>
+                <div style={sectionSub}>Send an invite link. They'll set their own password when they accept.</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
+                  <div>
+                    <label style={labelStyle}>Full Name</label>
+                    <input style={inputStyle} value={inviteName} onChange={e=>setInviteName(e.target.value)} placeholder="e.g. Sarah Chen" disabled={!isAdmin}/>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Email Address</label>
+                    <input style={inputStyle} type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="sarah@company.com.au" disabled={!isAdmin}/>
+                  </div>
+                </div>
+                <div style={{marginBottom:16}}>
+                  <label style={labelStyle}>Role</label>
+                  <div style={{display:'flex',gap:10}}>
+                    {[['admin','Admin','Full access — manage users, settings, all data'],['staff','Staff','Create orders, generate files, view all data'],['viewer','Viewer','Read-only — view orders and reports']].map(([r,l,d])=>(
+                      <button key={r} onClick={()=>isAdmin&&setInviteRole(r)}
+                        style={{flex:1,padding:'10px 12px',borderRadius:10,border:`1.5px solid ${inviteRole===r?T.accent:T.border}`,background:inviteRole===r?T.accentL:T.white,cursor:isAdmin?'pointer':'not-allowed',textAlign:'left',transition:'all .15s',opacity:isAdmin?1:.5}}>
+                        <div style={{fontSize:12,fontWeight:700,color:inviteRole===r?T.accent:T.ink,fontFamily:T.font}}>{l}</div>
+                        <div style={{fontSize:10,color:T.inkL,marginTop:3,lineHeight:1.4}}>{d}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button className="btn-t" onClick={sendInvite} disabled={!isAdmin||inviteLoading||!inviteEmail||!inviteName}>
+                  {inviteLoading?'Sending…':'✉️ Send Invite Link'}
+                </button>
+                {inviteResult&&(
+                  <div style={{marginTop:12,padding:'12px 14px',borderRadius:9,background:inviteResult.ok?T.sageL:T.redL,border:`1px solid ${inviteResult.ok?T.sageD+'33':T.redB}`,fontSize:12}}>
+                    {inviteResult.ok?(
+                      <div>
+                        <div style={{fontWeight:700,color:T.sageD,marginBottom:6}}>✅ Invite link generated</div>
+                        <div style={{color:T.inkM,marginBottom:8}}>Send this link to {inviteEmail||'the user'}:</div>
+                        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:7,padding:'8px 12px',fontFamily:'monospace',fontSize:11,color:T.ink,wordBreak:'break-all'}}>{inviteResult.url}</div>
+                        <button className="btn-o" style={{marginTop:8,fontSize:11}} onClick={()=>{navigator.clipboard.writeText(inviteResult.url);alert('Copied!');}}>📋 Copy link</button>
+                      </div>
+                    ):(
+                      <div style={{color:T.red}}>⚠️ {inviteResult.msg}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Users list */}
+              <div style={cardStyle}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+                  <div>
+                    <div style={sectionHead}>Team Members</div>
+                    <div style={{fontSize:12,color:T.inkL}}>{users.length} user{users.length!==1?'s':''} total</div>
+                  </div>
+                  <button className="btn-o" onClick={loadUsers} style={{fontSize:11}}>↺ Refresh</button>
+                </div>
+                {usersLoading?(
+                  <div style={{textAlign:'center',padding:32,color:T.inkL}}>Loading…</div>
+                ):users.length===0?(
+                  <div style={{textAlign:'center',padding:32,color:T.inkL}}>
+                    <div style={{fontSize:32,marginBottom:8}}>👥</div>
+                    <div style={{fontSize:13}}>No users yet. Invite your first team member above.</div>
+                  </div>
+                ):(
+                  <div>
+                    {/* Header */}
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 120px 100px 90px 80px',padding:'8px 14px',background:T.creamD,borderRadius:'8px 8px 0 0',gap:10}}>
+                      {['Name / Email','Role','Last Login','Status','Actions'].map(h=>(
+                        <span key={h} style={{fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:.8,fontFamily:T.font,textTransform:'uppercase'}}>{h}</span>
+                      ))}
+                    </div>
+                    {users.map((u,i)=>(
+                      <div key={u.id} style={{display:'grid',gridTemplateColumns:'1fr 120px 100px 90px 80px',padding:'12px 14px',gap:10,borderBottom:i<users.length-1?`1px solid ${T.creamD}`:'none',alignItems:'center',background:i%2===0?T.white:T.cream}}>
+                        <div>
+                          <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{u.name}</div>
+                          <div style={{fontSize:11,color:T.inkL,marginTop:1}}>{u.email}</div>
+                          {!u.password_hash&&<span style={{fontSize:9,fontWeight:700,color:T.amber,background:T.amberL,padding:'1px 6px',borderRadius:4,letterSpacing:.5}}>INVITE PENDING</span>}
+                        </div>
+                        <select value={u.role} onChange={e=>isAdmin&&changeUserRole(u.id,e.target.value)} disabled={!isAdmin}
+                          style={{background:T.creamD,border:`1px solid ${T.border}`,borderRadius:6,padding:'5px 8px',fontSize:11,color:T.ink,cursor:isAdmin?'pointer':'not-allowed',fontFamily:T.fontBody}}>
+                          <option value="admin">Admin</option>
+                          <option value="staff">Staff</option>
+                          <option value="viewer">Viewer</option>
+                        </select>
+                        <div style={{fontSize:11,color:T.inkL}}>{u.last_login_at?new Date(u.last_login_at).toLocaleDateString('en-AU',{day:'numeric',month:'short'}):'Never'}</div>
+                        <div>
+                          <span style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:20,
+                            background:u.is_active?T.sageL:T.creamDD,
+                            color:u.is_active?T.sageD:T.inkL,
+                            border:`1px solid ${u.is_active?T.sageD+'33':T.border}`}}>
+                            {u.is_active?'Active':'Inactive'}
+                          </span>
+                        </div>
+                        <div style={{display:'flex',gap:5}}>
+                          {isAdmin&&<button onClick={()=>toggleUserActive(u.id,!u.is_active)} title={u.is_active?'Deactivate':'Reactivate'}
+                            style={{width:28,height:28,borderRadius:7,border:`1px solid ${T.border}`,background:'none',cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',color:u.is_active?T.red:T.sage}}>
+                            {u.is_active?'🚫':'✅'}
+                          </button>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Role guide */}
+              <div style={cardStyle}>
+                <div style={sectionHead}>Role Permissions</div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginTop:14}}>
+                  {[
+                    {role:'Admin',color:T.accent,perms:['Invite & manage users','Change display settings','View all data & reports','Generate all files','Manage integrations','Change business settings']},
+                    {role:'Staff',color:T.sage,perms:['Upload CSV files','Generate manifests','Track & update orders','View all reports','Manage stocktake','Cannot manage users']},
+                    {role:'Viewer',color:T.sand,perms:['View orders & tracker','View reports & dashboard','View stocktake levels','No file generation','No settings access','Read-only']},
+                  ].map(({role,color,perms})=>(
+                    <div key={role} style={{background:T.creamD,borderRadius:10,padding:'14px 16px',border:`1px solid ${T.border}`}}>
+                      <div style={{fontSize:13,fontWeight:700,color,fontFamily:T.font,marginBottom:10}}>{role}</div>
+                      {perms.map(p=>(
+                        <div key={p} style={{fontSize:11,color:T.inkM,marginBottom:5,display:'flex',gap:6,alignItems:'flex-start'}}>
+                          <span style={{color,flexShrink:0,marginTop:1}}>·</span>{p}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── NOTIFICATIONS ── */}
+          {settingsTab==='notifications'&&(
+            <div>
+              <div style={cardStyle}>
+                <div style={sectionHead}>In-App Alerts</div>
+                <div style={sectionSub}>Control which events trigger alerts within the dashboard.</div>
+                {[
+                  ['newOrder','New order received','Show alert when a new Ordermentum order is detected'],
+                  ['lowStock','Low stock warning','Alert when any SKU drops below minimum threshold'],
+                  ['deliveryConf','Delivery confirmation','Alert when a POD email is received and an order is marked delivered'],
+                  ['discrepancy','Discrepancy flagged','Alert when a line item is flagged as a discrepancy'],
+                ].map(([key,label,desc])=>(
+                  <div key={key} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 0',borderBottom:`1px solid ${T.border}`}}>
+                    <div style={{flex:1,paddingRight:20}}>
+                      <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{label}</div>
+                      <div style={{fontSize:11,color:T.inkL,marginTop:3}}>{desc}</div>
+                    </div>
+                    <button onClick={()=>setNotifSettings(s=>({...s,[key]:!s[key]}))}
+                      style={{width:42,height:24,borderRadius:12,border:'none',cursor:'pointer',position:'relative',flexShrink:0,transition:'background .2s',
+                        background:notifSettings[key]?T.accent:T.creamDD}}>
+                      <div style={{width:18,height:18,borderRadius:'50%',background:'#fff',position:'absolute',top:3,transition:'left .2s',
+                        left:notifSettings[key]?'21px':'3px',boxShadow:'0 1px 3px rgba(0,0,0,.2)'}}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div style={cardStyle}>
+                <div style={sectionHead}>Email Digest</div>
+                <div style={sectionSub}>Receive a daily summary email with orders, delivery status, and any flags.</div>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 0',borderBottom:`1px solid ${T.border}`,marginBottom:14}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600,color:T.ink}}>Daily summary email</div>
+                    <div style={{fontSize:11,color:T.inkL,marginTop:3}}>Sent each morning with the previous day's activity</div>
+                  </div>
+                  <button onClick={()=>setNotifSettings(s=>({...s,dailySummary:!s.dailySummary}))}
+                    style={{width:42,height:24,borderRadius:12,border:'none',cursor:'pointer',position:'relative',flexShrink:0,transition:'background .2s',
+                      background:notifSettings.dailySummary?T.accent:T.creamDD}}>
+                    <div style={{width:18,height:18,borderRadius:'50%',background:'#fff',position:'absolute',top:3,transition:'left .2s',
+                      left:notifSettings.dailySummary?'21px':'3px',boxShadow:'0 1px 3px rgba(0,0,0,.2)'}}/>
+                  </button>
+                </div>
+                {notifSettings.dailySummary&&(
+                  <div>
+                    <label style={labelStyle}>Send digest to</label>
+                    <input style={inputStyle} type="email" value={notifSettings.digestEmail} onChange={e=>setNotifSettings(s=>({...s,digestEmail:e.target.value}))} placeholder="admin@pressedjuices.com.au"/>
+                  </div>
+                )}
+                <button className="btn-t" onClick={saveNotifSettings}>
+                  {notifSaved?'✅ Saved!':'Save Notification Settings'}
+                </button>
+              </div>
+
+              <div style={cardStyle}>
+                <div style={sectionHead}>Notification Log</div>
+                <div style={sectionSub}>Recent system events and alerts.</div>
+                {[
+                  {icon:'📬',msg:'New order OMO-09211 received from Harris Farm Markets',time:'Today 9:42am',color:T.sage},
+                  {icon:'✅',msg:'POD confirmed — OMO-09207 Pressed Juices Bondi — marked delivered',time:'Today 8:15am',color:T.teal},
+                  {icon:'⚠️',msg:'Discrepancy flagged on OMO-09204 — Roots 350ml qty mismatch',time:'Yesterday 4:33pm',color:T.amber},
+                  {icon:'📦',msg:'Low stock alert — Immunity 350ml at 24 units',time:'Yesterday 2:10pm',color:T.red},
+                ].map((n,i)=>(
+                  <div key={i} style={{display:'flex',gap:12,padding:'11px 0',borderBottom:i<3?`1px solid ${T.creamD}`:'none',alignItems:'flex-start'}}>
+                    <div style={{width:32,height:32,borderRadius:9,background:n.color+'18',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0}}>{n.icon}</div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:12,color:T.ink,lineHeight:1.5}}>{n.msg}</div>
+                      <div style={{fontSize:10,color:T.inkL,marginTop:3}}>{n.time}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── BUSINESS SETTINGS ── */}
+          {settingsTab==='business'&&(
+            <div>
+              <div style={cardStyle}>
+                <div style={sectionHead}>Company Details</div>
+                <div style={sectionSub}>Used on generated documents and manifests.</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                  {[
+                    ['companyName','Company Name','text','Wholesale State'],
+                    ['abn','ABN','text','12 345 678 901'],
+                    ['contactEmail','Contact Email','email','admin@pressedjuices.com.au'],
+                    ['contactPhone','Contact Phone','tel','+61 2 9000 0000'],
+                  ].map(([key,label,type,ph])=>(
+                    <div key={key}>
+                      <label style={labelStyle}>{label}</label>
+                      <input style={inputStyle} type={type} value={bizSettings[key]||''} onChange={e=>setBizSettings(s=>({...s,[key]:e.target.value}))} placeholder={ph}/>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <label style={labelStyle}>Business Address</label>
+                  <input style={inputStyle} value={bizSettings.address||''} onChange={e=>setBizSettings(s=>({...s,address:e.target.value}))} placeholder="123 Smith St, Collingwood VIC 3066"/>
+                </div>
+              </div>
+
+              <div style={cardStyle}>
+                <div style={sectionHead}>Order Defaults</div>
+                <div style={sectionSub}>Default values used when creating new orders.</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                  <div>
+                    <label style={labelStyle}>Default Courier</label>
+                    <select value={bizSettings.defaultCourier||''} onChange={e=>setBizSettings(s=>({...s,defaultCourier:e.target.value}))}
+                      style={{...inputStyle,marginBottom:0,cursor:'pointer'}}>
+                      <option value="">— Select —</option>
+                      <option value="COLDXPRESS">ColdXpress</option>
+                      <option value="DKDISTRIBUTION">DK Distribution</option>
+                      <option value="COOLCOURIERS">Cool Couriers</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Timezone</label>
+                    <select value={bizSettings.timezone||'Australia/Melbourne'} onChange={e=>setBizSettings(s=>({...s,timezone:e.target.value}))}
+                      style={{...inputStyle,marginBottom:0,cursor:'pointer'}}>
+                      {['Australia/Melbourne','Australia/Sydney','Australia/Brisbane','Australia/Perth','Australia/Adelaide'].map(tz=>(
+                        <option key={tz} value={tz}>{tz.replace('Australia/','')}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div style={cardStyle}>
+                <div style={sectionHead}>Integrations</div>
+                <div style={sectionSub}>Connected services and external platforms.</div>
+                {[
+                  {name:'Ordermentum',desc:'Order import via email parsing',status:'active',icon:'🧾'},
+                  {name:'Microsoft 365 / Outlook',desc:'Email inbox connection for auto-import',status:'active',icon:'📬'},
+                  {name:'ColdXpress',desc:'Manifest generation & courier dispatch',status:'active',icon:'❄️'},
+                  {name:'DK Distribution',desc:'Jobs sheet generation',status:'active',icon:'🚛'},
+                  {name:'Shopify',desc:'Direct storefront order sync',status:'inactive',icon:'🛒'},
+                  {name:'Xero',desc:'Accounting & invoice sync',status:'inactive',icon:'💼'},
+                ].map(intg=>(
+                  <div key={intg.name} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 0',borderBottom:`1px solid ${T.border}`}}>
+                    <div style={{display:'flex',alignItems:'center',gap:12}}>
+                      <div style={{width:36,height:36,borderRadius:9,background:intg.status==='active'?T.sageL:T.creamDD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{intg.icon}</div>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{intg.name}</div>
+                        <div style={{fontSize:11,color:T.inkL,marginTop:1}}>{intg.desc}</div>
+                      </div>
+                    </div>
+                    <span style={{fontSize:10,fontWeight:700,padding:'3px 10px',borderRadius:20,
+                      background:intg.status==='active'?T.sageL:T.creamDD,
+                      color:intg.status==='active'?T.sageD:T.inkL,
+                      border:`1px solid ${intg.status==='active'?T.sageD+'33':T.border}`}}>
+                      {intg.status==='active'?'Connected':'Not connected'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <button className="btn-t" onClick={saveBizSettings} style={{marginBottom:16}}>
+                {bizSaved?'✅ Saved!':'Save Business Settings'}
+              </button>
+            </div>
+          )}
+
+          {/* ── MY ACCOUNT ── */}
+          {settingsTab==='account'&&(
+            <div>
+              {currentUser&&(
+                <div style={cardStyle}>
+                  <div style={sectionHead}>Your Profile</div>
+                  <div style={sectionSub}>Your account details on Wholesale State.</div>
+                  <div style={{display:'flex',alignItems:'center',gap:16,padding:'16px 0',borderBottom:`1px solid ${T.border}`,marginBottom:16}}>
+                    <div style={{width:56,height:56,borderRadius:16,background:T.accentL,border:`2px solid ${T.accent}33`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,fontWeight:800,color:T.accent,fontFamily:T.font,flexShrink:0}}>
+                      {(currentUser.name||'?')[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{fontSize:17,fontWeight:700,color:T.ink,fontFamily:T.font}}>{currentUser.name||'—'}</div>
+                      <div style={{fontSize:12,color:T.inkL,marginTop:2}}>{currentUser.email||'Shared account'}</div>
+                      <span style={{fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:20,marginTop:4,display:'inline-block',
+                        background:currentUser.role==='admin'?T.accentL:T.sageL,
+                        color:currentUser.role==='admin'?T.accent:T.sageD,
+                        border:`1px solid ${currentUser.role==='admin'?T.accent+'33':T.sageD+'33'}`}}>
+                        {(currentUser.role||'staff').toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{fontSize:12,color:T.inkL}}>
+                    Last login: {currentUser.last_login_at?new Date(currentUser.last_login_at).toLocaleString('en-AU'):'—'}
+                  </div>
+                </div>
+              )}
+
+              <div style={cardStyle}>
+                <div style={sectionHead}>Change Password</div>
+                <div style={sectionSub}>Must be at least 6 characters.</div>
+                <div style={{maxWidth:380}}>
+                  <label style={labelStyle}>Current Password</label>
+                  <input style={inputStyle} type="password" value={pwCurrent} onChange={e=>setPwCurrent(e.target.value)} placeholder="Current password"/>
+                  <label style={labelStyle}>New Password</label>
+                  <input style={inputStyle} type="password" value={pwNew} onChange={e=>setPwNew(e.target.value)} placeholder="New password"/>
+                  <label style={labelStyle}>Confirm New Password</label>
+                  <input style={inputStyle} type="password" value={pwConfirm} onChange={e=>setPwConfirm(e.target.value)} placeholder="Confirm new password"/>
+                  {pwMsg&&<div style={{fontSize:12,color:pwMsg.ok?T.sageD:T.red,marginBottom:10,fontWeight:600}}>{pwMsg.ok?'✅':' ⚠️'} {pwMsg.msg}</div>}
+                  <button className="btn-t" onClick={changePassword} disabled={!pwCurrent||!pwNew||!pwConfirm}>
+                    Update Password
+                  </button>
+                </div>
+              </div>
+
+              <div style={cardStyle}>
+                <div style={sectionHead}>Session</div>
+                <div style={sectionSub}>Manage your current login session.</div>
+                <button className="btn-o" style={{color:T.red,borderColor:T.red}} onClick={()=>{
+                  if(!window.confirm('Sign out of Wholesale State?')) return;
+                  localStorage.removeItem('ws-token');
+                  setToken(null);
+                }}>Sign Out</button>
+              </div>
+
+              <div style={cardStyle}>
+                <div style={sectionHead}>About</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:0}}>
+                  {[
+                    ['Platform','Wholesale State Operations'],
+                    ['Version','2.0.0'],
+                    ['Environment',window.location.hostname==='localhost'?'Local dev':'Production'],
+                    ['Database','PostgreSQL (Railway)'],
+                    ['Email','Microsoft Graph API'],
+                    ['Hosting','Render / Railway'],
+                  ].map(([k,v])=>(
+                    <div key={k} style={{padding:'10px 0',borderBottom:`1px solid ${T.creamD}`,display:'flex',gap:8}}>
+                      <span style={{fontSize:11,color:T.inkL,width:110,flexShrink:0}}>{k}</span>
+                      <span style={{fontSize:12,color:T.ink,fontWeight:500}}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
   );
 }
 
