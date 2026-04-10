@@ -507,11 +507,13 @@ function genCoolCouriers(rows){
   return[{name:"Manifest",rows:sr,colWidths:[14,28,30,18,8,10,24,50,14,14]}];
 }
 function genWsDriver(rows, allocation, date){
-  // allocation: [{orderNumber, stopNum, etaMins, driveMins, marginalCost}]
+  // allocation: [{orderNumber, stopNum, etaStr, driveMins, marginalCost}]
+  // rows already have Courier=WSDRIVER for allocated orders after mutation
   const alloc = allocation || [];
   const allocMap = {};
   alloc.forEach(a => { allocMap[a.orderNumber] = a; });
-  const nf = rows.filter(r => r.SKU !== "FREIGHT" && r.Product && allocMap[r.OrderNumber] && !isPallet(r));
+  // Filter by WSDRIVER courier (mutated) OR by allocMap as fallback
+  const nf = rows.filter(r => r.SKU !== "FREIGHT" && r.Product && !isPallet(r) && (r.Courier === "WSDRIVER" || allocMap[r.OrderNumber]));
   if (!nf.length) return [{name:"Run Sheet", rows:[[Cv("No driver stops allocated")]]}];
   const om = {};
   nf.forEach(r => { if(!om[r.OrderNumber]) om[r.OrderNumber] = []; om[r.OrderNumber].push(r); });
@@ -535,13 +537,13 @@ function genWsDriver(rows, allocation, date){
     const cost = a.marginalCost || 0;
     totalCartons += ctns;
     totalCost += cost;
-    const eta = a.etaMins != null ? (() => {
-      const base = 6*60; // 6am
+    const eta = a.etaStr || (a.etaMins != null ? (() => {
+      const base = 6*60;
       const t = base + (a.etaMins || 0);
       const h = Math.floor(t/60) % 24;
       const m = t % 60;
       return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-    })() : "";
+    })() : "");
     const products = or_.filter(x=>x.SKU!=="FREIGHT"&&x.Product).map(x=>`${x.Name} x${x.Quantity}`).join(", ");
     sr.push([
       N(i+1), Cv(eta), Cv(on), Cv(r.Customer),
@@ -1228,6 +1230,116 @@ function annotateStops(stops,depot,startTime,stopMins,driverRate){
   });
 }
 
+// ── Google Maps Route URL builder ──
+// Opens depot → stop1 → stop2 → ... → depot in Google Maps directions
+function buildGoogleMapsUrl(stops, depot){
+  if(!stops.length) return null;
+  const DEPOT_ADDR = "17+Kirkham+Rd+W+Keysborough+VIC+3173";
+  // Google Maps directions supports up to 10 waypoints
+  const waypoints = stops.slice(0, -1).map(s=>{
+    const addr = encodeURIComponent(`${s.address}, ${s.suburb} VIC ${s.postcode}`);
+    return addr;
+  });
+  const dest = encodeURIComponent(`${stops[stops.length-1].address}, ${stops[stops.length-1].suburb} VIC ${stops[stops.length-1].postcode}`);
+  const base = "https://www.google.com/maps/dir/";
+  const parts = [DEPOT_ADDR, ...waypoints, dest, DEPOT_ADDR];
+  return base + parts.join("/");
+}
+
+// ── Embedded SVG map — plots all stops geographically ──
+function DeliveryMiniMap({driverAStops, driverBStops, cxStops, suspenseStops, depot}){
+  // Melbourne bounding box
+  const BOUNDS = {minLat:-38.7, maxLat:-37.5, minLon:144.5, maxLon:146.0};
+  const W=680, H=420;
+
+  const toXY = (lat, lon) => ({
+    x: ((lon - BOUNDS.minLon) / (BOUNDS.maxLon - BOUNDS.minLon)) * W,
+    y: ((BOUNDS.maxLat - lat) / (BOUNDS.maxLat - BOUNDS.minLat)) * H,
+  });
+
+  const depotXY = toXY(depot.lat, depot.lon);
+
+  // Draw route lines for driver stops
+  const routeLine = (stops, color) => {
+    if(stops.length < 1) return null;
+    const pts = [depotXY, ...stops.map(s=>toXY(s.lat, s.lon)), depotXY];
+    const d = pts.map((p,i)=>`${i===0?"M":"L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+    return <path d={d} stroke={color} strokeWidth="2" strokeDasharray="none" fill="none" opacity="0.7"/>;
+  };
+
+  const Marker = ({stop, color, label, size=8}) => {
+    const {x,y} = toXY(stop.lat, stop.lon);
+    return (
+      <g>
+        <circle cx={x} cy={y} r={size} fill={color} stroke="#fff" strokeWidth="1.5" opacity="0.92"/>
+        {label&&<text x={x} y={y+1} textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize={size>8?8:6} fontWeight="700" fontFamily="'Montserrat',sans-serif">{label}</text>}
+        <title>{stop.name} — {stop.suburb}\n{stop.cartons} ctns · ${stop.ce.toFixed(2)} CE</title>
+      </g>
+    );
+  };
+
+  return (
+    <div style={{background:"#F0F4F8",borderRadius:12,overflow:"hidden",border:"1px solid #CBD5E1",position:"relative"}}>
+      <div style={{padding:"8px 14px",background:"#1E3A5F",display:"flex",alignItems:"center",gap:20,flexWrap:"wrap"}}>
+        <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:"#fff",letterSpacing:.5}}>ROUTE MAP</span>
+        {[
+          {color:"#059669",label:"Driver A",stops:driverAStops},
+          {color:"#6366F1",label:"Driver B",stops:driverBStops},
+          {color:"#2563EB",label:"Cold Xpress",stops:cxStops},
+          {color:"#7C3AED",label:"Another Day",stops:suspenseStops},
+        ].filter(g=>g.stops.length>0).map(g=>(
+          <div key={g.label} style={{display:"flex",alignItems:"center",gap:5}}>
+            <div style={{width:10,height:10,borderRadius:"50%",background:g.color}}/>
+            <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:"#CBD5E1"}}>{g.label} ({g.stops.length})</span>
+          </div>
+        ))}
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",display:"block",background:"#E8EFF5"}}>
+        {/* Subtle grid lines */}
+        {[0.25,0.5,0.75].map(f=>(
+          <g key={f}>
+            <line x1={W*f} y1={0} x2={W*f} y2={H} stroke="#CBD5E1" strokeWidth="0.5"/>
+            <line x1={0} y1={H*f} x2={W} y2={H*f} stroke="#CBD5E1" strokeWidth="0.5"/>
+          </g>
+        ))}
+        {/* Port Phillip Bay silhouette hint */}
+        <ellipse cx={W*0.28} cy={H*0.72} rx={W*0.09} ry={H*0.12} fill="#C8D8E8" opacity="0.6"/>
+        <text x={W*0.28} y={H*0.72} textAnchor="middle" dominantBaseline="middle" fontSize="8" fill="#94A3B8" fontFamily="'Montserrat',sans-serif">Bay</text>
+
+        {/* Route lines */}
+        {routeLine(driverAStops, "#059669")}
+        {routeLine(driverBStops, "#6366F1")}
+
+        {/* CX stops — small grey dots */}
+        {cxStops.map(s=><Marker key={s.id} stop={s} color="#93C5FD" size={5}/>)}
+        {suspenseStops.map(s=><Marker key={s.id} stop={s} color="#A78BFA" size={5}/>)}
+
+        {/* Driver B stops */}
+        {driverBStops.map((s,i)=><Marker key={s.id} stop={s} color="#6366F1" label={i+1} size={9}/>)}
+        {/* Driver A stops — on top */}
+        {driverAStops.map((s,i)=><Marker key={s.id} stop={s} color="#059669" label={i+1} size={9}/>)}
+
+        {/* Depot — star */}
+        <polygon
+          points={`${depotXY.x},${depotXY.y-12} ${depotXY.x+3},${depotXY.y-4} ${depotXY.x+11},${depotXY.y-4} ${depotXY.x+5},${depotXY.y+2} ${depotXY.x+7},${depotXY.y+10} ${depotXY.x},${depotXY.y+5} ${depotXY.x-7},${depotXY.y+10} ${depotXY.x-5},${depotXY.y+2} ${depotXY.x-11},${depotXY.y-4} ${depotXY.x-3},${depotXY.y-4}`}
+          fill="#F59E0B" stroke="#fff" strokeWidth="1.5"/>
+        <title>Depot — 17 Kirkham Rd W, Keysborough</title>
+
+        {/* Suburb labels for driver stops */}
+        {[...driverAStops,...driverBStops].map(s=>{
+          const {x,y}=toXY(s.lat,s.lon);
+          return <text key={`lbl-${s.id}`} x={x} y={y-13} textAnchor="middle" fontSize="7" fill="#1E3A5F" fontFamily="'Montserrat',sans-serif" fontWeight="600">{s.suburb}</text>;
+        })}
+      </svg>
+      <div style={{padding:"6px 14px",background:"#F8FAFC",borderTop:"1px solid #E2E8F0",fontFamily:"'Montserrat',sans-serif",fontSize:9,color:"#94A3B8",display:"flex",gap:16}}>
+        <span>⭐ Depot (Keysborough)</span>
+        <span>Numbered markers = driver stops in sequence</span>
+        <span>Small dots = CX / held stops</span>
+      </div>
+    </div>
+  );
+}
+
 // ── SUSPENSE localStorage ──
 const LS_KEY="ws_driver_suspense";
 function saveSuspense(stops){try{localStorage.setItem(LS_KEY,JSON.stringify(stops));}catch(e){}}
@@ -1256,6 +1368,7 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
   const persistSetting=(key,val)=>{try{localStorage.setItem(key,String(val));}catch(e){}};
 
   const[optimising,setOptimising]=useState(false);
+  const[showMap,setShowMap]=useState(true);
   const[cxStops,setCxStops]=useState([]);
   const[driverAStops,setDriverAStops]=useState([]);
   const[driverBStops,setDriverBStops]=useState([]);
@@ -1450,6 +1563,10 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
             </div>
           ))}
           <div style={{display:"flex",alignItems:"center",gap:8,paddingLeft:16,borderLeft:"1px solid #F1F5F9"}}>
+            <button onClick={()=>setShowMap(m=>!m)}
+              style={{padding:"8px 14px",borderRadius:8,border:`1.5px solid ${showMap?"#059669":"#E2E8F0"}`,background:showMap?"#DCFCE7":"#F8FAFC",color:showMap?"#059669":"#64748B",fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+              {showMap?"🗺 Hide Map":"🗺 Show Map"}
+            </button>
             <button onClick={runOptimiser} disabled={optimising}
               style={{padding:"8px 16px",borderRadius:8,border:"none",background:"#0EA5E9",color:"#fff",fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:800,cursor:optimising?"not-allowed":"pointer",opacity:optimising?0.6:1,whiteSpace:"nowrap",letterSpacing:.3}}>
               {optimising?"⟳ Optimising…":"↻ Re-optimise"}
@@ -1529,47 +1646,67 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
               ))}
             </div>
 
-            <div style={{borderTop:"1px solid #F1F5F9",paddingTop:12}}>
-              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:"#94A3B8",letterSpacing:2,marginBottom:8}}>ANOTHER DAY ({suspenseStops.length})</div>
-              <div style={{maxHeight:120,overflowY:"auto"}}>
-                {suspenseStops.length===0&&<div style={{fontSize:10,color:"#CBD5E1",fontStyle:"italic",fontFamily:"'Montserrat',sans-serif"}}>No held stops</div>}
-                {suspenseStops.map(s=>(
-                  <div key={s.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid #F8FAFC"}}>
-                    <div>
-                      <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:600,color:"#1E3A5F"}}>{s.name}</div>
-                      <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:"#94A3B8"}}>{s.suburb}</div>
-                    </div>
-                    <button onClick={()=>{moveStop(s,"suspense","cx");}} style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid #E2E8F0",background:"#F8FAFC",color:"#64748B",cursor:"pointer",fontFamily:"'Montserrat',sans-serif",fontWeight:700}}>Add</button>
-                  </div>
-                ))}
-              </div>
-              {suspenseStops.length>0&&<button onClick={()=>{localStorage.removeItem(LS_KEY);setSuspenseStops([]);}} style={{marginTop:8,width:"100%",padding:"5px",borderRadius:7,border:"1px solid #EDE9FE",background:"none",color:"#6D28D9",fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,cursor:"pointer"}}>Clear All</button>}
-            </div>
+
           </div>
 
           {/* ── RIGHT: Delivery panels ── */}
           <div style={{overflowY:"auto",padding:16,display:"flex",flexDirection:"column",gap:12,background:"#F8FAFC"}}>
 
-            {/* Driver run info banner */}
+            {/* ── Embedded route map ── */}
+            {showMap&&(
+              <DeliveryMiniMap
+                driverAStops={driverAStops}
+                driverBStops={driverBStops}
+                cxStops={cxStops}
+                suspenseStops={suspenseStops}
+                depot={depot}
+              />
+            )}
+
+            {/* Driver run info banner + Google Maps buttons */}
             {driverAStops.length>0&&(
-              <div style={{background:"linear-gradient(135deg,#EFF6FF,#DBEAFE)",border:"1px solid #BFDBFE",borderRadius:10,padding:"10px 16px",display:"flex",gap:24,flexWrap:"wrap"}}>
-                <div>
-                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:"#93C5FD",fontWeight:700,letterSpacing:1,marginBottom:2}}>ROUTE</div>
-                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:"#1E3A5F"}}>
+              <div style={{background:"linear-gradient(135deg,#EFF6FF,#DBEAFE)",border:"1px solid #BFDBFE",borderRadius:10,padding:"10px 16px",display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:"#93C5FD",fontWeight:700,letterSpacing:1,marginBottom:3}}>DRIVER A ROUTE</div>
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:"#1E3A5F",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                     Depot → {driverAStops.map(s=>s.suburb).join(" → ")} → Depot
                   </div>
                 </div>
-                <div style={{marginLeft:"auto",display:"flex",gap:20}}>
+                <div style={{display:"flex",gap:10,alignItems:"center",flexShrink:0}}>
                   {[
-                    [`${driverHrsA}h`,`Driver A run time`],
-                    [`${driverAStops.length} stops`,`${driverAStops.reduce((s,st)=>s+st.cartons,0)} cartons`],
-                    [`$${driverAStops.reduce((s,st)=>s+st.ce,0).toFixed(2)}`,`CE value`],
+                    [`${driverHrsA}h`,`est. time`],
+                    [`${driverAStops.length} stops`,`${driverAStops.reduce((s,st)=>s+st.cartons,0)} ctns`],
+                    [`$${Math.max(0,driverAStops.reduce((s,st)=>s+st.ce,0)-driverAStops.reduce((s,st)=>s+(st.marginalCost||0),0)).toFixed(0)}`,`saved`],
                   ].map(([v,l])=>(
-                    <div key={l} style={{textAlign:"right"}}>
+                    <div key={l} style={{textAlign:"center"}}>
                       <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:800,color:"#1D4ED8"}}>{v}</div>
                       <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:"#93C5FD"}}>{l}</div>
                     </div>
                   ))}
+                  <a href={buildGoogleMapsUrl(driverAStops,depot)||"#"} target="_blank" rel="noopener noreferrer"
+                    style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:8,background:"#1D4ED8",color:"#fff",fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:800,textDecoration:"none",whiteSpace:"nowrap",boxShadow:"0 2px 8px rgba(29,78,216,0.3)"}}>
+                    🗺 Open in Google Maps
+                  </a>
+                </div>
+              </div>
+            )}
+            {numDrivers>=2&&driverBStops.length>0&&(
+              <div style={{background:"linear-gradient(135deg,#EEF2FF,#E0E7FF)",border:"1px solid #C7D2FE",borderRadius:10,padding:"10px 16px",display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:"#A5B4FC",fontWeight:700,letterSpacing:1,marginBottom:3}}>DRIVER B ROUTE</div>
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:"#1E3A5F",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    Depot → {driverBStops.map(s=>s.suburb).join(" → ")} → Depot
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:10,alignItems:"center",flexShrink:0}}>
+                  <div style={{textAlign:"center"}}>
+                    <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:800,color:"#4338CA"}}>{driverHrsB}h</div>
+                    <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:"#A5B4FC"}}>est. time</div>
+                  </div>
+                  <a href={buildGoogleMapsUrl(driverBStops,depot)||"#"} target="_blank" rel="noopener noreferrer"
+                    style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:8,background:"#4338CA",color:"#fff",fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:800,textDecoration:"none",whiteSpace:"nowrap",boxShadow:"0 2px 8px rgba(67,56,202,0.3)"}}>
+                    🗺 Open in Google Maps
+                  </a>
                 </div>
               </div>
             )}
@@ -1583,13 +1720,48 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
                 meta={driverBStops.length?`${driverHrsB}h`:null}/>}
             </div>
 
-            {/* Drop zone for suspense */}
-            <div onDragOver={e=>e.preventDefault()} onDrop={e=>onDrop(e,"suspense")} onDragEnter={()=>setDragOver("suspense")} onDragLeave={()=>setDragOver(p=>p==="suspense"?null:p)}
-              style={{border:`1.5px dashed ${dragOver==="suspense"?"#7C3AED":"#C4B5FD"}`,borderRadius:10,padding:"10px 14px",background:dragOver==="suspense"?"#F5F3FF":"transparent",transition:"all .15s",display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:16}}>⏸</span>
-              <div>
-                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:"#6D28D9"}}>Another Day — drop here to hold for a future run</div>
-                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:"#A78BFA"}}>Stops persist across sessions until cleared · {suspenseStops.length} currently held</div>
+            {/* ── ANOTHER DAY — big tile ── */}
+            <div style={{background:"#F5F3FF",border:`2px dashed ${dragOver==="suspense"?"#7C3AED":"#C4B5FD"}`,borderRadius:14,overflow:"hidden",transition:"all .15s",flexShrink:0}}
+              onDragOver={e=>e.preventDefault()} onDrop={e=>onDrop(e,"suspense")}
+              onDragEnter={()=>setDragOver("suspense")} onDragLeave={()=>setDragOver(p=>p==="suspense"?null:p)}>
+              {/* Header */}
+              <div style={{padding:"12px 16px",background:"#EDE9FE",borderBottom:"1px solid #DDD6FE",display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:18}}>⏸</span>
+                <div style={{flex:1}}>
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:13,color:"#5B21B6"}}>Another Day</div>
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:"#7C3AED",marginTop:1}}>Stops held here persist until cleared — useful when one delivery isn't worth a run alone this week</div>
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:"#6D28D9",background:"#DDD6FE",padding:"3px 10px",borderRadius:20}}>{suspenseStops.length} held</span>
+                  {suspenseStops.length>0&&<button onClick={()=>{localStorage.removeItem(LS_KEY);setSuspenseStops([]);}} style={{padding:"4px 10px",borderRadius:7,border:"1px solid #C4B5FD",background:"transparent",color:"#6D28D9",fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,cursor:"pointer"}}>Clear all</button>}
+                </div>
+              </div>
+              {/* Stop list */}
+              <div style={{minHeight:64,padding:suspenseStops.length?"8px 0":"0"}}>
+                {suspenseStops.length===0&&(
+                  <div style={{padding:"24px 16px",textAlign:"center",color:"#A78BFA",fontFamily:"'Montserrat',sans-serif",fontSize:12,fontStyle:"italic"}}>
+                    Drag any stop here to hold it for a future delivery day
+                  </div>
+                )}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8,padding:suspenseStops.length?"0 12px 12px":"0"}}>
+                  {suspenseStops.map(s=>(
+                    <div key={s.id} draggable onDragStart={e=>onDragStart(e,s,"suspense")}
+                      style={{background:"#fff",borderRadius:10,padding:"10px 12px",border:"1px solid #DDD6FE",cursor:"grab",display:"flex",gap:10,alignItems:"flex-start"}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:12,color:"#3B0764",marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
+                        <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:"#7C3AED"}}>{s.suburb} · {s.cartons} ctn{s.cartons!==1?"s":""}</div>
+                        <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:"#6D28D9",fontWeight:600,marginTop:2}}>${s.ce.toFixed(2)} CE · <ZoneBadge zone={s.zone}/></div>
+                        {s.depotMins&&<div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:"#A78BFA",marginTop:2}}>{Math.round(s.depotMins)} min from depot</div>}
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:3,flexShrink:0}}>
+                        <button onClick={()=>moveStop(s,"suspense","cx")} style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid #BFDBFE",background:"#EFF6FF",color:"#2563EB",cursor:"pointer",fontFamily:"'Montserrat',sans-serif",fontWeight:700}}>CX</button>
+                        <button onClick={()=>moveStop(s,"suspense","driverA")} style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid #BBF7D0",background:"#DCFCE7",color:"#15803D",cursor:"pointer",fontFamily:"'Montserrat',sans-serif",fontWeight:700}}>A</button>
+                        {numDrivers>=2&&<button onClick={()=>moveStop(s,"suspense","driverB")} style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid #C7D2FE",background:"#E0E7FF",color:"#4338CA",cursor:"pointer",fontFamily:"'Montserrat',sans-serif",fontWeight:700}}>B</button>}
+                        <button onClick={()=>{setSuspenseStops(p=>p.filter(x=>x.id!==s.id));saveSuspense(loadSuspense().filter(x=>x.id!==s.id));}} style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid #FECACA",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontFamily:"'Montserrat',sans-serif",fontWeight:700}}>✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -2507,7 +2679,8 @@ function App(){
       else if(type==="coolcouriers")dlXlsx(genCoolCouriers(rows),`${d}_COOLCOURIERS.xlsx`);
       else if(type==="wsdriver"){
         const alloc=driverAllocation||[];
-        dlXlsx(genWsDriver(rows,alloc,d),`${d}_WS_Delivery_Run.xlsx`);
+        const wsSheet=genWsDriver(rows,alloc,d);
+        dlXlsx(wsSheet,`${d}_WS_Delivery_Run.xlsx`);
       }
       else if(type==="prints"){const{f350,b350,fT,bT,f1}=genPrints(rows);dlZip([[f350,`${d}_350ml_Fronts.xlsx`],[b350,`${d}_350ml_Backs.xlsx`],[fT,`${d}_Tea_Fronts.xlsx`],[bT,`${d}_Tea_Backs.xlsx`],[f1,`${d}_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Print_Files.zip`);}
       else if(type==="pallet-prod")dlXlsx(genProduction(rows,true),`${d}_Pallet_Production.xlsx`);
@@ -2596,7 +2769,26 @@ function App(){
       {showOptimiser&&<DeliveryOptimiserModal
         csvRows={csvRows}
         existingAllocation={driverAllocation}
-        onConfirm={(alloc)=>{setDriverAllocation(alloc);setShowOptimiser(false);}}
+        onConfirm={(alloc)=>{
+          const allocNums=new Set(alloc.map(a=>a.orderNumber));
+          const mutated=rowsRef.current.map(r=>allocNums.has(r.OrderNumber)?{...r,Courier:'WSDRIVER'}:r);
+          rowsRef.current=mutated;
+          setCsvRows(mutated);
+          setDriverAllocation(alloc);
+          setDone({});
+          const dk=new Date().toLocaleDateString('en-AU');
+          setSnapshots(prev=>{
+            const updated=prev.map(s=>{
+              if(s.dateKey!==dk)return s;
+              const wsdOrders=[...allocNums];
+              const mfests=(s.manifests||[]).filter(m=>m.courier!=='WSDRIVER');
+              return{...s,manifests:[...mfests,{file:'WS_Delivery_Run.xlsx',icon:'🚐',label:'WS Delivery Run',courier:'WSDRIVER',orders:wsdOrders,dispatched:false,sentAt:null}]};
+            });
+            window.storage.set('ws-snaps',JSON.stringify(updated)).catch(()=>{});
+            return updated;
+          });
+          setShowOptimiser(false);
+        }}
         onSkip={()=>{setDriverAllocation([]);setShowOptimiser(false);}}
         onClose={()=>setShowOptimiser(false)}
         T={T}
