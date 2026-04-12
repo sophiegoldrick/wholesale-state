@@ -1452,6 +1452,35 @@ function App(){
           // Show success modal with Email / Download options
           setGenModal({zipBlob:blob,zipName:d+"_Wholesale_State_Files.zip",dateLabel:d});
           setDone(p=>({...p,[type]:true}));
+          // Also generate special customer print files client-side
+          const specialFiles=genSpecialPrints(rows,d);
+          if(specialFiles.length){
+            buildZipBlob(specialFiles).then(sBlob=>{
+              const url=URL.createObjectURL(sBlob);
+              const a=document.createElement("a");
+              a.href=url;a.download=`${d}_Special_Print_Files.zip`;
+              document.body.appendChild(a);a.click();
+              setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
+            }).catch(()=>{});
+          }
+        } else if(type==="prints"){
+          // Server returns the regular prints zip; also generate special files client-side
+          const url=URL.createObjectURL(blob);
+          const a=document.createElement("a");
+          a.href=url;a.download=d+"_Print_Files.zip";
+          document.body.appendChild(a);a.click();
+          setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
+          setDone(p=>({...p,[type]:true}));
+          const specialFiles=genSpecialPrints(rows,d);
+          if(specialFiles.length){
+            buildZipBlob(specialFiles).then(sBlob=>{
+              const url2=URL.createObjectURL(sBlob);
+              const a2=document.createElement("a");
+              a2.href=url2;a2.download=`${d}_Special_Print_Files.zip`;
+              document.body.appendChild(a2);a2.click();
+              setTimeout(()=>{document.body.removeChild(a2);URL.revokeObjectURL(url2);},200);
+            }).catch(()=>{});
+          }
         } else {
           const url=URL.createObjectURL(blob);
           const a=document.createElement("a");
