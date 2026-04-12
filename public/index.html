@@ -525,21 +525,29 @@ function genPrints(rows,palletOnly=false){
   return{f350:buildPrint(r350,false,"FRONTS"),b350:buildPrint(r350,true,"BACKS"),fT:buildPrint(rT,false,"FRONTS"),bT:buildPrint(rT,true,"BACKS"),f1:buildPrint(r1,false,"FRONTS","1L")};
 }
 function genSpecialPrints(rows,dateStr){
-  // Generate separate Fronts+Backs per special/pallet customer
-  // Named: CUSTOMERNAME-DD-MM-YYYY_Fronts.xlsx
-  const special=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&isPallet(r));
+  // Classify product from SKU (same as server-side Python) since Product field may be unreliable
+  const TEA_SKUS=new Set(['LTEA350','PTEA350','RTEA350']);
+  function classifyProduct(r){
+    const sku=(r.SKU||'').trim();
+    if(TEA_SKUS.has(sku)) return 'TEA';
+    if(sku.endsWith('350')) return '350';
+    if(sku.endsWith('1')||sku.endsWith('1L')) return '1L';
+    return r.Product||'';
+  }
+  // Find all special/pallet customer rows
+  const special=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU!=="freight"&&r.SKU&&isPallet(r));
   if(!special.length)return[];
   // Group by customer
   const byCustomer={};
   special.forEach(r=>{
     const key=r.Customer||r.CustomerId||"SPECIAL";
     if(!byCustomer[key])byCustomer[key]=[];
-    byCustomer[key].push(r);
+    byCustomer[key].push({...r,Product:classifyProduct(r)});
   });
   const files=[];
   const d=dateStr||new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
   Object.entries(byCustomer).forEach(([customer,crows])=>{
-    const safeName=customer.replace(/[^a-zA-Z0-9]/g,"-").toUpperCase();
+    const safeName=customer.replace(/[^a-zA-Z0-9]/g,"-").replace(/-+/g,"-").replace(/^-|-$/g,"").toUpperCase();
     const sort=pr=>[...pr].sort((a,b)=>{for(const k of['SKU','OrderNumber']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
     const r350=sort(crows.filter(r=>r.Product==="350"));
     const rT=sort(crows.filter(r=>r.Product==="TEA"));
