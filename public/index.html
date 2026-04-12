@@ -518,10 +518,45 @@ function buildPrint(rows,isBacks,sheetName,customerIdOverride){
   return[{name:sheetName,rows:[hdrRow,...dr],colWidths:[8,60,18,10,28,14,8,22,8,16,16,12,16]},{name:"File address",rows:[[{v:"Place your file address here",bold:true},Cv("G:\\My Drive\\Print Files")]],colWidths:[30,40]}];
 }
 function genPrints(rows,palletOnly=false){
+  // Regular prints: exclude pallet/special customers entirely
   const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(palletOnly?isPallet(r):!isPallet(r)));
   const sort=pr=>[...pr].sort((a,b)=>{for(const k of['Courier','Customer','OrderNumber','SKU']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
   const r350=sort(nf.filter(r=>r.Product==="350")),rT=sort(nf.filter(r=>r.Product==="TEA")),r1=sort(nf.filter(r=>r.Product==="1L"));
   return{f350:buildPrint(r350,false,"FRONTS"),b350:buildPrint(r350,true,"BACKS"),fT:buildPrint(rT,false,"FRONTS"),bT:buildPrint(rT,true,"BACKS"),f1:buildPrint(r1,false,"FRONTS","1L")};
+}
+function genSpecialPrints(rows,dateStr){
+  // Generate separate Fronts+Backs per special/pallet customer
+  // Named: CUSTOMERNAME-DD-MM-YYYY_Fronts.xlsx
+  const special=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&isPallet(r));
+  if(!special.length)return[];
+  // Group by customer
+  const byCustomer={};
+  special.forEach(r=>{
+    const key=r.Customer||r.CustomerId||"SPECIAL";
+    if(!byCustomer[key])byCustomer[key]=[];
+    byCustomer[key].push(r);
+  });
+  const files=[];
+  const d=dateStr||new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
+  Object.entries(byCustomer).forEach(([customer,crows])=>{
+    const safeName=customer.replace(/[^a-zA-Z0-9]/g,"-").toUpperCase();
+    const sort=pr=>[...pr].sort((a,b)=>{for(const k of['SKU','OrderNumber']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
+    const r350=sort(crows.filter(r=>r.Product==="350"));
+    const rT=sort(crows.filter(r=>r.Product==="TEA"));
+    const r1=sort(crows.filter(r=>r.Product==="1L"));
+    if(r350.length){
+      files.push({sheets:buildPrint(r350,false,"FRONTS"),name:`${safeName}-${d}_350ml_Fronts.xlsx`});
+      files.push({sheets:buildPrint(r350,true,"BACKS"),name:`${safeName}-${d}_350ml_Backs.xlsx`});
+    }
+    if(rT.length){
+      files.push({sheets:buildPrint(rT,false,"FRONTS"),name:`${safeName}-${d}_Tea_Fronts.xlsx`});
+      files.push({sheets:buildPrint(rT,true,"BACKS"),name:`${safeName}-${d}_Tea_Backs.xlsx`});
+    }
+    if(r1.length){
+      files.push({sheets:buildPrint(r1,false,"FRONTS","1L"),name:`${safeName}-${d}_1L_Fronts.xlsx`});
+    }
+  });
+  return files;
 }
 
 /* ── STATUS ── */
@@ -631,7 +666,13 @@ function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
         else if(type==="coolcouriers") dlXlsx(genCoolCouriers(selRows),`${d}_Sel_CoolCouriers.xlsx`);
         else if(type==="prints"){
           const{f350,b350,fT,bT,f1}=genPrints(selRows);
-          dlZip([[f350,`${d}_Sel_350ml_Fronts.xlsx`],[b350,`${d}_Sel_350ml_Backs.xlsx`],[fT,`${d}_Sel_Tea_Fronts.xlsx`],[bT,`${d}_Sel_Tea_Backs.xlsx`],[f1,`${d}_Sel_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Sel_Print_Files.zip`);
+          const specialFiles=genSpecialPrints(selRows,d);
+          dlZip([
+            [f350,`${d}_Sel_350ml_Fronts.xlsx`],[b350,`${d}_Sel_350ml_Backs.xlsx`],
+            [fT,`${d}_Sel_Tea_Fronts.xlsx`],[bT,`${d}_Sel_Tea_Backs.xlsx`],
+            [f1,`${d}_Sel_1L_Fronts.xlsx`],
+            ...specialFiles.map(f=>([f.sheets,f.name])),
+          ].map(([s,n])=>({sheets:s,name:n})),`${d}_Sel_Print_Files.zip`);
         }
         else if(type==="all"){
           const files=[{sheets:genProduction(selRows),name:`${d}_Sel_Production.xlsx`}];
@@ -1432,11 +1473,21 @@ function App(){
       else if(type==="coldxpress")dlXlsx(genColdXpress(rows,d),`${d}_COLDXPRESS.xlsx`);
       else if(type==="dk")dlXlsx(genDK(rows),`${d}_DK_DISTRIBUTIONS.xlsx`);
       else if(type==="coolcouriers")dlXlsx(genCoolCouriers(rows),`${d}_COOLCOURIERS.xlsx`);
-      else if(type==="prints"){const{f350,b350,fT,bT,f1}=genPrints(rows);dlZip([[f350,`${d}_350ml_Fronts.xlsx`],[b350,`${d}_350ml_Backs.xlsx`],[fT,`${d}_Tea_Fronts.xlsx`],[bT,`${d}_Tea_Backs.xlsx`],[f1,`${d}_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Print_Files.zip`);}
+      else if(type==="prints"){
+        const{f350,b350,fT,bT,f1}=genPrints(rows);
+        const specialFiles=genSpecialPrints(rows,d);
+        dlZip([
+          [f350,`${d}_350ml_Fronts.xlsx`],[b350,`${d}_350ml_Backs.xlsx`],
+          [fT,`${d}_Tea_Fronts.xlsx`],[bT,`${d}_Tea_Backs.xlsx`],
+          [f1,`${d}_1L_Fronts.xlsx`],
+          ...specialFiles.map(f=>([f.sheets,f.name])),
+        ].map(([s,n])=>({sheets:s,name:n})),`${d}_Print_Files.zip`);
+      }
       else if(type==="pallet-prod")dlXlsx(genProduction(rows,true),`${d}_Pallet_Production.xlsx`);
       else if(type==="pallet-prints"){const{f350,b350,fT,bT,f1}=genPrints(rows,true);dlZip([[f350,`${d}_Pallet_350ml_Fronts.xlsx`],[b350,`${d}_Pallet_350ml_Backs.xlsx`],[fT,`${d}_Pallet_Tea_Fronts.xlsx`],[bT,`${d}_Pallet_Tea_Backs.xlsx`],[f1,`${d}_Pallet_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Pallet_Print_Files.zip`);}
       else if(type==="all"){
         const{f350,b350,fT,bT,f1}=genPrints(rows);
+        const specialFiles=genSpecialPrints(rows,d);
         const zipName=`${d}_Wholesale_State_Files.zip`;
         buildZipBlob([
           {sheets:genProduction(rows),       name:`${d}_Production_Sheet.xlsx`},
@@ -1448,6 +1499,7 @@ function App(){
           {sheets:fT,                        name:`${d}_Tea_Fronts.xlsx`},
           {sheets:bT,                        name:`${d}_Tea_Backs.xlsx`},
           {sheets:f1,                        name:`${d}_1L_Fronts.xlsx`},
+          ...specialFiles,
         ]).then(blob=>{
           setGenModal({zipBlob:blob,zipName,dateLabel:d});
           setDone(p=>({...p,[type]:true}));
