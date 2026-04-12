@@ -354,7 +354,450 @@ function buildZipBlob(files){
   })).then(entries=>mkZip(entries));
 }
 
+// ── DELIVERY OPTIMISER ──
+// Postcode zone lookup (VIC only - simplified)
+function getZone(pc){
+  const n=parseInt(pc)||0;
+  if(n>=3800&&n<=3945||n>=3975&&n<=3985)return'metro'; // SE corridor
+  if(n>=3910&&n<=3945)return'cou1'; // Peninsula
+  if(n>=3211&&n<=3240)return'cou2'; // Geelong
+  if(n>=3000&&n<=3207)return'metro';
+  if(n>=3335&&n<=3429)return'metro'; // outer NW
+  if(n>=3750&&n<=3810)return'metro'; // outer NE
+  if(n>=3550&&n<=3560)return'cou4'; // Bendigo
+  if(n>=3350&&n<=3360)return'cou4'; // Ballarat
+  return'cou1';
+}
+const DEPOT={lat:-38.0024,lon:145.1587};
+const CE_RATES={metro:{base:22.40,extra:4.36,thresh:5},cou1:{base:24.89,extra:6.22,thresh:3},cou2:{base:24.89,extra:6.22,thresh:3},cou4:{base:37.34,extra:9.95,thresh:3}};
+const FUEL_LEVY=0.597;
+function ceCost(cartons,zone){
+  const r=CE_RATES[zone]||CE_RATES.metro;
+  return parseFloat(((r.base+Math.max(0,cartons-r.thresh)*r.extra)*(1+FUEL_LEVY)).toFixed(2));
+}
+// Approximate lat/lon from postcode
+const PC_COORDS={
+  3000:{lat:-37.814,lon:144.963},3001:{lat:-37.814,lon:144.963},3003:{lat:-37.798,lon:144.955},
+  3004:{lat:-37.842,lon:144.979},3005:{lat:-37.828,lon:144.952},3006:{lat:-37.825,lon:144.957},
+  3008:{lat:-37.821,lon:144.944},3011:{lat:-37.799,lon:144.900},3012:{lat:-37.804,lon:144.881},
+  3015:{lat:-37.863,lon:144.885},3016:{lat:-37.863,lon:144.885},3018:{lat:-37.874,lon:144.865},
+  3020:{lat:-37.769,lon:144.838},3021:{lat:-37.739,lon:144.815},3025:{lat:-37.834,lon:144.892},
+  3028:{lat:-37.873,lon:144.822},3029:{lat:-37.876,lon:144.770},3031:{lat:-37.789,lon:144.937},
+  3032:{lat:-37.778,lon:144.950},3039:{lat:-37.758,lon:144.923},3040:{lat:-37.737,lon:144.907},
+  3041:{lat:-37.721,lon:144.907},3042:{lat:-37.724,lon:144.874},3044:{lat:-37.689,lon:144.943},
+  3046:{lat:-37.679,lon:144.921},3051:{lat:-37.798,lon:144.948},3052:{lat:-37.793,lon:144.958},
+  3053:{lat:-37.804,lon:144.969},3054:{lat:-37.788,lon:144.974},3055:{lat:-37.781,lon:144.956},
+  3056:{lat:-37.769,lon:144.959},3057:{lat:-37.763,lon:144.976},3058:{lat:-37.751,lon:144.968},
+  3065:{lat:-37.799,lon:144.984},3066:{lat:-37.808,lon:144.988},3067:{lat:-37.818,lon:145.000},
+  3068:{lat:-37.806,lon:144.999},3070:{lat:-37.774,lon:145.004},3071:{lat:-37.764,lon:145.000},
+  3072:{lat:-37.750,lon:145.000},3078:{lat:-37.812,lon:145.026},3079:{lat:-37.802,lon:145.035},
+  3081:{lat:-37.784,lon:145.051},3084:{lat:-37.774,lon:145.070},3101:{lat:-37.819,lon:145.051},
+  3102:{lat:-37.809,lon:145.071},3103:{lat:-37.819,lon:145.085},3104:{lat:-37.809,lon:145.100},
+  3121:{lat:-37.819,lon:145.018},3122:{lat:-37.829,lon:145.035},3123:{lat:-37.839,lon:145.051},
+  3124:{lat:-37.839,lon:145.070},3125:{lat:-37.849,lon:145.085},3126:{lat:-37.839,lon:145.085},
+  3128:{lat:-37.849,lon:145.100},3130:{lat:-37.859,lon:145.120},3131:{lat:-37.839,lon:145.120},
+  3132:{lat:-37.819,lon:145.135},3133:{lat:-37.849,lon:145.135},3134:{lat:-37.809,lon:145.151},
+  3136:{lat:-37.809,lon:145.170},3138:{lat:-37.799,lon:145.185},3141:{lat:-37.849,lon:144.999},
+  3142:{lat:-37.851,lon:144.999},3143:{lat:-37.861,lon:145.004},3144:{lat:-37.869,lon:145.018},
+  3145:{lat:-37.879,lon:145.035},3146:{lat:-37.869,lon:145.051},3147:{lat:-37.889,lon:145.070},
+  3148:{lat:-37.879,lon:145.085},3149:{lat:-37.879,lon:145.100},3150:{lat:-37.889,lon:145.120},
+  3152:{lat:-37.879,lon:145.135},3153:{lat:-37.859,lon:145.170},3156:{lat:-37.909,lon:145.229},
+  3161:{lat:-37.869,lon:144.999},3162:{lat:-37.879,lon:144.999},3163:{lat:-37.889,lon:144.999},
+  3165:{lat:-37.919,lon:145.051},3166:{lat:-37.899,lon:145.070},3168:{lat:-37.909,lon:145.085},
+  3172:{lat:-37.979,lon:145.100},3173:{lat:-38.002,lon:145.159},3174:{lat:-38.022,lon:145.170},
+  3175:{lat:-38.042,lon:145.185},3181:{lat:-37.859,lon:144.999},3182:{lat:-37.869,lon:144.984},
+  3183:{lat:-37.879,lon:144.984},3184:{lat:-37.879,lon:144.969},3185:{lat:-37.889,lon:144.969},
+  3186:{lat:-37.909,lon:144.988},3187:{lat:-37.919,lon:145.004},3188:{lat:-37.939,lon:145.018},
+  3189:{lat:-37.949,lon:145.035},3190:{lat:-37.959,lon:145.051},3192:{lat:-37.969,lon:145.070},
+  3193:{lat:-37.979,lon:145.070},3194:{lat:-37.979,lon:145.051},3195:{lat:-38.039,lon:145.085},
+  3196:{lat:-38.069,lon:145.100},3197:{lat:-38.109,lon:145.135},3198:{lat:-38.129,lon:145.135},
+  3199:{lat:-38.139,lon:145.151},3200:{lat:-38.149,lon:145.151},3204:{lat:-37.909,lon:144.969},
+  3205:{lat:-37.839,lon:144.944},3206:{lat:-37.839,lon:144.928},3207:{lat:-37.839,lon:144.928},
+  3750:{lat:-37.657,lon:145.078},3752:{lat:-37.577,lon:145.078},3754:{lat:-37.497,lon:145.078},
+  3800:{lat:-37.909,lon:145.135},3802:{lat:-37.949,lon:145.170},3803:{lat:-37.969,lon:145.185},
+  3805:{lat:-38.009,lon:145.229},3806:{lat:-38.029,lon:145.229},3807:{lat:-38.049,lon:145.251},
+  3910:{lat:-38.179,lon:145.151},3912:{lat:-38.199,lon:145.185},3916:{lat:-38.279,lon:145.229},
+  3920:{lat:-38.389,lon:145.351},3926:{lat:-38.549,lon:145.451},3930:{lat:-38.629,lon:145.451},
+};
+function getCoords(pc){
+  return PC_COORDS[parseInt(pc)]||{lat:-37.95,lon:145.1};
+}
+function haversine(a,b){
+  const R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180;
+  const x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function roadMins(a,b){
+  return haversine(a,b)*1.32/48*60;
+}
+function totalRouteTime(stops,depot,sm){
+  if(!stops.length)return 0;
+  let t=roadMins(depot,stops[0]);
+  for(let i=1;i<stops.length;i++)t+=roadMins(stops[i-1],stops[i]);
+  t+=roadMins(stops[stops.length-1],depot);
+  return t+stops.length*sm;
+}
+function buildGoogleMapsUrl(stops){
+  if(!stops||!stops.length)return null;
+  const D='17+Kirkham+Rd+W+Keysborough+VIC+3173';
+  const wpts=stops.map(s=>encodeURIComponent((s.address||'')+', '+(s.suburb||'')+' VIC '+(s.postcode||'')));
+  return'https://www.google.com/maps/dir/'+[D,...wpts,D].join('/');
+}
+function nearestNeighbour(stops,depot){
+  if(!stops.length)return[];
+  const rem=[...stops];const out=[];let cur=depot;
+  while(rem.length){
+    let bi=0,bd=Infinity;
+    rem.forEach((s,i)=>{const d=roadMins(cur,s);if(d<bd){bd=d;bi=i;}});
+    out.push(rem[bi]);cur=rem[bi];rem.splice(bi,1);
+  }
+  return out;
+}
+function twoOpt(stops,depot){
+  if(stops.length<4)return stops;
+  let best=[...stops],improved=true,pass=0;
+  while(improved&&pass<10){
+    improved=false;pass++;
+    for(let i=0;i<best.length-1;i++){
+      for(let j=i+2;j<best.length;j++){
+        const cand=[...best.slice(0,i+1),...best.slice(i+1,j+1).reverse(),...best.slice(j+1)];
+        if(totalRouteTime(cand,depot,0)<totalRouteTime(best,depot,0)){best=cand;improved=true;}
+      }
+    }
+  }
+  return best;
+}
+function annotateRoute(stops,depot,startTime,sm,dRate){
+  const [h0,m0]=startTime.split(':').map(Number);
+  let cum=h0*60+m0;
+  return stops.map((s,i)=>{
+    const prev=i===0?depot:stops[i-1];
+    const dm=roadMins(prev,s);
+    cum+=dm;
+    const H=Math.floor(cum/60)%24,M=Math.round(cum%60);
+    const etaStr=String(H).padStart(2,'0')+':'+String(M).padStart(2,'0');
+    const mc=parseFloat(((dm+sm)/60*dRate).toFixed(2));
+    cum+=sm;
+    return{...s,driveMins:parseFloat(dm.toFixed(1)),etaStr,marginalCost:mc,saving:parseFloat((s.ce-mc).toFixed(2)),stopNum:i+1};
+  });
+}
+function clarkeWright(stops,depot,shiftMins,sm){
+  if(!stops.length)return{routes:[]};
+  const savings=[];
+  for(let i=0;i<stops.length;i++){
+    for(let j=i+1;j<stops.length;j++){
+      const si=stops[i],sj=stops[j];
+      const dI=roadMins(depot,si),dJ=roadMins(depot,sj),ij=roadMins(si,sj);
+      savings.push({i,j,saving:dI+dJ-ij+(si.ce+sj.ce)*0.01});
+    }
+  }
+  savings.sort((a,b)=>b.saving-a.saving);
+  const routes=stops.map(s=>({stops:[s]}));
+  const routeOf=stops.map((_,i)=>i);
+  for(const{i,j}of savings){
+    const ri=routeOf[i],rj=routeOf[j];
+    if(ri===rj||!routes[ri]||!routes[rj])continue;
+    const merged=[...routes[ri].stops,...routes[rj].stops];
+    if(totalRouteTime(merged,depot,sm)>shiftMins)continue;
+    routes[ri].stops=merged;
+    for(let k=0;k<stops.length;k++)if(routeOf[k]===rj)routeOf[k]=ri;
+    routes[rj]=null;
+  }
+  return{routes:routes.filter(Boolean).map((r,idx)=>{
+    const ord=twoOpt(nearestNeighbour(r.stops,depot),depot);
+    const hrs=totalRouteTime(ord,depot,sm)/60;
+    const dc=hrs*30;
+    const ceT=ord.reduce((s,st)=>s+st.ce,0);
+    return{id:idx,stops:ord,hrs:parseFloat(hrs.toFixed(2)),driverCost:parseFloat(dc.toFixed(2)),ceTotal:parseFloat(ceT.toFixed(2)),ceSavings:parseFloat((ceT-dc).toFixed(2))};
+  })};
+}
+
+// Suspense localStorage
+const SUSP_KEY='ws_driver_suspense';
+function loadSuspense(){try{return JSON.parse(localStorage.getItem(SUSP_KEY)||'[]');}catch{return[];}}
+function saveSuspense(s){try{localStorage.setItem(SUSP_KEY,JSON.stringify(s));}catch(e){}}
+
+function ZoneBadge({zone}){
+  const c={metro:{bg:'#DBEAFE',col:'#1D4ED8',l:'METRO'},cou1:{bg:'#FEF3C7',col:'#B45309',l:'COU1'},cou2:{bg:'#FFEDD5',col:'#C2410C',l:'COU2'},cou4:{bg:'#FCE7F3',col:'#9D174D',l:'COU4'}}[zone]||{bg:'#F1F5F9',col:'#64748B',l:zone||'?'};
+  return <span style={{display:'inline-block',padding:'1px 5px',borderRadius:3,background:c.bg,color:c.col,fontSize:8,fontWeight:700,fontFamily:"'Montserrat',sans-serif",letterSpacing:.5}}>{c.l}</span>;
+}
+
+function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onClose,T}){
+  const [shiftHrs,setShiftHrs]=React.useState(9);
+  const [stopMins,setStopMins]=React.useState(10);
+  const [driverRate,setDriverRate]=React.useState(30);
+  const [numDrivers,setNumDrivers]=React.useState(1);
+  const [startTime,setStartTime]=React.useState('06:00');
+  const [optimising,setOptimising]=React.useState(false);
+  const [driverAStops,setDriverAStops]=React.useState([]);
+  const [driverBStops,setDriverBStops]=React.useState([]);
+  const [cxStops,setCxStops]=React.useState([]);
+  const [suspenseStops,setSuspenseStops]=React.useState(loadSuspense);
+  const [dragOver,setDragOver]=React.useState(null);
+  const [done,setDone]=React.useState(false);
+
+  // Build stops from VIC orders
+  const allVicStops=React.useMemo(()=>{
+    const om={};
+    csvRows.filter(r=>r.SKU!=='FREIGHT'&&r.Product&&(r.CustomerState||'').toUpperCase()==='VIC'&&!isPallet(r))
+      .forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r);});
+    return Object.entries(om).map(([on,or_],idx)=>{
+      const r=or_[0];
+      const pc=parseInt(r.Postcode)||3000;
+      const zone=getZone(pc);
+      const coords=getCoords(pc);
+      const ctns=totalC(or_);
+      const ce=ceCost(ctns,zone);
+      return{
+        id:idx+1,orderNumber:on,name:r.Customer,
+        address:r.CustomerAddress1||'',suburb:r.CustomerSuburb||'',
+        postcode:String(pc),state:'VIC',cartons:ctns,zone,ce,
+        lat:coords.lat,lon:coords.lon,
+        lines:or_.filter(x=>x.SKU!=='FREIGHT'&&x.Product).map(x=>({sku:x.SKU,qty:parseInt(x.Quantity)||0})),
+        notes:r.Notes||'',driveMins:0,marginalCost:0,
+      };
+    });
+  },[csvRows]);
+
+  const suspenseIds=React.useMemo(()=>new Set(suspenseStops.map(s=>s.orderNumber)),[suspenseStops]);
+  const activeStops=React.useMemo(()=>allVicStops.filter(s=>!suspenseIds.has(s.orderNumber)),[allVicStops,suspenseIds]);
+
+  // Run optimiser
+  const runOptimiser=React.useCallback(()=>{
+    setOptimising(true);
+    setTimeout(()=>{
+      const shiftMins=shiftHrs*60;
+      const res=clarkeWright(activeStops,DEPOT,shiftMins,stopMins);
+      const sorted=[...res.routes].sort((a,b)=>b.ceSavings-a.ceSavings);
+      const profitable=sorted.filter(r=>r.ceSavings>0);
+      let dA=[],dB=[],cx=[...activeStops];
+      if(numDrivers>=1&&profitable[0]){
+        const ann=annotateRoute(twoOpt(nearestNeighbour(profitable[0].stops,DEPOT),DEPOT),DEPOT,startTime,stopMins,driverRate);
+        dA=ann;
+        const dAIds=new Set(ann.map(s=>s.orderNumber));
+        cx=activeStops.filter(s=>!dAIds.has(s.orderNumber));
+        if(numDrivers>=2&&profitable[1]){
+          const ann2=annotateRoute(twoOpt(nearestNeighbour(profitable[1].stops,DEPOT),DEPOT),DEPOT,startTime,stopMins,driverRate);
+          dB=ann2;
+          const dBIds=new Set(ann2.map(s=>s.orderNumber));
+          cx=cx.filter(s=>!dBIds.has(s.orderNumber));
+        }
+      }
+      setDriverAStops(dA);
+      setDriverBStops(dB);
+      setCxStops(cx);
+      setOptimising(false);
+    },50);
+  },[activeStops,shiftHrs,stopMins,driverRate,numDrivers,startTime]);
+
+  React.useEffect(()=>{runOptimiser();},[]);
+
+  // Drag and drop
+  const dragRef=React.useRef(null);
+  const onDragStart=(e,stop,from)=>{dragRef.current={stop,from};};
+  const onDrop=(e,to)=>{
+    e.preventDefault();setDragOver(null);
+    if(!dragRef.current)return;
+    const{stop,from}=dragRef.current;
+    const remove=lst=>lst.filter(s=>s.orderNumber!==stop.orderNumber);
+    if(from==='driverA')setDriverAStops(remove);
+    else if(from==='driverB')setDriverBStops(remove);
+    else if(from==='cx')setCxStops(remove);
+    else if(from==='suspense'){setSuspenseStops(prev=>{const u=remove(prev);saveSuspense(u);return u;});}
+    if(to==='driverA')setDriverAStops(p=>[...remove(p),{...stop,driver:'A'}]);
+    else if(to==='driverB')setDriverBStops(p=>[...remove(p),{...stop,driver:'B'}]);
+    else if(to==='cx')setCxStops(p=>[...remove(p),stop]);
+    else if(to==='suspense'){setSuspenseStops(prev=>{const u=[...remove(prev),stop];saveSuspense(u);return u;});}
+    dragRef.current=null;
+  };
+  const moveStop=(stop,from,to)=>{
+    const remove=lst=>lst.filter(s=>s.orderNumber!==stop.orderNumber);
+    if(from==='driverA')setDriverAStops(remove);
+    else if(from==='driverB')setDriverBStops(remove);
+    else if(from==='cx')setCxStops(remove);
+    else if(from==='suspense'){setSuspenseStops(prev=>{const u=remove(prev);saveSuspense(u);return u;});}
+    if(to==='driverA')setDriverAStops(p=>[...remove(p),{...stop,driver:'A'}]);
+    else if(to==='driverB')setDriverBStops(p=>[...remove(p),{...stop,driver:'B'}]);
+    else if(to==='cx')setCxStops(p=>[...remove(p),stop]);
+    else if(to==='suspense'){setSuspenseStops(prev=>{const u=[...remove(prev),stop];saveSuspense(u);return u;});}
+  };
+
+  // Stats
+  const driverHrsA=driverAStops.length?(totalRouteTime(driverAStops,DEPOT,stopMins)/60).toFixed(1):0;
+  const driverHrsB=driverBStops.length?(totalRouteTime(driverBStops,DEPOT,stopMins)/60).toFixed(1):0;
+  const driverCostA=parseFloat((driverHrsA*driverRate).toFixed(2));
+  const driverCostB=parseFloat((driverHrsB*driverRate).toFixed(2));
+  const ceIfAll=activeStops.reduce((s,st)=>s+st.ce,0);
+  const ceSaved=driverAStops.reduce((s,st)=>s+st.ce,0)+driverBStops.reduce((s,st)=>s+st.ce,0)-(driverCostA+driverCostB);
+  const allAccounted=[...driverAStops,...driverBStops,...cxStops].length;
+  const totalVic=activeStops.length;
+  const countOk=allAccounted>=totalVic;
+  const urlA=buildGoogleMapsUrl(driverAStops);
+  const urlB=buildGoogleMapsUrl(driverBStops);
+
+  const StopCard=({stop,panel})=>(
+    <div draggable onDragStart={e=>onDragStart(e,stop,panel)}
+      style={{padding:'9px 12px',borderBottom:'1px solid #F1F5F9',display:'flex',gap:8,alignItems:'flex-start',cursor:'grab'}}
+      onMouseEnter={e=>e.currentTarget.style.background='#F8FAFC'}
+      onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+      <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:'#CBD5E1',paddingTop:1,minWidth:14,textAlign:'right'}}>{stop.stopNum||''}</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:2}}>
+          <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:'#1E3A5F',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{stop.name}</span>
+          <ZoneBadge zone={stop.zone}/>
+        </div>
+        <div style={{fontSize:10,color:'#64748B',display:'flex',gap:6,flexWrap:'wrap'}}>
+          <span>{stop.suburb}</span>
+          <span style={{color:'#CBD5E1'}}>|</span>
+          <span>{stop.cartons} ctns</span>
+          <span style={{color:'#CBD5E1'}}>|</span>
+          <span style={{color:'#2563EB',fontWeight:700}}>${stop.ce.toFixed(2)} CX</span>
+          {stop.marginalCost>0&&<span style={{color:'#059669',fontWeight:700}}>${stop.marginalCost.toFixed(2)} driver</span>}
+          {stop.etaStr&&<span style={{color:'#94A3B8'}}>ETA {stop.etaStr}</span>}
+          {stop.saving!=null&&stop.marginalCost>0&&<span style={{color:stop.saving>0?'#059669':'#DC2626',fontWeight:600}}>{stop.saving>0?'saves':'costs'} ${Math.abs(stop.saving).toFixed(2)}</span>}
+        </div>
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
+        {panel!=='cx'&&<button onClick={()=>moveStop(stop,panel,'cx')} style={{fontSize:9,padding:'2px 5px',borderRadius:3,border:'1px solid #BFDBFE',background:'#EFF6FF',color:'#2563EB',cursor:'pointer',fontWeight:700}}>CX</button>}
+        {panel!=='driverA'&&<button onClick={()=>moveStop(stop,panel,'driverA')} style={{fontSize:9,padding:'2px 5px',borderRadius:3,border:'1px solid #BBF7D0',background:'#DCFCE7',color:'#15803D',cursor:'pointer',fontWeight:700}}>A</button>}
+        {panel!=='driverB'&&numDrivers>=2&&<button onClick={()=>moveStop(stop,panel,'driverB')} style={{fontSize:9,padding:'2px 5px',borderRadius:3,border:'1px solid #C7D2FE',background:'#E0E7FF',color:'#4338CA',cursor:'pointer',fontWeight:700}}>B</button>}
+        {panel!=='suspense'&&<button onClick={()=>moveStop(stop,panel,'suspense')} style={{fontSize:9,padding:'2px 5px',borderRadius:3,border:'1px solid #DDD6FE',background:'#EDE9FE',color:'#6D28D9',cursor:'pointer',fontWeight:700}}>Later</button>}
+      </div>
+    </div>
+  );
+
+  const Panel=({title,icon,stops,panel,accentColor,meta})=>(
+    <div onDragOver={e=>e.preventDefault()} onDrop={e=>onDrop(e,panel)} onDragEnter={()=>setDragOver(panel)} onDragLeave={()=>setDragOver(p=>p===panel?null:p)}
+      style={{background:dragOver===panel?`${accentColor}08`:'#fff',border:`1.5px solid ${dragOver===panel?accentColor:accentColor+'33'}`,borderRadius:12,overflow:'hidden',transition:'all .15s',display:'flex',flexDirection:'column'}}>
+      <div style={{padding:'10px 12px',background:`${accentColor}12`,borderBottom:`1px solid ${accentColor}22`,display:'flex',alignItems:'center',gap:7,flexShrink:0}}>
+        <span style={{fontSize:15}}>{icon}</span>
+        <span style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:11,color:'#1E3A5F'}}>{title}</span>
+        {meta&&<span style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:accentColor,background:`${accentColor}18`,padding:'1px 7px',borderRadius:10}}>{meta}</span>}
+        <span style={{marginLeft:'auto',fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:600,color:'#94A3B8'}}>{stops.length} stop{stops.length!==1?'s':''}</span>
+      </div>
+      <div style={{flex:1,overflowY:'auto',maxHeight:300}}>
+        {stops.length===0
+          ?<div style={{padding:'16px 12px',textAlign:'center',color:'#94A3B8',fontSize:11,fontFamily:"'Montserrat',sans-serif"}}>Drop stops here</div>
+          :stops.map(s=><StopCard key={s.orderNumber} stop={s} panel={panel}/>)}
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:1000,display:'flex',alignItems:'stretch',justifyContent:'flex-end'}}>
+      <div style={{width:'min(1100px,98vw)',height:'100vh',background:'#F8FAFC',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'-8px 0 40px rgba(0,0,0,0.18)'}}>
+
+        {/* Header */}
+        <div style={{background:'linear-gradient(135deg,#032D60,#0D3A72)',padding:'16px 20px',display:'flex',alignItems:'center',gap:14,flexShrink:0}}>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:16,color:'#fff',letterSpacing:1}}>Victorian Delivery Optimiser</div>
+            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:'#7EB8F7',letterSpacing:1.5,marginTop:2}}>
+              {countOk?'ALL '+totalVic+' VIC ORDERS ACCOUNTED FOR':allAccounted+' / '+totalVic+' VIC ORDERS PLACED'}
+            </div>
+          </div>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            {urlA&&<a href={urlA} target="_blank" rel="noopener noreferrer" style={{padding:'7px 13px',borderRadius:8,background:'rgba(255,255,255,0.15)',color:'#fff',fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,textDecoration:'none',border:'1px solid rgba(255,255,255,0.25)'}}>Driver A: Maps</a>}
+            {urlB&&<a href={urlB} target="_blank" rel="noopener noreferrer" style={{padding:'7px 13px',borderRadius:8,background:'rgba(255,255,255,0.15)',color:'#fff',fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,textDecoration:'none',border:'1px solid rgba(255,255,255,0.25)'}}>Driver B: Maps</a>}
+            <button onClick={onClose} style={{width:34,height:34,borderRadius:8,border:'1px solid rgba(255,255,255,0.25)',background:'rgba(255,255,255,0.1)',color:'#fff',fontSize:18,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:300}}>x</button>
+          </div>
+        </div>
+
+        {/* Metrics bar */}
+        <div style={{background:'#fff',borderBottom:'1px solid #E2E8F0',padding:'10px 20px',display:'flex',gap:20,flexShrink:0,flexWrap:'wrap'}}>
+          {[
+            ['CX if all sent','$'+ceIfAll.toFixed(2),'#2563EB'],
+            ['Driver A cost','$'+driverCostA.toFixed(2),'#059669'],
+            numDrivers>=2&&['Driver B cost','$'+driverCostB.toFixed(2),'#4338CA'],
+            ['You save','$'+Math.max(0,ceSaved).toFixed(2),ceSaved>0?'#059669':'#DC2626'],
+          ].filter(Boolean).map(([l,v,c])=>(
+            <div key={l} style={{textAlign:'center'}}>
+              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:16,fontWeight:800,color:c}}>{v}</div>
+              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:'#94A3B8',letterSpacing:.5}}>{l.toUpperCase()}</div>
+            </div>
+          ))}
+          <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>
+            <button onClick={runOptimiser} disabled={optimising} style={{padding:'7px 14px',borderRadius:8,border:'1.5px solid #BFDBFE',background:'#EFF6FF',color:'#2563EB',fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:'pointer'}}>
+              {optimising?'Optimising...':'Re-optimise'}
+            </button>
+          </div>
+        </div>
+
+        {/* Main content */}
+        <div style={{flex:1,display:'flex',overflow:'hidden'}}>
+
+          {/* Sidebar settings */}
+          <div style={{width:200,background:'#fff',borderRight:'1px solid #E2E8F0',padding:14,display:'flex',flexDirection:'column',gap:12,overflowY:'auto',flexShrink:0}}>
+            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:'#94A3B8',letterSpacing:2}}>SETTINGS</div>
+            {[
+              ['Shift hours',shiftHrs,setShiftHrs,6,14,1],
+              ['Stop time (min)',stopMins,setStopMins,5,30,5],
+              ['Rate ($/hr)',driverRate,setDriverRate,20,60,5],
+            ].map(([label,val,set,min,max,step])=>(
+              <div key={label}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                  <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:'#64748B'}}>{label}</span>
+                  <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:'#1E3A5F'}}>{val}</span>
+                </div>
+                <input type="range" min={min} max={max} step={step} value={val} onChange={e=>set(Number(e.target.value))} style={{width:'100%',accentColor:'#2563EB'}}/>
+              </div>
+            ))}
+            <div>
+              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:'#64748B',marginBottom:4}}>Drivers</div>
+              <div style={{display:'flex',gap:6}}>
+                {[1,2].map(n=><button key={n} onClick={()=>setNumDrivers(n)} style={{flex:1,padding:'5px 0',borderRadius:6,border:`1.5px solid ${numDrivers===n?'#2563EB':'#E2E8F0'}`,background:numDrivers===n?'#EFF6FF':'#fff',color:numDrivers===n?'#2563EB':'#94A3B8',fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:700,cursor:'pointer'}}>{n}</button>)}
+              </div>
+            </div>
+            <div>
+              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:'#64748B',marginBottom:4}}>Start time</div>
+              <input type="time" value={startTime} onChange={e=>setStartTime(e.target.value)} style={{width:'100%',padding:'5px 8px',borderRadius:6,border:'1.5px solid #E2E8F0',fontFamily:"'Montserrat',sans-serif",fontSize:12}}/>
+            </div>
+            <div style={{borderTop:'1px solid #F1F5F9',paddingTop:12}}>
+              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:'#94A3B8',letterSpacing:2,marginBottom:8}}>CX RATES</div>
+              {Object.entries(CE_RATES).map(([zone,r])=>(
+                <div key={zone} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:'1px solid #F8FAFC',fontFamily:"'Montserrat',sans-serif",fontSize:10}}>
+                  <span style={{fontWeight:700,color:'#64748B',textTransform:'uppercase'}}>{zone}</span>
+                  <span style={{color:'#1E3A5F'}}>${(r.base*(1+FUEL_LEVY)).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Panels */}
+          <div style={{flex:1,padding:16,display:'flex',flexDirection:'column',gap:12,overflowY:'auto',background:'#F8FAFC'}}>
+            <div style={{display:'grid',gridTemplateColumns:numDrivers>=2?'1fr 1fr 1fr':'1fr 1fr',gap:12}}>
+              <Panel title="Driver A" icon="🚐" stops={driverAStops} panel="driverA" accentColor="#059669"
+                meta={driverAStops.length?driverHrsA+'h | $'+driverCostA:''}/>
+              {numDrivers>=2&&<Panel title="Driver B" icon="🚐" stops={driverBStops} panel="driverB" accentColor="#4338CA"
+                meta={driverBStops.length?driverHrsB+'h | $'+driverCostB:''}/>}
+              <Panel title="Cold Xpress" icon="❄️" stops={cxStops} panel="cx" accentColor="#2563EB"
+                meta={cxStops.length?'$'+cxStops.reduce((s,st)=>s+st.ce,0).toFixed(2):''}/>
+            </div>
+            {suspenseStops.length>0&&(
+              <Panel title="Another Day" icon="🗓" stops={suspenseStops} panel="suspense" accentColor="#6D28D9"
+                meta={suspenseStops.length+' held'}/>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{background:'#fff',borderTop:'1px solid #E2E8F0',padding:'12px 20px',display:'flex',gap:10,justifyContent:'flex-end',flexShrink:0}}>
+          <button onClick={onSkip} style={{padding:'9px 18px',borderRadius:8,border:'1.5px solid #E2E8F0',background:'#fff',color:'#64748B',fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:700,cursor:'pointer'}}>All to CX</button>
+          <button onClick={()=>{
+            const alloc=[...driverAStops.map(s=>({...s,driver:'A'})),...driverBStops.map(s=>({...s,driver:'B'}))];
+            onConfirm(alloc);
+          }} disabled={driverAStops.length===0&&driverBStops.length===0}
+            style={{padding:'9px 22px',borderRadius:8,border:'none',background:driverAStops.length>0||driverBStops.length>0?'#059669':'#94A3B8',color:'#fff',fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:800,cursor:driverAStops.length>0||driverBStops.length>0?'pointer':'default'}}>
+            Confirm Allocation ({driverAStops.length+driverBStops.length} stops)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function parseCSV(text){
+  const TEA_SKUS_PC=new Set(['LTEA350','PTEA350','RTEA350']);
   const lines=text.split(/\r?\n/).filter(Boolean);
   if(lines.length<2)return[];
   const headers=lines[0].split(",").map(h=>h.replace(/^"|"$/g,"").trim());
@@ -363,6 +806,13 @@ function parseCSV(text){
     for(const ch of line){if(ch==='"'){inQ=!inQ}else if(ch===','&&!inQ){vals.push(cur);cur=""}else cur+=ch}
     vals.push(cur);
     const obj={};headers.forEach((h,i)=>obj[h]=(vals[i]||"").replace(/^"|"$/g,"").trim());
+    // Classify Product from SKU — Ordermentum Product field is unreliable (e.g. "JUICE")
+    const sku=(obj.SKU||'').trim();
+    if(sku&&sku!=='FREIGHT'){
+      if(TEA_SKUS_PC.has(sku)) obj.Product='TEA';
+      else if(sku.endsWith('350')) obj.Product='350';
+      else if(sku.endsWith('1L')||sku==='LTEA1'||sku==='PTEA1'||sku==='RTEA1') obj.Product='1L';
+    }
     return obj;
   });
 }
@@ -504,6 +954,27 @@ function genCoolCouriers(rows){
   Object.entries(om).forEach(([on,or_])=>{const r=or_[0];const items=or_.filter(x=>x.SKU!=="FREIGHT"&&x.Product).map(x=>`${x.Name} x${x.Quantity}`).join(", ");sr.push([Cv(on),Cv(r.Customer),Cv(r.CustomerAddress1+(r.CustomerAddress2?", "+r.CustomerAddress2:"")),Cv(r.CustomerSuburb),Cv(r.CustomerState),N(parseInt(r.Postcode)),Cv(r.Notes||""),Cv(items),N(totalC(or_)),Cv(r.DeliveryDate||r.DueDate||"")])});
   return[{name:"Manifest",rows:sr,colWidths:[14,28,30,18,8,10,24,50,14,14]}];
 }
+function genWsDriver(rows,allocation,date){
+  const alloc=allocation||[];
+  const allocMap={};alloc.forEach(a=>{allocMap[a.orderNumber]=a;});
+  const nf=rows.filter(r=>r.SKU!=='FREIGHT'&&r.Product&&(r.Courier==='WSDRIVER'||allocMap[r.OrderNumber]));
+  if(!nf.length)return[{name:'Run Sheet',rows:[[Cv('No driver stops allocated')]]}];
+  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r);});
+  const sr=[];
+  sr.push([{v:'WHOLESALE STATE DELIVERY RUN',bold:true,bg:'FF1A3C5E',align:'left'}]);
+  sr.push([{v:'Depot: 17 Kirkham Rd W, Keysborough VIC 3173'}]);
+  sr.push([{v:'Date:',bold:true},{v:date||new Date().toLocaleDateString('en-AU')}]);
+  sr.push([E]);
+  sr.push(['Stop #','ETA','Order','Customer','Address','Suburb','State','Postcode','Cartons','Products','Drive Mins','Cost $'].map(h=>H(h,true,'FFB8D4E8','center')));
+  Object.entries(om).sort((a,b)=>(allocMap[a[0]]?.stopNum||99)-(allocMap[b[0]]?.stopNum||99)).forEach(([on,or_],i)=>{
+    const r=or_[0],a=allocMap[on]||{};
+    const ctns=totalC(or_);
+    const prods=or_.filter(x=>x.SKU!=='FREIGHT'&&x.Product).map(x=>x.Name+' x'+x.Quantity).join(', ');
+    sr.push([N(i+1),Cv(a.etaStr||''),Cv(on),Cv(r.Customer),Cv(r.CustomerAddress1),Cv(r.CustomerSuburb),Cv(r.CustomerState),N(parseInt(r.Postcode)),N(ctns),Cv(prods),N(Math.round(a.driveMins||0)),N(parseFloat((a.marginalCost||0).toFixed(2)))]);
+  });
+  return[{name:'Run Sheet',rows:sr,colWidths:[8,10,14,28,30,18,8,10,10,50,12,12]}];
+}
+
 function buildPrint(rows,isBacks,sheetName,customerIdOverride){
   const hdrRow=["Order","#file","SKU","#copies","Customer","Customer ID",".PDF","CODE","#pages","#papersize","#duplex","#orientation","#trayname"].map(h=>H(h,true,"FFBDD7EE","center"));
   const dr=[];
@@ -591,6 +1062,29 @@ const f$=v=>`$${(v||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",")}`;
 const fN=v=>(v||0).toLocaleString();
 
 /* ── VAL MODAL ── */
+function VicTile({csvRows,driverAllocation,onOpen,T}){
+  const vn=[...new Set(csvRows.filter(r=>r.SKU!=='FREIGHT'&&r.Product&&(r.CustomerState||'').toUpperCase()==='VIC'&&!isPallet(r)).map(r=>r.OrderNumber))].length;
+  if(!vn)return null;
+  const hasAlloc=driverAllocation!==null&&driverAllocation!==undefined&&driverAllocation.length>0;
+  const skipped=driverAllocation!==null&&driverAllocation!==undefined&&driverAllocation.length===0;
+  const bg=hasAlloc?'#EFF9F4':skipped?'#F8FAFC':'#EEF6FF';
+  const border=hasAlloc?'#34D399':skipped?'#CBD5E1':'#60A5FA';
+  const icon=hasAlloc?'OK':skipped?'->':'🚐';
+  const title=hasAlloc?'Delivery Run - '+driverAllocation.length+' stops':skipped?'All Victorian to Cold Xpress':'Sort Victorian Deliveries';
+  const sub=hasAlloc?vn+' VIC orders - click to edit':skipped?vn+' VIC orders - all to CX':vn+' VIC orders - optimise your run';
+  return(
+    <div onClick={onOpen} style={{marginTop:14,background:bg,border:'1.5px solid '+border,borderRadius:14,padding:'16px 18px',cursor:'pointer',transition:'all .15s',display:'flex',alignItems:'center',gap:14}}
+      onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)'}}
+      onMouseLeave={e=>{e.currentTarget.style.transform='none'}}>
+      <div style={{fontSize:22}}>{icon}</div>
+      <div style={{flex:1}}>
+        <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:13,color:'#1E3A5F',marginBottom:2}}>{title}</div>
+        <div style={{fontSize:11,color:'#64748B'}}>{sub}</div>
+      </div>
+      <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,color:'#60A5FA',fontWeight:700}}>{hasAlloc||skipped?'edit':'set up'}</div>
+    </div>
+  );
+}
 function ValModal({result,label,onProceed,onCancel,onRequestLabels,labelRequestSent}){
   const{errors,warnings,totalOrders,coveredOrders,canProceed}=result;
   const hasMissingLabels=warnings.some(w=>w.rule==="MISSING_LABEL_FOLDER");
@@ -1222,7 +1716,9 @@ function App(){
   const[approvedDrawdowns,setApprovedDrawdowns]=useState([]); // history
   const[discrepancies,setDiscrepancies]=useState([]); // [{id,orderNumber,customer,courier,itemName,qty,sku,flaggedAt,status,resolvedAt,notes}]
   const[quickAdd,setQuickAdd]=useState({});
-  const[snapGen,setSnapGen]=useState({}); // {sku: delta string} for quick +/- inputs
+  const[snapGen,setSnapGen]=useState({});
+  const[driverAllocation,setDriverAllocation]=useState(null);
+  const[showOptimiser,setShowOptimiser]=useState(false); // {sku: delta string} for quick +/- inputs
   const fileRef=useRef();
   const rowsRef=useRef([]);  // always holds latest parsed rows, safe for async doGen
 
@@ -1510,6 +2006,7 @@ function App(){
       else if(type==="coldxpress")dlXlsx(genColdXpress(rows,d),`${d}_COLDXPRESS.xlsx`);
       else if(type==="dk")dlXlsx(genDK(rows),`${d}_DK_DISTRIBUTIONS.xlsx`);
       else if(type==="coolcouriers")dlXlsx(genCoolCouriers(rows),`${d}_COOLCOURIERS.xlsx`);
+      else if(type==="wsdriver")dlXlsx(genWsDriver(rows,driverAllocation||[],d),`${d}_WS_Delivery_Run.xlsx`);
       else if(type==="prints"){
         const{f350,b350,fT,bT,f1}=genPrints(rows);
         const specialFiles=genSpecialPrints(rows,d);
@@ -1594,11 +2091,27 @@ function App(){
   const SKUS_TEA=['Organic Lemon Iced Tea 350ml','Organic Peach Iced Tea 350ml','Organic Raspberry Iced Tea 350ml'];
   const SKUS_1L=['Antiox 1L','Blueberry Glow 1L','Botanical 1L','Cloudy Apple 1L','Energise 1L','Immunity 1L','Pure Orange 1L','Refresh 1L','Roots 1L','Tropical Bliss 1L'];
   const ALL_TRACKED_SKUS=[...SKUS_350,...SKUS_TEA,...SKUS_1L];
-  const BTNS=[{id:"production",label:"Production Sheet",sub:"350ml · Tea · 1L by courier",icon:"🏭"},{id:"coldxpress",label:"ColdXpress Manifest",sub:"Exact import format",icon:"❄️"},{id:"dk",label:"DK Distributions",sub:"Jobs sheet format",icon:"🚛"},{id:"coolcouriers",label:"Cool Couriers",sub:"Standard manifest template",icon:"🟢"},{id:"prints",label:"Print Files (5)",sub:"350ml · Tea · 1L Fronts & Backs",icon:"🖨️"}];
+  const BTNS=[{id:"production",label:"Production Sheet",sub:"350ml · Tea · 1L by courier",icon:"🏭"},{id:"coldxpress",label:"ColdXpress Manifest",sub:"Exact import format",icon:"❄️"},{id:"dk",label:"DK Distributions",sub:"Jobs sheet format",icon:"🚛"},{id:"coolcouriers",label:"Cool Couriers",sub:"Standard manifest template",icon:"🟢"},{id:"prints",label:"Print Files (5)",sub:"350ml · Tea · 1L Fronts & Backs",icon:"🖨️"},{id:"wsdriver",label:"WS Delivery Run",sub:"Own driver run sheet",icon:"🚐",needsDriver:true}];
 
   return(
     <>
       <style>{currentCSS}</style>
+      {showOptimiser&&<DeliveryOptimiserModal
+        csvRows={csvRows}
+        existingAllocation={driverAllocation}
+        onConfirm={(alloc)=>{
+          const nums=new Set(alloc.map(a=>a.orderNumber));
+          const mutated=rowsRef.current.map(r=>nums.has(r.OrderNumber)?{...r,Courier:'WSDRIVER'}:r);
+          rowsRef.current=mutated;
+          setCsvRows(mutated);
+          setDriverAllocation(alloc);
+          setDone({});
+          setShowOptimiser(false);
+        }}
+        onSkip={()=>{setDriverAllocation([]);setShowOptimiser(false);}}
+        onClose={()=>setShowOptimiser(false)}
+        T={T}
+      />}
       {valModal&&<ValModal result={valModal.result} label={valModal.label} onProceed={()=>doGen(valModal.type,true)} onCancel={()=>setValModal(null)} labelRequestSent={labelRequestSent} onRequestLabels={async()=>{try{const resp=await apiFetch("/api/request-labels",{method:"POST",body:JSON.stringify({customers:driveWarnings})});if(resp.ok){setLabelRequestSent(true);}else{const e=await resp.json();alert("Failed to send: "+(e.error||"Unknown error"));}}catch(e){alert("Failed to send: "+e.message);}}}/>}
       {genModal&&<GenSuccessModal modal={genModal} onClose={()=>setGenModal(null)} apiFetch={apiFetch} T={T}/>}
       <div style={{minHeight:"100vh",background:T.cream,display:"flex",flexDirection:"column"}}>
@@ -1628,7 +2141,7 @@ function App(){
 
         <main style={{flex:1,padding:"26px 24px",maxWidth:1200,margin:"0 auto",width:"100%"}}>
 
-          {/* ═══ GENERATE ═══ */}
+          {/* === GENERATE === */}
           {tab==="generate"&&(
             <div className="fu">
               <div style={{marginBottom:28}}>
@@ -1642,7 +2155,7 @@ function App(){
 
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:22}}>
 
-                {/* LEFT — Upload + Stats */}
+                {/* LEFT - Upload + Stats */}
                 <div>
                   <div className={`upload-zone${drag?" drag":""}`}
                     style={{marginBottom:18,borderRadius:16,padding:"36px 28px"}}
@@ -1719,7 +2232,7 @@ function App(){
                       {[["Orders","🛒",T.terra],["Total Bottles","🧃",T.sage],["Daily Revenue","💰",T.sand],["Pallet Orders","🏗️",T.inkM]].map(([l,icon,ac])=>(
                         <div key={l} style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px",opacity:.45}}>
                           <div style={{fontSize:22,marginBottom:10}}>{icon}</div>
-                          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:26,fontWeight:700,color:ac,lineHeight:1}}>—</div>
+                          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:26,fontWeight:700,color:ac,lineHeight:1}}>-</div>
                           <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:T.inkL,marginTop:6,letterSpacing:.5,fontWeight:600}}>{l}</div>
                         </div>
                       ))}
@@ -1727,12 +2240,21 @@ function App(){
                   )}
                 </div>
 
-                {/* RIGHT — Generate buttons */}
+                {csvName&&(
+                  <VicTile
+                    csvRows={csvRows}
+                    driverAllocation={driverAllocation}
+                    onOpen={()=>setShowOptimiser(true)}
+                    T={T}
+                  />
+                )}
+
+                {/* RIGHT - Generate buttons */}
                 <div style={{display:"flex",flexDirection:"column",gap:11}}>
                   {/* Template upload status */}
                   
                   <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:2,marginBottom:2,marginTop:8}}>GENERATE FILES</div>
-                  {BTNS.map(btn=>(
+                  {BTNS.filter(btn=>!btn.needsDriver||(driverAllocation&&driverAllocation.length>0)).map(btn=>(
                     <button key={btn.id} className={`gen-card${done[btn.id]?" done":""}`}
                       onClick={()=>triggerGen(btn.id,btn.label)}
                       disabled={!!gen||!csvName}
@@ -1760,7 +2282,7 @@ function App(){
                   )}
                 </div>
 
-                {/* ── Pending Drawdown Summary ── */}
+                {/* -- Pending Drawdown Summary -- */}
                 {pendingDrawdowns.length>0&&pendingDrawdowns.map(pd=>{
                   const totalBottles=Object.values(pd.skuTotals).reduce((s,q)=>s+q,0);
                   return(
@@ -1783,7 +2305,7 @@ function App(){
             </div>
           )}
 
-          {/* ═══ ORDERS ═══ */}
+          {/* === ORDERS === */}
           {tab==="tracker"&&(
             <div className="fu">
               <div style={{marginBottom:18}}><div className="sc">Order Tracker</div><div className="ss">REGULAR WHOLESALE · {regularOrders.length} ORDERS</div></div>
@@ -1791,7 +2313,7 @@ function App(){
             </div>
           )}
 
-          {/* ═══ DASHBOARD ═══ */}
+          {/* === DASHBOARD === */}
           {tab==="dashboard"&&(
             <div className="fu">
               <div style={{marginBottom:20,display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
@@ -1828,7 +2350,7 @@ function App(){
             </div>
           )}
 
-          {/* ═══ REPORTS ═══ */}
+          {/* === REPORTS === */}
           {tab==="reports"&&(
             <div className="fu">
               <div style={{marginBottom:22,display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
@@ -1842,7 +2364,7 @@ function App(){
             </div>
           )}
 
-          {/* ═══ HISTORY ═══ */}
+          {/* === HISTORY === */}
           {tab==="history"&&(
             <div className="fu">
               <div style={{marginBottom:20,display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
@@ -1936,7 +2458,7 @@ function App(){
                           </div>
                         )}
 
-                        {/* ── Re-generate from stored CSV ── */}
+                        {/* -- Re-generate from stored CSV -- */}
                         {(()=>{
                           const d2=snap.dateKey?snap.dateKey.split("/").reverse().join("-"):"";
                           const currentGen=snapGen[snap.dateKey]||null;
@@ -2003,7 +2525,7 @@ function App(){
             </div>
           )}
 
-          {/* ═══ PALLETS ═══ */}
+          {/* === PALLETS === */}
           {tab==="pallets"&&(
             <div className="fu">
               <div style={{marginBottom:20}}><div className="sc">Pallet & Special Orders</div><div className="ss">NON-REGULAR CUSTOMERS · AUTO-SPLIT FROM CSV · {palletOrders.length} ORDERS</div></div>
@@ -2077,7 +2599,7 @@ function App(){
           )}
 
 
-          {/* ═══ CUSTOMERS ═══ */}
+          {/* === CUSTOMERS === */}
           {tab==="customers"&&(
             <div className="fu">
               <div style={{marginBottom:22,display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
@@ -2091,7 +2613,7 @@ function App(){
             </div>
           )}
 
-          {/* ═══ STOCKTAKE ═══ */}
+          {/* === STOCKTAKE === */}
           {tab==="stocktake"&&(
             <div className="fu">
               <div style={{marginBottom:22,display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
@@ -2164,7 +2686,7 @@ function App(){
               </div>
 
 
-              {/* ── QUICK ADD ── */}
+              {/* -- QUICK ADD -- */}
               <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:14,padding:"20px 24px",marginBottom:18}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
                   <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:T.inkL,letterSpacing:1.5}}>QUICK ADD STOCK</div>
@@ -2233,7 +2755,7 @@ function App(){
                 </div>
               </div>
 
-              {/* ── PENDING DRAWDOWNS ── */}
+              {/* -- PENDING DRAWDOWNS -- */}
               <div style={{marginBottom:16}}>
                 <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:T.inkL,letterSpacing:1.5,marginBottom:10}}>
                   PENDING DRAWDOWNS {pendingDrawdowns.length>0&&<span style={{background:T.terra,color:"#fff",borderRadius:20,padding:"2px 8px",fontSize:10,marginLeft:6}}>{pendingDrawdowns.length}</span>}
@@ -2286,7 +2808,7 @@ function App(){
                 )}
               </div>
 
-              {/* ── CURRENT STOCK ── */}
+              {/* -- CURRENT STOCK -- */}
               {Object.keys(stockEdit).length>0?(
                 /* EDIT MODE */
                 <div style={{background:T.white,border:`1.5px solid ${T.terra}55`,borderRadius:16,padding:"22px 26px",marginBottom:20}}>
@@ -2346,7 +2868,7 @@ function App(){
                 </div>
               )}
 
-              {/* ── DRAWDOWN HISTORY ── */}
+              {/* -- DRAWDOWN HISTORY -- */}
               {approvedDrawdowns.length>0&&(
                 <div>
                   <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:T.inkL,letterSpacing:1.5,marginBottom:10}}>DRAWDOWN HISTORY</div>
@@ -2367,7 +2889,7 @@ function App(){
           )}
 
 
-          {/* ═══ DISCREPANCIES ═══ */}
+          {/* === DISCREPANCIES === */}
           {tab==="discrepancies"&&(
             <div className="fu">
               <div style={{marginBottom:22,display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
@@ -2535,7 +3057,7 @@ function App(){
             </div>
           )}
 
-          {/* ═══ EMAIL HUB ═══ */}
+          {/* === EMAIL HUB === */}
           {tab==="email"&&(
             <div className="fu">
               <div style={{marginBottom:20,display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
@@ -2664,7 +3186,7 @@ function App(){
             </div>
           )}
 
-          {/* ═══ SETTINGS ═══ */}
+          {/* === SETTINGS === */}
           {tab==="settings"&&(
             <SettingsPanel T={currentT} apiFetch={apiFetch} themeKey={themeKey} setTheme={setTheme} token={token} setToken={setToken}/>
           )}
@@ -2802,7 +3324,7 @@ function SettingsPanel({T, apiFetch, themeKey, setTheme, token, setToken}){
         {/* Content area */}
         <div>
 
-          {/* ── DISPLAY & THEME ── */}
+          {/* -- DISPLAY & THEME -- */}
           {settingsTab==='display'&&(
             <div>
               <div style={cardStyle}>
@@ -2870,7 +3392,7 @@ function SettingsPanel({T, apiFetch, themeKey, setTheme, token, setToken}){
             </div>
           )}
 
-          {/* ── USERS & ACCESS ── */}
+          {/* -- USERS & ACCESS -- */}
           {settingsTab==='users'&&(
             <div>
               {!isAdmin&&(
@@ -3005,7 +3527,7 @@ function SettingsPanel({T, apiFetch, themeKey, setTheme, token, setToken}){
             </div>
           )}
 
-          {/* ── NOTIFICATIONS ── */}
+          {/* -- NOTIFICATIONS -- */}
           {settingsTab==='notifications'&&(
             <div>
               <div style={cardStyle}>
@@ -3079,7 +3601,7 @@ function SettingsPanel({T, apiFetch, themeKey, setTheme, token, setToken}){
             </div>
           )}
 
-          {/* ── BUSINESS SETTINGS ── */}
+          {/* -- BUSINESS SETTINGS -- */}
           {settingsTab==='business'&&(
             <div>
               <div style={cardStyle}>
@@ -3112,7 +3634,7 @@ function SettingsPanel({T, apiFetch, themeKey, setTheme, token, setToken}){
                     <label style={labelStyle}>Default Courier</label>
                     <select value={bizSettings.defaultCourier||''} onChange={e=>setBizSettings(s=>({...s,defaultCourier:e.target.value}))}
                       style={{...inputStyle,marginBottom:0,cursor:'pointer'}}>
-                      <option value="">— Select —</option>
+                      <option value="">- Select -</option>
                       <option value="COLDXPRESS">ColdXpress</option>
                       <option value="DKDISTRIBUTION">DK Distribution</option>
                       <option value="COOLCOURIERS">Cool Couriers</option>
@@ -3165,7 +3687,7 @@ function SettingsPanel({T, apiFetch, themeKey, setTheme, token, setToken}){
             </div>
           )}
 
-          {/* ── MY ACCOUNT ── */}
+          {/* -- MY ACCOUNT -- */}
           {settingsTab==='account'&&(
             <div>
               {currentUser&&(
