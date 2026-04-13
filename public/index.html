@@ -354,6 +354,11 @@ function buildZipBlob(files){
   })).then(entries=>mkZip(entries));
 }
 
+const packSize=p=>p==="TEA"?18:p==="1L"?12:24;
+const cartons=(qty,p)=>Math.ceil((parseInt(qty)||0)/packSize(p));
+const totalC=rows=>rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product).reduce((s,r)=>s+cartons(r.Quantity,r.Product),0);
+const isPallet=r=>(r.CustomerVisibilityGroup&&r.CustomerVisibilityGroup.toUpperCase()!=="REGULAR"&&r.CustomerVisibilityGroup!=="")||(r.CustomerPriceGroup&&r.CustomerPriceGroup.toUpperCase()!=="REGULAR"&&r.CustomerPriceGroup!=="")||(r.Customergroup&&r.Customergroup.toUpperCase()!=="REGULAR"&&r.Customergroup!=="");
+
 const CX_RUNS={"2581":"Y-DEFAULT","2582":"ZZ - W/H PICK UP - N.S.W.","2588":"ZZ - W/H PICK UP - N.S.W.","2600":"A-CANBERRA SCOTT","2607":"A-CANBERRA SCOTT","2617":"A-CANBERRA SCOTT","2620":"A-CANBERRA SCOTT","2621":"A-CANBERRA SCOTT","2632":"A-GIPPSLAND","2640":"F-ALBURY","2641":"F-ALBURY","2642":"F-ALBURY","2643":"G-RIVERINA","2644":"D-WAGGA","2646":"G-RIVERINA","2647":"G-YARRAWONGA","2648":"B-MILDURA 2 (TU/TH/SAT)","2649":"D-WAGGA","2650":"D-WAGGA","2651":"D-WAGGA","2652":"ZZ - W/H PICK UP - N.S.W.","2653":"D-WAGGA","2655":"D-WAGGA","2656":"D-WAGGA","2658":"D-WAGGA","2660":"D-WAGGA","2661":"D-WAGGA","2663":"D-WAGGA","2680":"A-GRIFFITH","2681":"A-GRIFFITH","2700":"A-GRIFFITH","2701":"D-WAGGA","2705":"A-GRIFFITH","2710":"A-HAY","2711":"A-HAY","2712":"G-RIVERINA 2 (TOCUMWAL)","2713":"G-RIVERINA 2 (TOCUMWAL)","2714":"G-RIVERINA 2 (TOCUMWAL)","2715":"C-ROBINVALE RUN (TU/TH)","2716":"A-GRIFFITH","2717":"B-MILDURA 2 (TU/TH/SAT)","2720":"D-WAGGA","2722":"A-CANBERRA","2727":"Y-DEFAULT","2730":"D-WAGGA","2731":"J-ECHUCA RUN (M/W/F)","2732":"C-SWAN HILL","2733":"C-SWAN HILL","2738":"ZZ - W/H PICK UP - N.S.W.","2739":"B-MILDURA 2 (TU/TH/SAT)","3000":"Z-RUN CITY","3001":"Z-RUN CITY","3002":"Z-RUN PRAHRAN:","3003":"Z-RUN NORTH MELBOURNE","3004":"Z-RUN ALBERT PARK","3005":"Y-DEFAULT","3006":"Z-RUN CITY","3008":"Z-RUN CITY","3010":"Y-DEFAULT","3011":"Z-RUN FOOTSCRAY","3012":"Z-RUN FOOTSCRAY: 3,","3013":"Z-RUN FOOTSCRAY","3015":"Z-RUN FOOTSCRAY","3016":"Z-RUN FOOTSCRAY","3018":"Z-RUN FOOTSCRAY: 3,","3019":"Z-RUN FOOTSCRAY: 3,","3020":"Z-RUN FOOTSCRAY: 3,","3021":"Z-RUN FOOTSCRAY: 3,","3022":"Z-RUN FOOTSCRAY: 3,","3023":"Z-RUN FOOTSCRAY: 3,","3024":"Z-RUN LAVERTON:15B","3026":"Z-RUN LAVERTON:15B","3027":"Z-RUN LAVERTON:15B","3028":"Z-RUN LAVERTON:15B","3029":"Z-RUN LAVERTON:15B","3030":"Z-RUN FOOTSCRAY: 3,","3031":"Z-RUN CITY  2 (HIGHPOINT)","3032":"Z-RUN CITY  2 (HIGHPOINT)","3033":"Z-RUN FOOTSCRAY: 3,","3034":"Z-RUN FOOTSCRAY: 3,","3036":"Z-RUN FOOTSCRAY: 3,","3037":"Z-RUN FOOTSCRAY: 3,","3038":"Z-RUN FOOTSCRAY: 3,","3039":"Z-RUN BRUNSWICK: 1D,2B,","3040":"Z-RUN ESSENDON","3041":"Z-RUN ESSENDON","3042":"Z-RUN FOOTSCRAY: 3,","3043":"Z-RUN BRUNSWICK: 1D,2B,","3044":"Z-RUN BRUNSWICK: 1D,2B,","3046":"Z-RUN BRUNSWICK: 1D,2B,","3047":"Z-RUN ESSENDON","3048":"Z-RUN ESSENDON","3049":"Z-RUN BRUNSWICK: 1D,2B,","3050":"Y-DEFAULT","3051":"Z-RUN CITY","3052":"Z-RUN CITY","3053":"Z-RUN PRAHRAN","3054":"Z-RUN PRAHRAN","3055":"Z-RUN BRUNSWICK: 1D,2B,","3056":"Z-RUN BRUNSWICK: 1D,2B,","3057":"Z-RUN BRUNSWICK: 1D,2B,","3058":"Z-RUN BRUNSWICK: 1D,2B,","3059":"Z-RUN ESSENDON","3060":"Z-RUN BRUNSWICK: 1D,2B,","3061":"Z-RUN ESSENDON","3062":"Z-RUN ESSENDON","3063":"Z-RUN ESSENDON","3064":"Z-RUN ESSENDON","3065":"Z-RUN PRAHRAN","3066":"Z-RUN PRAHRAN","3068":"Z-RUN PRAHRAN","3070":"Z-RUN KEW:","3071":"Z-RUN KEW:","3072":"Z-RUN KEW:","3073":"Z-RUN KEW:","3074":"Z-RUN KEW:","3075":"Z-RUN KEW","3076":"Z-RUN KEW","3078":"Z-RUN KEW:","3079":"Z-RUN BOX HILL:","3081":"Z-RUN BOX HILL:","3082":"Z-RUN KEW","3083":"Z-RUN KEW:","3084":"Z-RUN BOX HILL:","3085":"Z-RUN BOX HILL:","3086":"Y-DEFAULT","3087":"Z-RUN BOX HILL:","3088":"Z-RUN BOX HILL:","3089":"Z-RUN KEW","3090":"Z-RUN BOX HILL:","3091":"Z-RUN KEW","3093":"Z-RUN BOX HILL:","3094":"Z-RUN BOX HILL:","3095":"Z-RUN BOX HILL:","3099":"Z-RUN KEW","3101":"Z-RUN BOX HILL:","3102":"Z-RUN KEW:","3103":"Z-RUN BOX HILL:","3104":"Z-RUN BOX HILL:","3105":"Z-RUN BOX HILL:","3106":"Z-RUN VERMONT","3107":"Z-RUN VERMONT","3108":"Z-RUN VERMONT","3109":"Z-RUN VERMONT","3111":"Z-RUN VERMONT","3113":"Z-RUN VERMONT","3114":"Z-RUN VERMONT","3115":"Z-RUN VERMONT","3116":"O-RUN LILYDALE:","3121":"Z-RUN PRAHRAN:","3122":"Z-RUN GLEN WAVERLY","3123":"Z-RUN GLEN WAVERLY","3124":"Z-RUN GLEN WAVERLY","3125":"Z-RUN VERMONT","3126":"Z-RUN GLEN WAVERLY","3127":"Z-RUN BOX HILL:","3128":"Z-RUN BOX HILL:","3129":"Z-RUN BOX HILL:","3130":"Z-RUN VERMONT","3131":"Z-RUN VERMONT","3132":"Z-RUN VERMONT","3133":"Z-RUN VERMONT","3134":"Z-RUN VERMONT","3135":"Z-RUN VERMONT","3136":"Z-RUN KNOX","3137":"Z-RUN KILSYTH:","3138":"O-RUN LILYDALE:","3139":"O-MOUNTAIN","3140":"O-RUN LILYDALE:","3141":"Z-RUN PRAHRAN:","3142":"Z-RUN PRAHRAN:","3143":"Z-RUN GLEN WAVERLY","3144":"Z-RUN GLEN WAVERLY","3145":"Z-RUN ALBERT PARK","3146":"Z-RUN GLEN WAVERLY","3147":"Z-RUN GLEN WAVERLY","3148":"Z-RUN CHADSTONE: 16A,","3149":"Z-RUN GLEN WAVERLY","3150":"Z-RUN GLEN WAVERLY","3151":"Z-RUN VERMONT","3152":"Z-RUN KNOX: 5A,5B,5C,","3153":"Z-RUN KNOX: 5A,5B,5C,","3154":"Z-RUN KNOX: 5A,5B,5C,","3155":"Z-RUN KNOX: 5A,5B,5C,","3156":"Z-RUN KNOX: 5A,5B,5C,","3158":"O-MOUNTAIN","3160":"O-MOUNTAIN","3161":"Z-RUN GLEN WAVERLY","3162":"Z-RUN ALBERT PARK","3163":"Z-RUN ALBERT PARK","3165":"Z-RUN CHADSTONE: 16A,","3166":"Z-RUN CHADSTONE: 16A,","3167":"Z-RUN CHADSTONE: 16A,","3168":"Z-RUN CHADSTONE: 16A,","3169":"Z-RUN CHADSTONE: 16A,","3170":"Z-RUN MULGRAVE:","3171":"Z-RUN NOBLE PARK:","3172":"Z-RUN NOBLE PARK:","3173":"Q-SOUTH/EAST PALLET DROPS","3174":"Z-RUN NOBLE PARK:","3175":"Z-RUN ROWVILLE:","3177":"Z-RUN DANDENONG:","3178":"Z-RUN ROWVILLE:","3179":"Z-RUN KNOX: 5A,5B,5C,","3180":"Z-RUN KNOX: 5A,5B,5C,","3181":"Z-RUN PRAHRAN:","3182":"Z-RUN ALBERT PARK","3183":"Z-RUN ALBERT PARK","3184":"Z-RUN ALBERT PARK","3185":"Z-RUN ALBERT PARK","3186":"Z-RUN ALBERT PARK","3187":"Z-RUN ALBERT PARK","3188":"Z-RUN CHADSTONE: 16A,","3189":"Z-RUN CHELTENHAM:","3190":"Z-RUN CHELTENHAM:","3191":"Z-RUN CHADSTONE: 16A,","3192":"Z-RUN CHELTENHAM:","3193":"Z-RUN CHELTENHAM:","3194":"Z-RUN CHELTENHAM:","3195":"Z-RUN CHELTENHAM:","3196":"Z-RUN CHELTENHAM:","3197":"Z-RUN CHELTENHAM:","3198":"Z-RUN CHELTENHAM","3199":"Z-RUN CHELTENHAM","3200":"Z-RUN CHELTENHAM","3201":"Z-RUN CHELTENHAM","3202":"Z-RUN CHADSTONE: 16A,","3204":"Z-RUN CHADSTONE: 16A,","3205":"Z-RUN ALBERT PARK","3206":"Z-RUN ALBERT PARK","3207":"Z-RUN ALBERT PARK","3212":"N-GEELONG","3214":"N-GEELONG","3215":"N-GEELONG","3216":"N-GEELONG","3217":"N-APOLLO BAY","3218":"N-GEELONG","3219":"N-GEELONG","3220":"N-GEELONG","3222":"N-GEELONG","3223":"N-GEELONG","3224":"N-GEELONG","3225":"N-GEELONG","3226":"N-GEELONG","3227":"N-GEELONG","3228":"N-APOLLO BAY","3232":"N-APOLLO BAY","3234":"N-APOLLO BAY","3236":"E-WARRNAMBOOL","3241":"E-WARRNAMBOOL","3242":"E-WARRNAMBOOL","3250":"E-WARRNAMBOOL","3260":"E-WARRNAMBOOL","3264":"E-WARRNAMBOOL","3266":"E-WARRNAMBOOL","3268":"E-WARRNAMBOOL","3269":"E-WARRNAMBOOL","3272":"E-WEST","3280":"E-WARRNAMBOOL","3282":"E-WARRNAMBOOL","3283":"P-PENINSULA","3284":"E-WARRNAMBOOL","3285":"E-WARRNAMBOOL 2 PORTLAND (FRIDAY)","3289":"E-WEST","3294":"E-WEST","3300":"E-WEST","3304":"E-WARRNAMBOOL 2 PORTLAND (FRIDAY)","3305":"E-WARRNAMBOOL 2 PORTLAND (FRIDAY)","3311":"E-WEST","3315":"E-WEST","3318":"E-WEST","3321":"E-WEST","3324":"E-WEST","3325":"E-WEST","3331":"N-GEELONG","3335":"K-BALLARAT","3337":"K-NIGHT RUN","3338":"K-BALLARAT","3340":"K-NIGHT RUN","3341":"K-BALLARAT","3342":"K-NIGHT RUN","3350":"K-BALLARAT","3351":"K-BALLARAT","3352":"K-BALLARAT","3355":"K-BALLARAT","3356":"K-BALLARAT","3357":"K-BALLARAT","3358":"K-BALLARAT","3361":"K-SKIPTON/ ARARAT (W/F)","3363":"K-BALLARAT","3370":"J-PYRENEES","3373":"K-SKIPTON/ ARARAT (W/F)","3374":"K-SKIPTON/ ARARAT (W/F)","3379":"I-HORSHAM","3380":"K-SKIPTON/ ARARAT (W/F)","3381":"K-SKIPTON/ ARARAT (W/F)","3388":"I-WARRACKNABEAL","3390":"I-WARRACKNABEAL","3392":"I-WARRACKNABEAL","3393":"I-WARRACKNABEAL","3395":"I-HORSHAM","3396":"I-WARRACKNABEAL","3400":"I-HORSHAM","3409":"I-HORSHAM","3412":"E-WEST","3414":"I-HORSHAM","3418":"I-HORSHAM","3419":"I-HORSHAM","3424":"I-WARRACKNABEAL","3427":"K-NIGHT RUN","3429":"K-NIGHT RUN","3431":"J-GISBORNE","3434":"J-GISBORNE","3435":"J-GISBORNE","3440":"J-GISBORNE","3442":"J-GISBORNE","3444":"J-GISBORNE","3450":"J-PYRENEES","3451":"J-PYRENEES","3453":"J-BENDIGO","3458":"J-PYRENEES","3460":"J-PYRENEES","3461":"J-PYRENEES","3462":"J-PYRENEES","3463":"J-PYRENEES","3465":"J-PYRENEES","3467":"J-PYRENEES","3472":"J-PYRENEES","3478":"I-WARRACKNABEAL","3480":"I-WARRACKNABEAL","3483":"I-HORSHAM","3490":"C-ROBINVALE RUN (TU/TH)","3496":"B-MILDURA 2 (TU/TH/SAT)","3498":"B-MILDURA 2 (TU/TH/SAT)","3500":"B-MILDURA 2 (TU/TH/SAT)","3505":"B-MILDURA 2 (TU/TH/SAT)","3517":"C-ROBINVALE RUN (TU/TH)","3518":"C-ROBINVALE RUN (TU/TH)","3523":"J-HEATHCOTE","3525":"C-ROBINVALE RUN (TU/TH)","3527":"C-ROBINVALE RUN (TU/TH)","3529":"C-ROBINVALE RUN (TU/TH)","3533":"C-ROBINVALE RUN (TU/TH)","3537":"C-SWAN HILL","3549":"C-ROBINVALE RUN (TU/TH)","3550":"J-BENDIGO","3551":"J-HEATHCOTE","3555":"J-BENDIGO","3556":"J-BENDIGO","3558":"J-HEATHCOTE","3561":"J-HEATHCOTE","3563":"J-HEATHCOTE","3564":"J-ECHUCA RUN (M/W/F)","3566":"C-SWAN HILL","3567":"C-SWAN HILL","3568":"C-SWAN HILL","3575":"C-SWAN HILL","3579":"C-SWAN HILL","3584":"C-SWAN HILL","3585":"C-SWAN HILL","3595":"C-SWAN HILL","3607":"H-SHEPPARTON","3608":"H-SHEPPARTON 3 (NAGAMBIE)","3610":"H-SHEPPARTON","3612":"H-SHEPPARTON","3616":"H-SHEPPARTON","3620":"H-SHEPPARTON  KYABRAM EX","3621":"H-SHEPPARTON  KYABRAM EX","3623":"H-SHEPPARTON  KYABRAM EX","3629":"H-SHEPPARTON","3630":"H-SHEPPARTON","3631":"H-SHEPPARTON","3635":"H-SHEPPARTON","3636":"H-SHEPPARTON 2 (NATHALIA/NUMURKAH)","3638":"H-SHEPPARTON 2 (NATHALIA/NUMURKAH)","3644":"G-RIVERINA 2 (TOCUMWAL)","3658":"H-BROADFORD","3659":"H-BROADFORD","3660":"H-SHEPPARTON","3662":"H-SHEPPARTON","3664":"F-EUROA","3666":"F-EUROA","3669":"F-EUROA","3672":"F-EUROA","3675":"F-EUROA","3677":"F-EUROA","3678":"F-ALPINE","3683":"F-ALBURY","3685":"G-RIVERINA","3687":"G-RIVERINA","3688":"F-ALBURY","3690":"F-WODONGA","3691":"F-ALBURY","3697":"F-ALPINE","3698":"F-ALPINE","3699":"F-ALPINE","3700":"D-WAGGA","3701":"D-WAGGA","3707":"D-WAGGA","3711":"O-MANSFIELD","3712":"O-MANSFIELD","3713":"O-MANSFIELD","3715":"Y-DEFAULT","3717":"O-MANSFIELD","3719":"O-MANSFIELD","3720":"O-MANSFIELD","3722":"O-MANSFIELD","3730":"G-RIVERINA","3737":"F-ALPINE","3738":"F-ALPINE","3741":"F-ALPINE","3747":"F-BEECHWORTH","3749":"F-BEECHWORTH","3750":"Z-RUN KEW","3752":"Z-RUN KEW","3753":"H-RUN WHITTLESEA:","3754":"Z-RUN KEW","3756":"H-BROADFORD","3757":"H-RUN WHITTLESEA:","3758":"H-BROADFORD","3763":"H-RUN WHITTLESEA:","3764":"H-BROADFORD","3765":"Z-RUN KILSYTH:","3766":"O-MOUNTAIN","3770":"O-MANSFIELD","3775":"O-MANSFIELD","3777":"O-MOUNTAIN","3779":"O-MANSFIELD","3781":"O-MOUNTAIN","3782":"O-MOUNTAIN","3783":"O-MOUNTAIN","3785":"O-MOUNTAIN","3787":"O-MOUNTAIN","3788":"O-MOUNTAIN","3791":"O-MOUNTAIN","3793":"O-MOUNTAIN","3797":"O-MOUNTAIN","3799":"O-MOUNTAIN","3802":"Z-RUN DANDENONG:","3803":"Z-RUN DANDENONG:","3804":"Z-RUN DANDENONG:","3805":"Z-RUN DANDENONG:","3806":"Z-RUN DANDENONG:","3807":"Z-RUN DANDENONG:","3808":"Z-RUN DANDENONG:","3809":"L-PAKENHAM","3810":"L-PAKENHAM","3812":"L-GIPPSLAND","3813":"L-GIPPSLAND","3814":"L-GIPPSLAND","3815":"L-GIPPSLAND","3816":"L-GIPPSLAND","3818":"L-GIPPSLAND","3820":"L-GIPPSLAND","3823":"L-GIPPSLAND","3824":"L-GIPPSLAND","3825":"L-GIPPSLAND","3831":"L-GIPPSLAND","3840":"L-GIPPSLAND","3842":"L-GIPPSLAND","3844":"L-GIPPSLAND","3847":"L-GIPPSLAND 2A (SALE)","3850":"L-GIPPSLAND 2A (SALE)","3851":"L-GIPSSLAND LOCH SPORT (TU/TH)","3854":"L-GIPPSLAND 2A (SALE)","3857":"L-GIPPSLAND","3858":"L-GIPPSLAND","3860":"L-GIPPSLAND","3862":"L-GIPPSLAND","3865":"L-GIPPSLAND","3869":"L-GIPPSLAND","3871":"M-STH GIPPSLAND","3874":"M-STH GIPPSLAND","3875":"L-GIPPSLAND","3880":"L-GIPPSLAND","3882":"A-GIPPSLAND","3885":"A-GIPPSLAND","3888":"A-GIPPSLAND","3890":"A-GIPPSLAND","3892":"A-GIPPSLAND","3896":"A-GIPPSLAND","3898":"A-GIPPSLAND","3903":"L-GIPPSLAND","3904":"L-GIPPSLAND","3909":"L-GIPPSLAND","3910":"Z-RUN CHELTENHAM","3911":"P-PENINSULA","3912":"P-PENINSULA","3913":"P-PENINSULA","3915":"P-PENINSULA","3916":"P-PENINSULA","3918":"P-PENINSULA","3919":"P-PENINSULA","3922":"M-STH GIPPSLAND","3925":"M-STH GIPPSLAND","3926":"P-PENINSULA","3929":"P-PENINSULA","3930":"P-PENINSULA","3931":"P-PENINSULA","3934":"P-PENINSULA","3936":"P-PENINSULA","3937":"P-PENINSULA","3939":"P-PENINSULA","3941":"P-PENINSULA","3942":"P-PENINSULA","3943":"P-PENINSULA","3944":"P-PENINSULA","3945":"M-STH GIPPSLAND","3950":"M-STH GIPPSLAND","3953":"M-STH GIPPSLAND","3956":"M-STH GIPPSLAND","3959":"M-STH GIPPSLAND","3960":"M-STH GIPPSLAND","3962":"M-STH GIPPSLAND","3965":"M-STH GIPPSLAND","3966":"M-STH GIPPSLAND","3971":"M-STH GIPPSLAND","3975":"Z-RUN CRANBOURNE:","3976":"Z-RUN DANDENONG:","3977":"Z-RUN CRANBOURNE:","3980":"M-STH GIPPSLAND","3981":"M-STH GIPPSLAND","3984":"M-STH GIPPSLAND","3988":"M-STH GIPPSLAND","3995":"M-STH GIPPSLAND","3996":"M-STH GIPPSLAND"};
 
 // Look up CX run for a postcode
@@ -1010,6 +1015,196 @@ function VicTile({csvRows,driverAllocation,onOpen,T}){
     </div>
   );
 }
+function parseCSV(text){
+  const lines=text.split(/\r?\n/).filter(Boolean);
+  if(lines.length<2)return[];
+  const headers=lines[0].split(",").map(h=>h.replace(/^"|"$/g,"").trim());
+  return lines.slice(1).map(line=>{
+    const vals=[];let inQ=false,cur="";
+    for(const ch of line){if(ch==='"'){inQ=!inQ}else if(ch===','&&!inQ){vals.push(cur);cur=""}else cur+=ch}
+    vals.push(cur);
+    const obj={};headers.forEach((h,i)=>obj[h]=(vals[i]||"").replace(/^"|"$/g,"").trim());
+    return obj;
+  });
+}
+
+/* ── ANALYTICS ── */
+function buildAnalytics(rows,prevIds=[]){
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Name&&r.Product);
+  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
+  const totalRevenue=nf.reduce((s,r)=>s+(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0),0);
+  const totalBottles=nf.reduce((s,r)=>s+(parseInt(r.Quantity)||0),0);
+  const totalOrders=Object.keys(om).length;
+  const avgOrderValue=totalOrders>0?totalRevenue/totalOrders:0;
+  const productTotals={};nf.forEach(r=>{productTotals[r.Name]=(productTotals[r.Name]||0)+(parseInt(r.Quantity)||0)});
+  const courierTotals={};
+  Object.values(om).forEach(or_=>{
+    const c=or_[0].Courier||"Unknown",st=or_[0].CustomerState||"?";
+    if(!courierTotals[c])courierTotals[c]={orders:0,bottles:0,revenue:0,states:new Set()};
+    courierTotals[c].orders++;courierTotals[c].states.add(st);
+    or_.forEach(r=>{courierTotals[c].bottles+=(parseInt(r.Quantity)||0);courierTotals[c].revenue+=(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0)});
+  });
+  const staffTotals={};
+  Object.values(om).forEach(or_=>{
+    const am=or_[0].AccountManager||"Unknown";
+    if(!staffTotals[am])staffTotals[am]={orders:0,revenue:0,customers:new Set()};
+    staffTotals[am].orders++;staffTotals[am].customers.add(or_[0].CustomerId);
+    or_.forEach(r=>staffTotals[am].revenue+=(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0));
+  });
+  const stateTotals={};
+  Object.values(om).forEach(or_=>{
+    const st=or_[0].CustomerState||"?";
+    if(!stateTotals[st])stateTotals[st]={orders:0,revenue:0};
+    stateTotals[st].orders++;
+    or_.forEach(r=>stateTotals[st].revenue+=(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0));
+  });
+  const allCustomerIds=[...new Set(nf.map(r=>r.CustomerId))];
+  const newCustomers=allCustomerIds.filter(id=>!prevIds.includes(id));
+  const returningCustomers=allCustomerIds.filter(id=>prevIds.includes(id));
+  return{totalRevenue,totalBottles,totalOrders,avgOrderValue,productTotals,courierTotals,staffTotals,stateTotals,allCustomerIds,newCustomers,returningCustomers,date:new Date().toLocaleDateString("en-AU")};
+}
+
+/* ── VALIDATION ── */
+function validate(rows){
+  const issues=[];
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT");
+  const pr=nf.filter(r=>r.Product);
+  const allONs=[...new Set(nf.map(r=>r.OrderNumber).filter(Boolean))];
+  const withProd=[...new Set(pr.map(r=>r.OrderNumber))];
+  allONs.forEach(on=>{if(!withProd.includes(on))issues.push({severity:"error",message:`Order ${on} has no product lines.`,rule:"MISSING_PRODUCTS"})});
+  const om={};pr.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
+  Object.entries(om).forEach(([on,or_])=>{
+    const r=or_[0];
+    if(!r.Customer?.trim())issues.push({severity:"error",message:`Order ${on}: Customer name missing.`,rule:"NO_CUSTOMER"});
+    if(!r.Courier?.trim())issues.push({severity:"error",message:`Order ${on} (${r.Customer}): No courier assigned.`,rule:"NO_COURIER"});
+    if(!r.CustomerAddress1?.trim())issues.push({severity:"error",message:`Order ${on} (${r.Customer}): Delivery address missing.`,rule:"NO_ADDRESS"});
+    if(!r.CustomerSuburb?.trim())issues.push({severity:"warning",message:`Order ${on} (${r.Customer}): Suburb missing.`,rule:"NO_SUBURB"});
+    if(!r.Postcode?.trim())issues.push({severity:"warning",message:`Order ${on} (${r.Customer}): Postcode missing.`,rule:"NO_POSTCODE"});
+  });
+  pr.forEach(r=>{const q=parseInt(r.Quantity);if(isNaN(q)||q<=0)issues.push({severity:"error",message:`Order ${r.OrderNumber}: "${r.Name}" invalid qty.`,rule:"BAD_QTY"})});
+  const omc={};pr.forEach(r=>{if(!omc[r.OrderNumber])omc[r.OrderNumber]=new Set();omc[r.OrderNumber].add(r.Customer)});
+  Object.entries(omc).forEach(([on,cs])=>{if(cs.size>1)issues.push({severity:"error",message:`Order ${on} linked to multiple customers.`,rule:"DUPE_ORDER"})});
+  return{issues,errors:issues.filter(i=>i.severity==="error"),warnings:issues.filter(i=>i.severity==="warning"),totalOrders:allONs.length,coveredOrders:withProd.length,canProceed:issues.filter(i=>i.severity==="error").length===0};
+}
+
+/* ── CELL HELPERS ── */
+const H=(v,b=true,bg="FFD3D3D3",a="center")=>({v,bold:b,bg,align:a});
+const Cv=(v,b=false,bg=null,a=null)=>({v,bold:b,bg,align:a});
+const N=(v,b=false)=>({v,t:'n',bold:b});
+const E=null;
+
+/* ── SHEET GENERATORS ── */
+function genProduction(rows,palletOnly=false){
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(palletOnly?isPallet(r):!isPallet(r)));
+  function section(sr,title,lc,prod){
+    if(!sr.length)return[];
+    const skus=[...new Set(sr.map(r=>r.Name))].sort();
+    const couriers=[...new Set(sr.map(r=>r.Courier))].sort();
+    const out=[];
+    out.push([{v:title,bold:true,bg:"FF1F4E79",align:"left"},E,E,E,E,E,E,E,E,E,E,E,E,E,{v:"LABELS",bold:true},{v:lc,bold:true}]);
+    out.push([E,E,E,E,E,E,E,E,E,E,E,E,E,E,{v:"CUSTOMERGROUP",bold:true},{v:palletOnly?"PALLET":"REGULAR",bold:true}]);
+    out.push([{v:"Labelling Date:",bold:true},E,E,{v:"Staff Working:",bold:true},E,E,E,E,E,E,E,E,E,E,{v:"PRODUCT",bold:true},{v:prod==="TEA"?"TEAS":prod,bold:true}]);
+    out.push([E]);out.push([E,E,E,{v:"Batch Number:",bold:true}]);
+    out.push([H("Courier"),H("OrderNumber"),H("CustomerId"),H("Customer"),...skus.map(s=>H(s)),H("Grand Total"),H("Cartons")]);
+    let gt={};skus.forEach(s=>gt[s]=0);let gtB=0,gtC=0;
+    couriers.forEach(c=>{
+      const cr=sr.filter(r=>r.Courier===c),omap={};
+      cr.forEach(r=>{if(!omap[r.OrderNumber])omap[r.OrderNumber]=[];omap[r.OrderNumber].push(r)});
+      let cB=0,cC=0,cT={};skus.forEach(s=>cT[s]=0);let first=true;
+      Object.entries(omap).forEach(([on,or_])=>{
+        const r=or_[0],sm={};or_.forEach(r=>sm[r.Name]=parseInt(r.Quantity)||0);
+        const rB=skus.reduce((s,k)=>s+(sm[k]||0),0),rC=totalC(or_);
+        out.push([first?{v:c,bold:true}:E,Cv(on),N(parseInt(r.CustomerId)),Cv(r.Customer),...skus.map(s=>sm[s]?N(sm[s]):E),N(rB),N(rC)]);
+        first=false;skus.forEach(s=>{cT[s]+=sm[s]||0;gt[s]+=sm[s]||0});cB+=rB;cC+=rC;gtB+=rB;gtC+=rC;
+      });
+      out.push([E,E,E,{v:"Total",bold:true,bg:"FFFFF2CC"},...skus.map(s=>({v:cT[s],t:'n',bold:true,bg:"FFFFF2CC"})),{v:cB,t:'n',bold:true,bg:"FFFFF2CC"},{v:cC,t:'n',bold:true,bg:"FFFFF2CC"}]);
+      out.push([E]);
+    });
+    out.push([{v:"Grand Total",bold:true,bg:"FF1F4E79",align:"left"},E,E,E,...skus.map(s=>({v:gt[s],t:'n',bold:true,bg:"FFBDD7EE"})),{v:gtB,t:'n',bold:true,bg:"FFBDD7EE"},{v:gtC,t:'n',bold:true,bg:"FFBDD7EE"}]);
+    out.push([E],[E]);
+    return out;
+  }
+  const today=new Date().toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  return[{name:palletOnly?"Pallet Production":"Production",rows:[[{v:today.toUpperCase(),bold:true,bg:"FF1F4E79",align:"left"}],[E],...section(nf.filter(r=>r.Product==="350"),"350ml Orders","WHITE","350"),...section(nf.filter(r=>r.Product==="TEA"),"Tea Orders","CLEAR","TEA"),...section(nf.filter(r=>r.Product==="1L"),"1L Orders","WHITE","1L")],colWidths:[18,14,13,28,...Array(20).fill(16),13,10]}];
+}
+function genColdXpress(rows,date){
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="COLDXPRESS"&&!isPallet(r));
+  if(!nf.length)return[{name:"Sheet1",rows:[[Cv("No COLDXPRESS orders")]]}];
+  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
+  const sr=[];
+  sr.push([{v:"COLD XPRESS MANIFEST",bold:true,bg:"FF002060",align:"left"}]);
+  sr.push([{v:"PLEASE EMAIL TO MANIFESTS@COLDXPRESS.COM.AU"}]);
+  sr.push([{v:"SUPPLIER NAME:",bold:true},{v:"Wholesale State"}]);
+  sr.push([{v:"MANIFEST REFERENCE:",bold:true},{v:date||new Date().toLocaleDateString("en-AU")}]);
+  sr.push([E]);
+  sr.push(["INV NO.","DELIVERY DATE","STORE NO","STORE NAME","ADDRESS","SUBURB","STATE","POSTCODE","CARTONS","PALLETS","WEIGHT (KG)","INV. VALUE","COD","TEMP","COMMENT"].map(h=>H(h,true,"FFD9E1F2","center")));
+  Object.entries(om).forEach(([on,or_])=>{const r=or_[0];sr.push([Cv(on),Cv(r.DeliveryDate||r.DueDate||""),E,Cv(r.Customer),Cv(r.CustomerAddress1),Cv(r.CustomerSuburb),Cv(r.CustomerState),N(parseInt(r.Postcode)),N(totalC(or_)),E,E,E,E,Cv("chilled"),E])});
+  return[{name:"Sheet1",rows:sr,colWidths:[14,16,10,28,28,18,8,10,10,10,13,12,10,10,20]}];
+}
+function genDK(rows){
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="DKDISTRIBUTION"&&!isPallet(r));
+  if(!nf.length)return[{name:"jobs",rows:[[Cv("No DK orders")]]}];
+  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
+  const sr=[["Order ID","Date","Order Type","Notes","Address 1","Address 2","Address 3","Postal Code","City","State","Country","Location","Last Name","Phone","Delivery Instructions","Email","GROUP","Volume"].map(h=>H(h,true,"FFBDD7EE","center"))];
+  Object.entries(om).forEach(([on,or_])=>{const r=or_[0];sr.push([Cv(on),E,Cv("Business"),Cv(r.Customer),Cv(r.CustomerAddress1),Cv(r.CustomerAddress2||""),E,N(parseInt(r.Postcode)),Cv(r.CustomerSuburb),Cv(r.CustomerState),E,E,E,E,Cv(r.Notes||""),E,Cv("WS"),N(totalC(or_))])});
+  return[{name:"jobs",rows:sr,colWidths:[14,12,12,28,28,20,12,12,18,8,10,12,14,14,28,20,8,10]}];
+}
+function genCoolCouriers(rows){
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="COOLCOURIERS"&&!isPallet(r));
+  if(!nf.length)return[{name:"Manifest",rows:[[Cv("No COOLCOURIERS orders")]]}];
+  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
+  const sr=[];
+  sr.push([{v:"COOL COURIERS MANIFEST",bold:true,bg:"FF1A3C5E",align:"left"}]);
+  sr.push([{v:"Wholesale State Cold Pressed Juices",bold:true}]);
+  sr.push([{v:"Manifest Date:",bold:true},{v:new Date().toLocaleDateString("en-AU")}]);sr.push([E]);
+  sr.push(["Order No.","Customer Name","Address","Suburb","State","Postcode","Special Instructions","Items","Total Cartons","Delivery Date"].map(h=>H(h,true,"FFD6E4F0","center")));
+  Object.entries(om).forEach(([on,or_])=>{const r=or_[0];const items=or_.filter(x=>x.SKU!=="FREIGHT"&&x.Product).map(x=>`${x.Name} x${x.Quantity}`).join(", ");sr.push([Cv(on),Cv(r.Customer),Cv(r.CustomerAddress1+(r.CustomerAddress2?", "+r.CustomerAddress2:"")),Cv(r.CustomerSuburb),Cv(r.CustomerState),N(parseInt(r.Postcode)),Cv(r.Notes||""),Cv(items),N(totalC(or_)),Cv(r.DeliveryDate||r.DueDate||"")])});
+  return[{name:"Manifest",rows:sr,colWidths:[14,28,30,18,8,10,24,50,14,14]}];
+}
+function buildPrint(rows,isBacks,sheetName,customerIdOverride){
+  const hdrRow=["Order","#file","SKU","#copies","Customer","Customer ID",".PDF","CODE","#pages","#papersize","#duplex","#orientation","#trayname"].map(h=>H(h,true,"FFBDD7EE","center"));
+  const dr=[];
+  if(isBacks){
+    const t=rows.length;
+    dr.push([N(t+1),Cv(""),Cv("BLANK"),N(24),E,Cv("BLANK"),Cv(".PDF"),Cv("BLANK.PDF"),E,E,E,E,E]);
+    [...rows].reverse().forEach((r,i)=>{const rn=t-i,row=dr.length+2;dr.push([N(rn),{v:`=IF(D${row}>0,CONCATENATE('File address'!$B$1,"\\",F${row},"\\",H${row}),"")`,t:'f'},Cv(r.SKU),N(parseInt(r.Quantity)),Cv(r.Customer),Cv("BACKS"),Cv(".PDF"),{v:`=CONCATENATE(C${row},G${row})`,t:'f'},{v:`=IF(D${row}>0,"all","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},{v:`=IF(D${row}>0,"Portrait","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'}])});
+  }else{
+    dr.push([N(1),Cv(""),Cv("BLANK"),N(24),E,Cv("BLANK"),Cv(".PDF"),Cv("BLANK.PDF"),E,E,E,E,E,E]);
+    rows.forEach((r,i)=>{const on=i+2,row=on+1;dr.push([N(on),{v:`=IF(D${row}>0,CONCATENATE('File address'!$B$1,"\\",F${row},"\\",H${row}),"")`,t:'f'},Cv(r.SKU),N(parseInt(r.Quantity)),Cv(r.Customer),Cv(customerIdOverride||String(r.CustomerId)),Cv(".PDF"),{v:`=CONCATENATE(C${row},G${row})`,t:'f'},{v:`=IF(D${row}>0,"all","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},{v:`=IF(D${row}>0,"Portrait","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},E])});
+  }
+  return[{name:sheetName,rows:[hdrRow,...dr],colWidths:[8,60,18,10,28,14,8,22,8,16,16,12,16]},{name:"File address",rows:[[{v:"Place your file address here",bold:true},Cv("G:\\My Drive\\Print Files")]],colWidths:[30,40]}];
+}
+function genPrints(rows,palletOnly=false){
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(palletOnly?isPallet(r):!isPallet(r)));
+  const sort=pr=>[...pr].sort((a,b)=>{for(const k of['Courier','Customer','OrderNumber','SKU']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
+  const r350=sort(nf.filter(r=>r.Product==="350")),rT=sort(nf.filter(r=>r.Product==="TEA")),r1=sort(nf.filter(r=>r.Product==="1L"));
+  return{f350:buildPrint(r350,false,"FRONTS"),b350:buildPrint(r350,true,"BACKS"),fT:buildPrint(rT,false,"FRONTS"),bT:buildPrint(rT,true,"BACKS"),f1:buildPrint(r1,false,"FRONTS","1L")};
+}
+
+/* ── STATUS ── */
+const ST={
+  "Order Confirmed":    {color:T.sage,  bg:T.sageL, border:"#B8E6B8"},
+  "In Production":      {color:T.blue,  bg:T.blueL, border:"#BFDBFE"},
+  "With Courier":       {color:T.amber, bg:T.amberL,border:T.amberB},
+  "Delivered":          {color:T.teal,  bg:T.tealL, border:"#99F6E4"},
+};
+const ALL_ST=Object.keys(ST);
+
+const MOCK_LOG=[
+  {id:1,from:"notifications@ordermentum.com",subject:"Invoice - Wholesale State Cold Pressed Juices #OMI17714",time:"2:39 PM",type:"order",ref:"OMO17714",action:"Confirmed"},
+  {id:2,from:"notifications@ordermentum.com",subject:"Invoice - Wholesale State Cold Pressed Juices #OMI17707",time:"12:34 PM",type:"order",ref:"OMO17707",action:"Confirmed"},
+  {id:3,from:"manifests@coldxpress.com.au",  subject:"Manifest Confirmed – Wholesale State 04/03/2026",time:"11:14 AM",type:"manifest",ref:null,action:"In Transit (CX)"},
+  {id:4,from:"noreply@dkdistributions.com.au",subject:"POD Confirmed – OMO17701 The Bower Cafe",time:"2:47 PM",type:"pod",ref:"OMO17701",action:"Delivered"},
+  {id:5,from:"noreply@dkdistributions.com.au",subject:"POD Confirmed – OMO17704 Staple Bakery",time:"3:12 PM",type:"pod",ref:"OMO17704",action:"Delivered"},
+];
+
+/* ── SMALL COMPONENTS ── */
+function Pill({status}){const s=ST[status]||ST["Confirmed"];return<span className="pill" style={{background:s.bg,color:s.color,border:`1px solid ${s.border}`}}><span className="dot" style={{background:s.color}}/>{status}</span>}
+function EBadge({type}){const cfg={order:{c:T.sage,bg:T.sageL,l:"ORDER"},manifest:{c:T.blue,bg:T.blueL,l:"MANIFEST"},pod:{c:T.teal,bg:T.tealL,l:"POD"}}[type]||{c:T.inkL,bg:T.creamD,l:"EMAIL"};return<span className="ebadge" style={{background:cfg.bg,color:cfg.c}}>{cfg.l}</span>}
+const f$=v=>`$${(v||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",")}`;
+const fN=v=>(v||0).toLocaleString();
+
+/* ── VAL MODAL ── */
 function ValModal({result,label,onProceed,onCancel,onRequestLabels,labelRequestSent}){
   const{errors,warnings,totalOrders,coveredOrders,canProceed}=result;
   const hasMissingLabels=warnings.some(w=>w.rule==="MISSING_LABEL_FOLDER");
@@ -1342,7 +1537,6 @@ function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
 }
 
 /* ══ MAIN APP ══ */
-const REQUIRED_TEMPLATES = ['COLDXPRESS.xlsx','DK_DISTRIBUTIONS.xlsx','COOLCOURIERS.xlsx','Production_Sheet.xlsx','350ml_Fronts.xlsx','350ml_Backs.xlsx','Tea_Fronts.xlsx','Tea_Backs.xlsx','1L_Fronts.xlsx'];
 
 function TemplateUploader({apiFetch,T}){
   const [uploaded,setUploaded]=React.useState([]);
