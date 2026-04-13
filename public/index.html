@@ -354,6 +354,13 @@ function buildZipBlob(files){
   })).then(entries=>mkZip(entries));
 }
 
+const CX_RUNS={"2581":"Y-DEFAULT","2582":"ZZ - W/H PICK UP - N.S.W.","2588":"ZZ - W/H PICK UP - N.S.W.","2600":"A-CANBERRA SCOTT","2607":"A-CANBERRA SCOTT","2617":"A-CANBERRA SCOTT","2620":"A-CANBERRA SCOTT","2621":"A-CANBERRA SCOTT","2632":"A-GIPPSLAND","2640":"F-ALBURY","2641":"F-ALBURY","2642":"F-ALBURY","2643":"G-RIVERINA","2644":"D-WAGGA","2646":"G-RIVERINA","2647":"G-YARRAWONGA","2648":"B-MILDURA 2 (TU/TH/SAT)","2649":"D-WAGGA","2650":"D-WAGGA","2651":"D-WAGGA","2652":"ZZ - W/H PICK UP - N.S.W.","2653":"D-WAGGA","2655":"D-WAGGA","2656":"D-WAGGA","2658":"D-WAGGA","2660":"D-WAGGA","2661":"D-WAGGA","2663":"D-WAGGA","2680":"A-GRIFFITH","2681":"A-GRIFFITH","2700":"A-GRIFFITH","2701":"D-WAGGA","2705":"A-GRIFFITH","2710":"A-HAY","2711":"A-HAY","2712":"G-RIVERINA 2 (TOCUMWAL)","2713":"G-RIVERINA 2 (TOCUMWAL)","2714":"G-RIVERINA 2 (TOCUMWAL)","2715":"C-ROBINVALE RUN (TU/TH)","2716":"A-GRIFFITH","2717":"B-MILDURA 2 (TU/TH/SAT)","2720":"D-WAGGA","2722":"A-CANBERRA","2727":"Y-DEFAULT","2730":"D-WAGGA","2731":"J-ECHUCA RUN (M/W/F)","2732":"C-SWAN HILL","2733":"C-SWAN HILL","2738":"ZZ - W/H PICK UP - N.S.W.","2739":"B-MILDURA 2 (TU/TH/SAT)","3000":"Z-RUN CITY","3001":"Z-RUN CITY","3002":"Z-RUN PRAHRAN:","3003":"Z-RUN NORTH MELBOURNE","3004":"Z-RUN ALBERT PARK","3005":"Y-DEFAULT","3006":"Z-RUN CITY","3008":"Z-RUN CITY","3010":"Y-DEFAULT","3011":"Z-RUN FOOTSCRAY","3012":"Z-RUN FOOTSCRAY: 3,","3013":"Z-RUN FOOTSCRAY","3015":"Z-RUN FOOTSCRAY","3016":"Z-RUN FOOTSCRAY","3018":"Z-RUN FOOTSCRAY: 3,","3019":"Z-RUN FOOTSCRAY: 3,","3020":"Z-RUN FOOTSCRAY: 3,","3021":"Z-RUN FOOTSCRAY: 3,","3022":"Z-RUN FOOTSCRAY: 3,","3023":"Z-RUN FOOTSCRAY: 3,","3024":"Z-RUN LAVERTON:15B","3026":"Z-RUN LAVERTON:15B","3027":"Z-RUN LAVERTON:15B","3028":"Z-RUN LAVERTON:15B","3029":"Z-RUN LAVERTON:15B","3030":"Z-RUN FOOTSCRAY: 3,","3031":"Z-RUN CITY  2 (HIGHPOINT)","3032":"Z-RUN CITY  2 (HIGHPOINT)","3033":"Z-RUN FOOTSCRAY: 3,","3034":"Z-RUN FOOTSCRAY: 3,","3036":"Z-RUN FOOTSCRAY: 3,","3037":"Z-RUN FOOTSCRAY: 3,","3038":"Z-RUN FOOTSCRAY: 3,","3039":"Z-RUN BRUNSWICK: 1D,2B,","3040":"Z-RUN ESSENDON","3041":"Z-RUN ESSENDON","3042":"Z-RUN FOOTSCRAY: 3,","3043":"Z-RUN BRUNSWICK: 1D,2B,","3044":"Z-RUN BRUNSWICK: 1D,2B,","3046":"Z-RUN BRUNSWICK: 1D,2B,","3047":"Z-RUN ESSENDON","3048":"Z-RUN ESSENDON","3049":"Z-RUN BRUNSWICK: 1D,2B,","3050":"Y-DEFAULT","3051":"Z-RUN CITY","3052":"Z-RUN CITY","3053":"Z-RUN PRAHRAN","3054":"Z-RUN PRAHRAN","3055":"Z-RUN BRUNSWICK: 1D,2B,","3056":"Z-RUN BRUNSWICK: 1D,2B,","3057":"Z-RUN BRUNSWICK: 1D,2B,","3058":"Z-RUN BRUNSWICK: 1D,2B,","3059":"Z-RUN ESSENDON","3060":"Z-RUN BRUNSWICK: 1D,2B,","3061":"Z-RUN ESSENDON","3062":"Z-RUN ESSENDON","3063":"Z-RUN ESSENDON","3064":"Z-RUN ESSENDON","3065":"Z-RUN PRAHRAN","3066":"Z-RUN PRAHRAN","3068":"Z-RUN PRAHRAN","3070":"Z-RUN KEW:","3071":"Z-RUN KEW:","3072":"Z-RUN KEW:","3073":"Z-RUN KEW:","3074":"Z-RUN KEW:","3075":"Z-RUN KEW","3076":"Z-RUN KEW","3078":"Z-RUN KEW:","3079":"Z-RUN BOX HILL:","3081":"Z-RUN BOX HILL:","3082":"Z-RUN KEW","3083":"Z-RUN KEW:","3084":"Z-RUN BOX HILL:","3085":"Z-RUN BOX HILL:","3086":"Y-DEFAULT","3087":"Z-RUN BOX HILL:","3088":"Z-RUN BOX HILL:","3089":"Z-RUN KEW","3090":"Z-RUN BOX HILL:","3091":"Z-RUN KEW","3093":"Z-RUN BOX HILL:","3094":"Z-RUN BOX HILL:","3095":"Z-RUN BOX HILL:","3099":"Z-RUN KEW","3101":"Z-RUN BOX HILL:","3102":"Z-RUN KEW:","3103":"Z-RUN BOX HILL:","3104":"Z-RUN BOX HILL:","3105":"Z-RUN BOX HILL:","3106":"Z-RUN VERMONT","3107":"Z-RUN VERMONT","3108":"Z-RUN VERMONT","3109":"Z-RUN VERMONT","3111":"Z-RUN VERMONT","3113":"Z-RUN VERMONT","3114":"Z-RUN VERMONT","3115":"Z-RUN VERMONT","3116":"O-RUN LILYDALE:","3121":"Z-RUN PRAHRAN:","3122":"Z-RUN GLEN WAVERLY","3123":"Z-RUN GLEN WAVERLY","3124":"Z-RUN GLEN WAVERLY","3125":"Z-RUN VERMONT","3126":"Z-RUN GLEN WAVERLY","3127":"Z-RUN BOX HILL:","3128":"Z-RUN BOX HILL:","3129":"Z-RUN BOX HILL:","3130":"Z-RUN VERMONT","3131":"Z-RUN VERMONT","3132":"Z-RUN VERMONT","3133":"Z-RUN VERMONT","3134":"Z-RUN VERMONT","3135":"Z-RUN VERMONT","3136":"Z-RUN KNOX","3137":"Z-RUN KILSYTH:","3138":"O-RUN LILYDALE:","3139":"O-MOUNTAIN","3140":"O-RUN LILYDALE:","3141":"Z-RUN PRAHRAN:","3142":"Z-RUN PRAHRAN:","3143":"Z-RUN GLEN WAVERLY","3144":"Z-RUN GLEN WAVERLY","3145":"Z-RUN ALBERT PARK","3146":"Z-RUN GLEN WAVERLY","3147":"Z-RUN GLEN WAVERLY","3148":"Z-RUN CHADSTONE: 16A,","3149":"Z-RUN GLEN WAVERLY","3150":"Z-RUN GLEN WAVERLY","3151":"Z-RUN VERMONT","3152":"Z-RUN KNOX: 5A,5B,5C,","3153":"Z-RUN KNOX: 5A,5B,5C,","3154":"Z-RUN KNOX: 5A,5B,5C,","3155":"Z-RUN KNOX: 5A,5B,5C,","3156":"Z-RUN KNOX: 5A,5B,5C,","3158":"O-MOUNTAIN","3160":"O-MOUNTAIN","3161":"Z-RUN GLEN WAVERLY","3162":"Z-RUN ALBERT PARK","3163":"Z-RUN ALBERT PARK","3165":"Z-RUN CHADSTONE: 16A,","3166":"Z-RUN CHADSTONE: 16A,","3167":"Z-RUN CHADSTONE: 16A,","3168":"Z-RUN CHADSTONE: 16A,","3169":"Z-RUN CHADSTONE: 16A,","3170":"Z-RUN MULGRAVE:","3171":"Z-RUN NOBLE PARK:","3172":"Z-RUN NOBLE PARK:","3173":"Q-SOUTH/EAST PALLET DROPS","3174":"Z-RUN NOBLE PARK:","3175":"Z-RUN ROWVILLE:","3177":"Z-RUN DANDENONG:","3178":"Z-RUN ROWVILLE:","3179":"Z-RUN KNOX: 5A,5B,5C,","3180":"Z-RUN KNOX: 5A,5B,5C,","3181":"Z-RUN PRAHRAN:","3182":"Z-RUN ALBERT PARK","3183":"Z-RUN ALBERT PARK","3184":"Z-RUN ALBERT PARK","3185":"Z-RUN ALBERT PARK","3186":"Z-RUN ALBERT PARK","3187":"Z-RUN ALBERT PARK","3188":"Z-RUN CHADSTONE: 16A,","3189":"Z-RUN CHELTENHAM:","3190":"Z-RUN CHELTENHAM:","3191":"Z-RUN CHADSTONE: 16A,","3192":"Z-RUN CHELTENHAM:","3193":"Z-RUN CHELTENHAM:","3194":"Z-RUN CHELTENHAM:","3195":"Z-RUN CHELTENHAM:","3196":"Z-RUN CHELTENHAM:","3197":"Z-RUN CHELTENHAM:","3198":"Z-RUN CHELTENHAM","3199":"Z-RUN CHELTENHAM","3200":"Z-RUN CHELTENHAM","3201":"Z-RUN CHELTENHAM","3202":"Z-RUN CHADSTONE: 16A,","3204":"Z-RUN CHADSTONE: 16A,","3205":"Z-RUN ALBERT PARK","3206":"Z-RUN ALBERT PARK","3207":"Z-RUN ALBERT PARK","3212":"N-GEELONG","3214":"N-GEELONG","3215":"N-GEELONG","3216":"N-GEELONG","3217":"N-APOLLO BAY","3218":"N-GEELONG","3219":"N-GEELONG","3220":"N-GEELONG","3222":"N-GEELONG","3223":"N-GEELONG","3224":"N-GEELONG","3225":"N-GEELONG","3226":"N-GEELONG","3227":"N-GEELONG","3228":"N-APOLLO BAY","3232":"N-APOLLO BAY","3234":"N-APOLLO BAY","3236":"E-WARRNAMBOOL","3241":"E-WARRNAMBOOL","3242":"E-WARRNAMBOOL","3250":"E-WARRNAMBOOL","3260":"E-WARRNAMBOOL","3264":"E-WARRNAMBOOL","3266":"E-WARRNAMBOOL","3268":"E-WARRNAMBOOL","3269":"E-WARRNAMBOOL","3272":"E-WEST","3280":"E-WARRNAMBOOL","3282":"E-WARRNAMBOOL","3283":"P-PENINSULA","3284":"E-WARRNAMBOOL","3285":"E-WARRNAMBOOL 2 PORTLAND (FRIDAY)","3289":"E-WEST","3294":"E-WEST","3300":"E-WEST","3304":"E-WARRNAMBOOL 2 PORTLAND (FRIDAY)","3305":"E-WARRNAMBOOL 2 PORTLAND (FRIDAY)","3311":"E-WEST","3315":"E-WEST","3318":"E-WEST","3321":"E-WEST","3324":"E-WEST","3325":"E-WEST","3331":"N-GEELONG","3335":"K-BALLARAT","3337":"K-NIGHT RUN","3338":"K-BALLARAT","3340":"K-NIGHT RUN","3341":"K-BALLARAT","3342":"K-NIGHT RUN","3350":"K-BALLARAT","3351":"K-BALLARAT","3352":"K-BALLARAT","3355":"K-BALLARAT","3356":"K-BALLARAT","3357":"K-BALLARAT","3358":"K-BALLARAT","3361":"K-SKIPTON/ ARARAT (W/F)","3363":"K-BALLARAT","3370":"J-PYRENEES","3373":"K-SKIPTON/ ARARAT (W/F)","3374":"K-SKIPTON/ ARARAT (W/F)","3379":"I-HORSHAM","3380":"K-SKIPTON/ ARARAT (W/F)","3381":"K-SKIPTON/ ARARAT (W/F)","3388":"I-WARRACKNABEAL","3390":"I-WARRACKNABEAL","3392":"I-WARRACKNABEAL","3393":"I-WARRACKNABEAL","3395":"I-HORSHAM","3396":"I-WARRACKNABEAL","3400":"I-HORSHAM","3409":"I-HORSHAM","3412":"E-WEST","3414":"I-HORSHAM","3418":"I-HORSHAM","3419":"I-HORSHAM","3424":"I-WARRACKNABEAL","3427":"K-NIGHT RUN","3429":"K-NIGHT RUN","3431":"J-GISBORNE","3434":"J-GISBORNE","3435":"J-GISBORNE","3440":"J-GISBORNE","3442":"J-GISBORNE","3444":"J-GISBORNE","3450":"J-PYRENEES","3451":"J-PYRENEES","3453":"J-BENDIGO","3458":"J-PYRENEES","3460":"J-PYRENEES","3461":"J-PYRENEES","3462":"J-PYRENEES","3463":"J-PYRENEES","3465":"J-PYRENEES","3467":"J-PYRENEES","3472":"J-PYRENEES","3478":"I-WARRACKNABEAL","3480":"I-WARRACKNABEAL","3483":"I-HORSHAM","3490":"C-ROBINVALE RUN (TU/TH)","3496":"B-MILDURA 2 (TU/TH/SAT)","3498":"B-MILDURA 2 (TU/TH/SAT)","3500":"B-MILDURA 2 (TU/TH/SAT)","3505":"B-MILDURA 2 (TU/TH/SAT)","3517":"C-ROBINVALE RUN (TU/TH)","3518":"C-ROBINVALE RUN (TU/TH)","3523":"J-HEATHCOTE","3525":"C-ROBINVALE RUN (TU/TH)","3527":"C-ROBINVALE RUN (TU/TH)","3529":"C-ROBINVALE RUN (TU/TH)","3533":"C-ROBINVALE RUN (TU/TH)","3537":"C-SWAN HILL","3549":"C-ROBINVALE RUN (TU/TH)","3550":"J-BENDIGO","3551":"J-HEATHCOTE","3555":"J-BENDIGO","3556":"J-BENDIGO","3558":"J-HEATHCOTE","3561":"J-HEATHCOTE","3563":"J-HEATHCOTE","3564":"J-ECHUCA RUN (M/W/F)","3566":"C-SWAN HILL","3567":"C-SWAN HILL","3568":"C-SWAN HILL","3575":"C-SWAN HILL","3579":"C-SWAN HILL","3584":"C-SWAN HILL","3585":"C-SWAN HILL","3595":"C-SWAN HILL","3607":"H-SHEPPARTON","3608":"H-SHEPPARTON 3 (NAGAMBIE)","3610":"H-SHEPPARTON","3612":"H-SHEPPARTON","3616":"H-SHEPPARTON","3620":"H-SHEPPARTON  KYABRAM EX","3621":"H-SHEPPARTON  KYABRAM EX","3623":"H-SHEPPARTON  KYABRAM EX","3629":"H-SHEPPARTON","3630":"H-SHEPPARTON","3631":"H-SHEPPARTON","3635":"H-SHEPPARTON","3636":"H-SHEPPARTON 2 (NATHALIA/NUMURKAH)","3638":"H-SHEPPARTON 2 (NATHALIA/NUMURKAH)","3644":"G-RIVERINA 2 (TOCUMWAL)","3658":"H-BROADFORD","3659":"H-BROADFORD","3660":"H-SHEPPARTON","3662":"H-SHEPPARTON","3664":"F-EUROA","3666":"F-EUROA","3669":"F-EUROA","3672":"F-EUROA","3675":"F-EUROA","3677":"F-EUROA","3678":"F-ALPINE","3683":"F-ALBURY","3685":"G-RIVERINA","3687":"G-RIVERINA","3688":"F-ALBURY","3690":"F-WODONGA","3691":"F-ALBURY","3697":"F-ALPINE","3698":"F-ALPINE","3699":"F-ALPINE","3700":"D-WAGGA","3701":"D-WAGGA","3707":"D-WAGGA","3711":"O-MANSFIELD","3712":"O-MANSFIELD","3713":"O-MANSFIELD","3715":"Y-DEFAULT","3717":"O-MANSFIELD","3719":"O-MANSFIELD","3720":"O-MANSFIELD","3722":"O-MANSFIELD","3730":"G-RIVERINA","3737":"F-ALPINE","3738":"F-ALPINE","3741":"F-ALPINE","3747":"F-BEECHWORTH","3749":"F-BEECHWORTH","3750":"Z-RUN KEW","3752":"Z-RUN KEW","3753":"H-RUN WHITTLESEA:","3754":"Z-RUN KEW","3756":"H-BROADFORD","3757":"H-RUN WHITTLESEA:","3758":"H-BROADFORD","3763":"H-RUN WHITTLESEA:","3764":"H-BROADFORD","3765":"Z-RUN KILSYTH:","3766":"O-MOUNTAIN","3770":"O-MANSFIELD","3775":"O-MANSFIELD","3777":"O-MOUNTAIN","3779":"O-MANSFIELD","3781":"O-MOUNTAIN","3782":"O-MOUNTAIN","3783":"O-MOUNTAIN","3785":"O-MOUNTAIN","3787":"O-MOUNTAIN","3788":"O-MOUNTAIN","3791":"O-MOUNTAIN","3793":"O-MOUNTAIN","3797":"O-MOUNTAIN","3799":"O-MOUNTAIN","3802":"Z-RUN DANDENONG:","3803":"Z-RUN DANDENONG:","3804":"Z-RUN DANDENONG:","3805":"Z-RUN DANDENONG:","3806":"Z-RUN DANDENONG:","3807":"Z-RUN DANDENONG:","3808":"Z-RUN DANDENONG:","3809":"L-PAKENHAM","3810":"L-PAKENHAM","3812":"L-GIPPSLAND","3813":"L-GIPPSLAND","3814":"L-GIPPSLAND","3815":"L-GIPPSLAND","3816":"L-GIPPSLAND","3818":"L-GIPPSLAND","3820":"L-GIPPSLAND","3823":"L-GIPPSLAND","3824":"L-GIPPSLAND","3825":"L-GIPPSLAND","3831":"L-GIPPSLAND","3840":"L-GIPPSLAND","3842":"L-GIPPSLAND","3844":"L-GIPPSLAND","3847":"L-GIPPSLAND 2A (SALE)","3850":"L-GIPPSLAND 2A (SALE)","3851":"L-GIPSSLAND LOCH SPORT (TU/TH)","3854":"L-GIPPSLAND 2A (SALE)","3857":"L-GIPPSLAND","3858":"L-GIPPSLAND","3860":"L-GIPPSLAND","3862":"L-GIPPSLAND","3865":"L-GIPPSLAND","3869":"L-GIPPSLAND","3871":"M-STH GIPPSLAND","3874":"M-STH GIPPSLAND","3875":"L-GIPPSLAND","3880":"L-GIPPSLAND","3882":"A-GIPPSLAND","3885":"A-GIPPSLAND","3888":"A-GIPPSLAND","3890":"A-GIPPSLAND","3892":"A-GIPPSLAND","3896":"A-GIPPSLAND","3898":"A-GIPPSLAND","3903":"L-GIPPSLAND","3904":"L-GIPPSLAND","3909":"L-GIPPSLAND","3910":"Z-RUN CHELTENHAM","3911":"P-PENINSULA","3912":"P-PENINSULA","3913":"P-PENINSULA","3915":"P-PENINSULA","3916":"P-PENINSULA","3918":"P-PENINSULA","3919":"P-PENINSULA","3922":"M-STH GIPPSLAND","3925":"M-STH GIPPSLAND","3926":"P-PENINSULA","3929":"P-PENINSULA","3930":"P-PENINSULA","3931":"P-PENINSULA","3934":"P-PENINSULA","3936":"P-PENINSULA","3937":"P-PENINSULA","3939":"P-PENINSULA","3941":"P-PENINSULA","3942":"P-PENINSULA","3943":"P-PENINSULA","3944":"P-PENINSULA","3945":"M-STH GIPPSLAND","3950":"M-STH GIPPSLAND","3953":"M-STH GIPPSLAND","3956":"M-STH GIPPSLAND","3959":"M-STH GIPPSLAND","3960":"M-STH GIPPSLAND","3962":"M-STH GIPPSLAND","3965":"M-STH GIPPSLAND","3966":"M-STH GIPPSLAND","3971":"M-STH GIPPSLAND","3975":"Z-RUN CRANBOURNE:","3976":"Z-RUN DANDENONG:","3977":"Z-RUN CRANBOURNE:","3980":"M-STH GIPPSLAND","3981":"M-STH GIPPSLAND","3984":"M-STH GIPPSLAND","3988":"M-STH GIPPSLAND","3995":"M-STH GIPPSLAND","3996":"M-STH GIPPSLAND"};
+
+// Look up CX run for a postcode
+function getCXRun(pc){
+  return CX_RUNS[String(parseInt(pc)||0)]||'';
+}
+
 // ── DELIVERY OPTIMISER ──
 // Postcode zone lookup (VIC only - simplified)
 function getZone(pc){
@@ -488,7 +495,8 @@ function clarkeWright(stops,depot,shiftMins,sm){
     for(let j=i+1;j<stops.length;j++){
       const si=stops[i],sj=stops[j];
       const dI=roadMins(depot,si),dJ=roadMins(depot,sj),ij=roadMins(si,sj);
-      savings.push({i,j,saving:dI+dJ-ij+(si.ce+sj.ce)*0.01});
+      const sameRun=si.cx_run&&sj.cx_run&&si.cx_run===sj.cx_run?25:0;
+      savings.push({i,j,saving:dI+dJ-ij+(si.ce+sj.ce)*0.01+sameRun});
     }
   }
   savings.sort((a,b)=>b.saving-a.saving);
@@ -548,9 +556,10 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
       const coords=getCoords(pc);
       const ctns=totalC(or_);
       const ce=ceCost(ctns,zone);
+      const cx_run=getCXRun(r.Postcode);
       return{
         id:idx+1,orderNumber:on,name:r.Customer,
-        address:r.CustomerAddress1||'',suburb:r.CustomerSuburb||'',
+        address:r.CustomerAddress1||'',suburb:r.CustomerSuburb||'',cx_run,
         postcode:String(pc),state:'VIC',cartons:ctns,zone,ce,
         lat:coords.lat,lon:coords.lon,
         lines:or_.filter(x=>x.SKU!=='FREIGHT'&&x.Product).map(x=>({sku:x.SKU,qty:parseInt(x.Quantity)||0})),
@@ -1953,42 +1962,67 @@ function App(){
         }
         const blob=await resp.blob();
         if(type==="all"){
-          // Show success modal with Email / Download options
-          setGenModal({zipBlob:blob,zipName:d+"_Wholesale_State_Files.zip",dateLabel:d});
-          setDone(p=>({...p,[type]:true}));
-          // Also generate special customer print files client-side
           const specialFiles=genSpecialPrints(rows,d);
-          if(specialFiles.length){
-            buildZipBlob(specialFiles).then(sBlob=>{
-              const url=URL.createObjectURL(sBlob);
-              const a=document.createElement("a");
-              a.href=url;a.download=`${d}_Special_Print_Files.zip`;
-              document.body.appendChild(a);a.click();
-              setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
-            }).catch(()=>{});
+          const extraFiles=[...specialFiles];
+          if(driverAllocation&&driverAllocation.length>0){
+            extraFiles.push({sheets:genWsDriver(rows,driverAllocation,d),name:`${d}_WS_Delivery_Run.xlsx`});
+          }
+          if(extraFiles.length){
+            // Merge special + driver files into the server ZIP before showing modal
+            buildZipBlob(extraFiles).then(async sBlob=>{
+              const mainZip=await JSZip.loadAsync(blob);
+              const specZip=await JSZip.loadAsync(sBlob);
+              for(const fname of Object.keys(specZip.files)){
+                const content=await specZip.files[fname].async('arraybuffer');
+                mainZip.file(fname,content);
+              }
+              const mergedBlob=await mainZip.generateAsync({type:'blob',compression:'DEFLATE'});
+              setGenModal({zipBlob:mergedBlob,zipName:d+"_Wholesale_State_Files.zip",dateLabel:d});
+              setDone(p=>({...p,[type]:true}));
+            }).catch(()=>{
+              setGenModal({zipBlob:blob,zipName:d+"_Wholesale_State_Files.zip",dateLabel:d});
+              setDone(p=>({...p,[type]:true}));
+            });
+          } else {
+            setGenModal({zipBlob:blob,zipName:d+"_Wholesale_State_Files.zip",dateLabel:d});
+            setDone(p=>({...p,[type]:true}));
           }
         } else if(type==="prints"){
-          // Server returns the regular prints zip; also generate special files client-side
-          const url=URL.createObjectURL(blob);
-          const a=document.createElement("a");
-          a.href=url;a.download=d+"_Print_Files.zip";
-          document.body.appendChild(a);a.click();
-          setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
-          setDone(p=>({...p,[type]:true}));
           const specialFiles=genSpecialPrints(rows,d);
           if(specialFiles.length){
-            buildZipBlob(specialFiles).then(sBlob=>{
-              const url2=URL.createObjectURL(sBlob);
-              const a2=document.createElement("a");
-              a2.href=url2;a2.download=`${d}_Special_Print_Files.zip`;
-              document.body.appendChild(a2);a2.click();
-              setTimeout(()=>{document.body.removeChild(a2);URL.revokeObjectURL(url2);},200);
-            }).catch(()=>{});
+            // Merge special files into the server ZIP
+            buildZipBlob(specialFiles).then(async sBlob=>{
+              const mainZip=await JSZip.loadAsync(blob);
+              const specZip=await JSZip.loadAsync(sBlob);
+              for(const fname of Object.keys(specZip.files)){
+                const content=await specZip.files[fname].async('arraybuffer');
+                mainZip.file(fname,content);
+              }
+              const mergedBlob=await mainZip.generateAsync({type:'blob',compression:'DEFLATE'});
+              const url=URL.createObjectURL(mergedBlob);
+              const a=document.createElement("a");
+              a.href=url;a.download=d+"_Print_Files.zip";
+              document.body.appendChild(a);a.click();
+              setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
+            }).catch(()=>{
+              const url=URL.createObjectURL(blob);
+              const a=document.createElement("a");
+              a.href=url;a.download=d+"_Print_Files.zip";
+              document.body.appendChild(a);a.click();
+              setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
+            });
+          } else {
+            const url=URL.createObjectURL(blob);
+            const a=document.createElement("a");
+            a.href=url;a.download=d+"_Print_Files.zip";
+            document.body.appendChild(a);a.click();
+            setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
           }
+          setDone(p=>({...p,[type]:true}));
         } else {
           const url=URL.createObjectURL(blob);
           const a=document.createElement("a");
-          a.href=url;a.download=type==="prints"?d+"_Print_Files.zip":d+"_"+type+".xlsx";
+          a.href=url;a.download=d+"_"+type+".xlsx";
           document.body.appendChild(a);a.click();
           setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
           setDone(p=>({...p,[type]:true}));
@@ -2023,7 +2057,7 @@ function App(){
         const{f350,b350,fT,bT,f1}=genPrints(rows);
         const specialFiles=genSpecialPrints(rows,d);
         const zipName=`${d}_Wholesale_State_Files.zip`;
-        buildZipBlob([
+        const allFiles=[
           {sheets:genProduction(rows),       name:`${d}_Production_Sheet.xlsx`},
           {sheets:genColdXpress(rows,d),     name:`${d}_COLDXPRESS.xlsx`},
           {sheets:genDK(rows),               name:`${d}_DK_DISTRIBUTIONS.xlsx`},
@@ -2034,7 +2068,11 @@ function App(){
           {sheets:bT,                        name:`${d}_Tea_Backs.xlsx`},
           {sheets:f1,                        name:`${d}_1L_Fronts.xlsx`},
           ...specialFiles,
-        ]).then(blob=>{
+        ];
+        if(driverAllocation&&driverAllocation.length>0){
+          allFiles.push({sheets:genWsDriver(rows,driverAllocation,d),name:`${d}_WS_Delivery_Run.xlsx`});
+        }
+        buildZipBlob(allFiles).then(blob=>{
           setGenModal({zipBlob:blob,zipName,dateLabel:d});
           setDone(p=>({...p,[type]:true}));
           setGen(null);
