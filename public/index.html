@@ -363,191 +363,217 @@ function getCXRun(pc){
 
 // ── DELIVERY OPTIMISER ──
 // Postcode zone lookup (VIC only - simplified)
-function getZone(pc){
-  const n=parseInt(pc)||0;
-  if(n>=3800&&n<=3945||n>=3975&&n<=3985)return'metro'; // SE corridor
-  if(n>=3910&&n<=3945)return'cou1'; // Peninsula
-  if(n>=3211&&n<=3240)return'cou2'; // Geelong
-  if(n>=3000&&n<=3207)return'metro';
-  if(n>=3335&&n<=3429)return'metro'; // outer NW
-  if(n>=3750&&n<=3810)return'metro'; // outer NE
-  if(n>=3550&&n<=3560)return'cou4'; // Bendigo
-  if(n>=3350&&n<=3360)return'cou4'; // Ballarat
-  return'cou1';
-}
+const CX_ZONES={"2581":"cou1","2582":"cou1","2588":"cou1","2600":"cou4","2607":"cou4","2617":"cou4","2620":"cou4","2621":"cou4","2632":"cou4","2640":"cou4","2641":"cou4","2642":"cou4","2643":"cou4","2644":"cou4","2646":"cou4","2647":"cou4","2648":"cou4","2649":"cou4","2650":"cou4","2651":"cou4","2652":"cou1","2653":"cou4","2655":"cou4","2656":"cou4","2658":"cou4","2660":"cou4","2661":"cou4","2663":"cou4","2680":"cou4","2681":"cou4","2700":"cou4","2701":"cou4","2705":"cou4","2710":"cou4","2711":"cou4","2712":"cou4","2713":"cou4","2714":"cou4","2715":"cou4","2716":"cou4","2717":"cou4","2720":"cou4","2722":"cou4","2727":"cou1","2730":"cou4","2731":"cou1","2732":"cou4","2733":"cou4","2738":"cou1","2739":"cou4","3000":"metro","3001":"metro","3002":"metro","3003":"metro","3004":"metro","3005":"cou1","3006":"metro","3008":"metro","3010":"cou1","3011":"metro","3012":"metro","3013":"metro","3015":"metro","3016":"metro","3018":"metro","3019":"metro","3020":"metro","3021":"metro","3022":"metro","3023":"metro","3024":"metro","3026":"metro","3027":"metro","3028":"metro","3029":"metro","3030":"metro","3031":"metro","3032":"metro","3033":"metro","3034":"metro","3036":"metro","3037":"metro","3038":"metro","3039":"metro","3040":"metro","3041":"metro","3042":"metro","3043":"metro","3044":"metro","3046":"metro","3047":"metro","3048":"metro","3049":"metro","3050":"cou1","3051":"metro","3052":"metro","3053":"metro","3054":"metro","3055":"metro","3056":"metro","3057":"metro","3058":"metro","3059":"metro","3060":"metro","3061":"metro","3062":"metro","3063":"metro","3064":"metro","3065":"metro","3066":"metro","3068":"metro","3070":"metro","3071":"metro","3072":"metro","3073":"metro","3074":"metro","3075":"metro","3076":"metro","3078":"metro","3079":"metro","3081":"metro","3082":"metro","3083":"metro","3084":"metro","3085":"metro","3086":"cou1","3087":"metro","3088":"metro","3089":"metro","3090":"metro","3091":"metro","3093":"metro","3094":"metro","3095":"metro","3099":"metro","3101":"metro","3102":"metro","3103":"metro","3104":"metro","3105":"metro","3106":"metro","3107":"metro","3108":"metro","3109":"metro","3111":"metro","3113":"metro","3114":"metro","3115":"metro","3116":"metro","3121":"metro","3122":"metro","3123":"metro","3124":"metro","3125":"metro","3126":"metro","3127":"metro","3128":"metro","3129":"metro","3130":"metro","3131":"metro","3132":"metro","3133":"metro","3134":"metro","3135":"metro","3136":"metro","3137":"metro","3138":"metro","3139":"metro","3140":"metro","3141":"metro","3142":"metro","3143":"metro","3144":"metro","3145":"metro","3146":"metro","3147":"metro","3148":"metro","3149":"metro","3150":"metro","3151":"metro","3152":"metro","3153":"metro","3154":"metro","3155":"metro","3156":"metro","3158":"metro","3160":"metro","3161":"metro","3162":"metro","3163":"metro","3165":"metro","3166":"metro","3167":"metro","3168":"metro","3169":"metro","3170":"metro","3171":"metro","3172":"metro","3173":"metro","3174":"metro","3175":"metro","3177":"metro","3178":"metro","3179":"metro","3180":"metro","3181":"metro","3182":"metro","3183":"metro","3184":"metro","3185":"metro","3186":"metro","3187":"metro","3188":"metro","3189":"metro","3190":"metro","3191":"metro","3192":"metro","3193":"metro","3194":"metro","3195":"metro","3196":"metro","3197":"metro","3198":"metro","3199":"metro","3200":"metro","3201":"metro","3202":"metro","3204":"metro","3205":"metro","3206":"metro","3207":"metro","3212":"cou2","3214":"cou2","3215":"cou2","3216":"cou2","3217":"cou2","3218":"cou2","3219":"cou2","3220":"cou2","3222":"cou2","3223":"cou2","3224":"cou2","3225":"cou2","3226":"cou2","3227":"cou2","3228":"cou2","3232":"cou2","3234":"cou2","3236":"cou4","3241":"cou4","3242":"cou4","3250":"cou4","3260":"cou4","3264":"cou4","3266":"cou4","3268":"cou4","3269":"cou4","3272":"cou4","3280":"cou4","3282":"cou4","3283":"cou1","3284":"cou4","3285":"cou4","3289":"cou4","3294":"cou4","3300":"cou4","3304":"cou4","3305":"cou4","3311":"cou4","3315":"cou4","3318":"cou4","3321":"cou4","3324":"cou4","3325":"cou4","3331":"cou2","3335":"cou1","3337":"cou1","3338":"cou1","3340":"cou1","3341":"cou1","3342":"cou1","3350":"cou1","3351":"cou1","3352":"cou1","3355":"cou1","3356":"cou1","3357":"cou1","3358":"cou1","3361":"cou1","3363":"cou1","3370":"cou1","3373":"cou1","3374":"cou1","3379":"cou4","3380":"cou1","3381":"cou1","3388":"cou4","3390":"cou4","3392":"cou4","3393":"cou4","3395":"cou4","3396":"cou4","3400":"cou4","3409":"cou4","3412":"cou4","3414":"cou4","3418":"cou4","3419":"cou4","3424":"cou4","3427":"cou1","3429":"cou1","3431":"cou1","3434":"cou1","3435":"cou1","3440":"cou1","3442":"cou1","3444":"cou1","3450":"cou1","3451":"cou1","3453":"cou1","3458":"cou1","3460":"cou1","3461":"cou1","3462":"cou1","3463":"cou1","3465":"cou1","3467":"cou1","3472":"cou1","3478":"cou4","3480":"cou4","3483":"cou4","3490":"cou4","3496":"cou4","3498":"cou4","3500":"cou4","3505":"cou4","3517":"cou4","3518":"cou4","3523":"cou1","3525":"cou4","3527":"cou4","3529":"cou4","3533":"cou4","3537":"cou4","3549":"cou4","3550":"cou1","3551":"cou1","3555":"cou1","3556":"cou1","3558":"cou1","3561":"cou1","3563":"cou1","3564":"cou1","3566":"cou4","3567":"cou4","3568":"cou4","3575":"cou4","3579":"cou4","3584":"cou4","3585":"cou4","3595":"cou4","3607":"cou4","3608":"cou4","3610":"cou4","3612":"cou4","3616":"cou4","3620":"cou4","3621":"cou4","3623":"cou4","3629":"cou4","3630":"cou4","3631":"cou4","3635":"cou4","3636":"cou4","3638":"cou4","3644":"cou4","3658":"cou4","3659":"cou4","3660":"cou4","3662":"cou4","3664":"cou4","3666":"cou4","3669":"cou4","3672":"cou4","3675":"cou4","3677":"cou4","3678":"cou4","3683":"cou4","3685":"cou4","3687":"cou4","3688":"cou4","3690":"cou4","3691":"cou4","3697":"cou4","3698":"cou4","3699":"cou4","3700":"cou4","3701":"cou4","3707":"cou4","3711":"metro","3712":"metro","3713":"metro","3715":"cou1","3717":"metro","3719":"metro","3720":"metro","3722":"metro","3730":"cou4","3737":"cou4","3738":"cou4","3741":"cou4","3747":"cou4","3749":"cou4","3750":"metro","3752":"metro","3753":"cou4","3754":"metro","3756":"cou4","3757":"cou4","3758":"cou4","3763":"cou4","3764":"cou4","3765":"metro","3766":"metro","3770":"metro","3775":"metro","3777":"metro","3779":"metro","3781":"metro","3782":"metro","3783":"metro","3785":"metro","3787":"metro","3788":"metro","3791":"metro","3793":"metro","3797":"metro","3799":"metro","3802":"metro","3803":"metro","3804":"metro","3805":"metro","3806":"metro","3807":"metro","3808":"metro","3809":"cou1","3810":"cou1","3812":"cou1","3813":"cou1","3814":"cou1","3815":"cou1","3816":"cou1","3818":"cou1","3820":"cou1","3823":"cou1","3824":"cou1","3825":"cou1","3831":"cou1","3840":"cou1","3842":"cou1","3844":"cou1","3847":"cou1","3850":"cou1","3851":"cou1","3854":"cou1","3857":"cou1","3858":"cou1","3860":"cou1","3862":"cou1","3865":"cou1","3869":"cou1","3871":"cou1","3874":"cou1","3875":"cou1","3880":"cou1","3882":"cou4","3885":"cou4","3888":"cou4","3890":"cou4","3892":"cou4","3896":"cou4","3898":"cou4","3903":"cou1","3904":"cou1","3909":"cou1","3910":"metro","3911":"cou1","3912":"cou1","3913":"cou1","3915":"cou1","3916":"cou1","3918":"cou1","3919":"cou1","3922":"cou1","3925":"cou1","3926":"cou1","3929":"cou1","3930":"cou1","3931":"cou1","3934":"cou1","3936":"cou1","3937":"cou1","3939":"cou1","3941":"cou1","3942":"cou1","3943":"cou1","3944":"cou1","3945":"cou1","3950":"cou1","3953":"cou1","3956":"cou1","3959":"cou1","3960":"cou1","3962":"cou1","3965":"cou1","3966":"cou1","3971":"cou1","3975":"metro","3976":"metro","3977":"metro","3980":"cou1","3981":"cou1","3984":"cou1","3988":"cou1","3995":"cou1","3996":"cou1"};
+// Zone from CX schedule - exact postcode lookup, fallback to cou1
+function getZone(pc){return CX_ZONES[String(parseInt(pc)||0)]||'cou1';}
 const DEPOT={lat:-38.0024,lon:145.1587};
+// CX rates: (base + extra*over_threshold) * (1 + fuel_levy) * 1.10 GST
 const CE_RATES={metro:{base:22.40,extra:4.36,thresh:5},cou1:{base:24.89,extra:6.22,thresh:3},cou2:{base:24.89,extra:6.22,thresh:3},cou4:{base:37.34,extra:9.95,thresh:3}};
 const FUEL_LEVY=0.597;
+const GST=1.10;
 function ceCost(cartons,zone){
   const r=CE_RATES[zone]||CE_RATES.metro;
-  return parseFloat(((r.base+Math.max(0,cartons-r.thresh)*r.extra)*(1+FUEL_LEVY)).toFixed(2));
+  return parseFloat(((r.base+Math.max(0,cartons-r.thresh)*r.extra)*(1+FUEL_LEVY)*GST).toFixed(2));
 }
 // Approximate lat/lon from postcode
-const PC_COORDS={
-  3000:{lat:-37.814,lon:144.963},3001:{lat:-37.814,lon:144.963},3003:{lat:-37.798,lon:144.955},
-  3004:{lat:-37.842,lon:144.979},3005:{lat:-37.828,lon:144.952},3006:{lat:-37.825,lon:144.957},
-  3008:{lat:-37.821,lon:144.944},3011:{lat:-37.799,lon:144.900},3012:{lat:-37.804,lon:144.881},
-  3015:{lat:-37.863,lon:144.885},3016:{lat:-37.863,lon:144.885},3018:{lat:-37.874,lon:144.865},
-  3020:{lat:-37.769,lon:144.838},3021:{lat:-37.739,lon:144.815},3025:{lat:-37.834,lon:144.892},
-  3028:{lat:-37.873,lon:144.822},3029:{lat:-37.876,lon:144.770},3031:{lat:-37.789,lon:144.937},
-  3032:{lat:-37.778,lon:144.950},3039:{lat:-37.758,lon:144.923},3040:{lat:-37.737,lon:144.907},
-  3041:{lat:-37.721,lon:144.907},3042:{lat:-37.724,lon:144.874},3044:{lat:-37.689,lon:144.943},
-  3046:{lat:-37.679,lon:144.921},3051:{lat:-37.798,lon:144.948},3052:{lat:-37.793,lon:144.958},
-  3053:{lat:-37.804,lon:144.969},3054:{lat:-37.788,lon:144.974},3055:{lat:-37.781,lon:144.956},
-  3056:{lat:-37.769,lon:144.959},3057:{lat:-37.763,lon:144.976},3058:{lat:-37.751,lon:144.968},
-  3065:{lat:-37.799,lon:144.984},3066:{lat:-37.808,lon:144.988},3067:{lat:-37.818,lon:145.000},
-  3068:{lat:-37.806,lon:144.999},3070:{lat:-37.774,lon:145.004},3071:{lat:-37.764,lon:145.000},
-  3072:{lat:-37.750,lon:145.000},3078:{lat:-37.812,lon:145.026},3079:{lat:-37.802,lon:145.035},
-  3081:{lat:-37.784,lon:145.051},3084:{lat:-37.774,lon:145.070},3101:{lat:-37.819,lon:145.051},
-  3102:{lat:-37.809,lon:145.071},3103:{lat:-37.819,lon:145.085},3104:{lat:-37.809,lon:145.100},
-  3121:{lat:-37.819,lon:145.018},3122:{lat:-37.829,lon:145.035},3123:{lat:-37.839,lon:145.051},
-  3124:{lat:-37.839,lon:145.070},3125:{lat:-37.849,lon:145.085},3126:{lat:-37.839,lon:145.085},
-  3128:{lat:-37.849,lon:145.100},3130:{lat:-37.859,lon:145.120},3131:{lat:-37.839,lon:145.120},
-  3132:{lat:-37.819,lon:145.135},3133:{lat:-37.849,lon:145.135},3134:{lat:-37.809,lon:145.151},
-  3136:{lat:-37.809,lon:145.170},3138:{lat:-37.799,lon:145.185},3141:{lat:-37.849,lon:144.999},
-  3142:{lat:-37.851,lon:144.999},3143:{lat:-37.861,lon:145.004},3144:{lat:-37.869,lon:145.018},
-  3145:{lat:-37.879,lon:145.035},3146:{lat:-37.869,lon:145.051},3147:{lat:-37.889,lon:145.070},
-  3148:{lat:-37.879,lon:145.085},3149:{lat:-37.879,lon:145.100},3150:{lat:-37.889,lon:145.120},
-  3152:{lat:-37.879,lon:145.135},3153:{lat:-37.859,lon:145.170},3156:{lat:-37.909,lon:145.229},
-  3161:{lat:-37.869,lon:144.999},3162:{lat:-37.879,lon:144.999},3163:{lat:-37.889,lon:144.999},
-  3165:{lat:-37.919,lon:145.051},3166:{lat:-37.899,lon:145.070},3168:{lat:-37.909,lon:145.085},
-  3172:{lat:-37.979,lon:145.100},3173:{lat:-38.002,lon:145.159},3174:{lat:-38.022,lon:145.170},
-  3175:{lat:-38.042,lon:145.185},3181:{lat:-37.859,lon:144.999},3182:{lat:-37.869,lon:144.984},
-  3183:{lat:-37.879,lon:144.984},3184:{lat:-37.879,lon:144.969},3185:{lat:-37.889,lon:144.969},
-  3186:{lat:-37.909,lon:144.988},3187:{lat:-37.919,lon:145.004},3188:{lat:-37.939,lon:145.018},
-  3189:{lat:-37.949,lon:145.035},3190:{lat:-37.959,lon:145.051},3192:{lat:-37.969,lon:145.070},
-  3193:{lat:-37.979,lon:145.070},3194:{lat:-37.979,lon:145.051},3195:{lat:-38.039,lon:145.085},
-  3196:{lat:-38.069,lon:145.100},3197:{lat:-38.109,lon:145.135},3198:{lat:-38.129,lon:145.135},
-  3199:{lat:-38.139,lon:145.151},3200:{lat:-38.149,lon:145.151},3204:{lat:-37.909,lon:144.969},
-  3205:{lat:-37.839,lon:144.944},3206:{lat:-37.839,lon:144.928},3207:{lat:-37.839,lon:144.928},
-  3750:{lat:-37.657,lon:145.078},3752:{lat:-37.577,lon:145.078},3754:{lat:-37.497,lon:145.078},
-  3800:{lat:-37.909,lon:145.135},3802:{lat:-37.949,lon:145.170},3803:{lat:-37.969,lon:145.185},
-  3805:{lat:-38.009,lon:145.229},3806:{lat:-38.029,lon:145.229},3807:{lat:-38.049,lon:145.251},
-  3910:{lat:-38.179,lon:145.151},3912:{lat:-38.199,lon:145.185},3916:{lat:-38.279,lon:145.229},
-  3920:{lat:-38.389,lon:145.351},3926:{lat:-38.549,lon:145.451},3930:{lat:-38.629,lon:145.451},
-};
-function getCoords(pc){
-  return PC_COORDS[parseInt(pc)]||null;
+// ============================================================
+// DELIVERY OPTIMISER ENGINE v2
+// ============================================================
+
+// Real drive time via Google Maps Distance Matrix API
+async function getRealDriveMins(origins, destinations, apiKey) {
+  const orig = origins.map(o=>`${o.lat},${o.lon}`).join('|');
+  const dest = destinations.map(d=>`${d.lat},${d.lon}`).join('|');
+  const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(orig)}&destinations=${encodeURIComponent(dest)}&mode=driving&departure_time=now&key=${apiKey}`;
+  try {
+    const r = await fetch(url);
+    const d = await r.json();
+    if (d.rows && d.rows[0] && d.rows[0].elements) {
+      return d.rows[0].elements.map(el =>
+        el.status === 'OK' ? el.duration_in_traffic
+          ? el.duration_in_traffic.value / 60
+          : el.duration.value / 60
+        : null
+      );
+    }
+  } catch(e) {}
+  return null;
 }
-function haversine(a,b){
-  const R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180;
+
+// Haversine fallback (km)
+function hvDist(a, b) {
+  const R=6371, dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
   const x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
   return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
-function roadMins(a,b){
-  return haversine(a,b)*1.32/48*60;
+function hvMins(a, b) { return hvDist(a,b)*1.32/48*60; }
+
+// Build full NxN drive-time matrix for a set of points (depot + stops)
+// Returns matrix[i][j] = minutes from point i to point j
+async function buildMatrix(points, apiKey) {
+  const n = points.length;
+  const mat = Array.from({length:n}, (_,i) => Array.from({length:n}, (_,j) => hvMins(points[i],points[j])));
+  // Batch via Distance Matrix (max 10x10 per call)
+  const BATCH = 10;
+  try {
+    for (let i=0; i<n; i+=BATCH) {
+      const origs = points.slice(i, i+BATCH);
+      for (let j=0; j<n; j+=BATCH) {
+        const dests = points.slice(j, j+BATCH);
+        const origStr = origs.map(p=>`${p.lat},${p.lon}`).join('|');
+        const destStr = dests.map(p=>`${p.lat},${p.lon}`).join('|');
+        const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(origStr)}&destinations=${encodeURIComponent(destStr)}&mode=driving&key=${apiKey}`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+        if (data.rows) {
+          data.rows.forEach((row, ri) => {
+            row.elements.forEach((el, ci) => {
+              if (el.status === 'OK') {
+                mat[i+ri][j+ci] = el.duration.value / 60;
+              }
+            });
+          });
+        }
+      }
+    }
+  } catch(e) { console.warn('Distance Matrix failed, using haversine:', e.message); }
+  return mat;
 }
-function totalRouteTime(stops,depot,sm){
-  if(!stops.length)return 0;
-  let t=roadMins(depot,stops[0]);
-  for(let i=1;i<stops.length;i++)t+=roadMins(stops[i-1],stops[i]);
-  t+=roadMins(stops[stops.length-1],depot);
-  return t+stops.length*sm;
+
+// Route time from matrix
+function routeTimeFromMatrix(stopIdxs, depotIdx, mat, sm) {
+  if (!stopIdxs.length) return 0;
+  let t = mat[depotIdx][stopIdxs[0]];
+  for (let i=1; i<stopIdxs.length; i++) t += mat[stopIdxs[i-1]][stopIdxs[i]];
+  t += mat[stopIdxs[stopIdxs.length-1]][depotIdx];
+  return t + stopIdxs.length * sm;
 }
-function buildGoogleMapsUrl(stops){
-  if(!stops||!stops.length)return null;
-  const D='17+Kirkham+Rd+W+Keysborough+VIC+3173';
-  const wpts=stops.map(s=>encodeURIComponent((s.address||'')+', '+(s.suburb||'')+' VIC '+(s.postcode||'')));
-  return'https://www.google.com/maps/dir/'+[D,...wpts,D].join('/');
-}
-function nearestNeighbour(stops,depot){
-  if(!stops.length)return[];
-  const rem=[...stops];const out=[];let cur=depot;
-  while(rem.length){
-    let bi=0,bd=Infinity;
-    rem.forEach((s,i)=>{const d=roadMins(cur,s);if(d<bd){bd=d;bi=i;}});
-    out.push(rem[bi]);cur=rem[bi];rem.splice(bi,1);
+
+// Nearest neighbour ordering using matrix
+function nnOrder(stopIdxs, depotIdx, mat) {
+  const rem = [...stopIdxs], out = [];
+  let cur = depotIdx;
+  while (rem.length) {
+    let bi = 0, bd = Infinity;
+    rem.forEach((si, i) => { if (mat[cur][si] < bd) { bd = mat[cur][si]; bi = i; } });
+    out.push(rem[bi]); cur = rem[bi]; rem.splice(bi, 1);
   }
   return out;
 }
-function twoOpt(stops,depot){
-  if(stops.length<4)return stops;
-  let best=[...stops],improved=true,pass=0;
-  while(improved&&pass<10){
-    improved=false;pass++;
-    for(let i=0;i<best.length-1;i++){
-      for(let j=i+2;j<best.length;j++){
-        const cand=[...best.slice(0,i+1),...best.slice(i+1,j+1).reverse(),...best.slice(j+1)];
-        if(totalRouteTime(cand,depot,0)<totalRouteTime(best,depot,0)){best=cand;improved=true;}
+
+// 2-opt using matrix
+function twoOptMatrix(stopIdxs, depotIdx, mat) {
+  if (stopIdxs.length < 4) return stopIdxs;
+  let best = [...stopIdxs], improved = true, pass = 0;
+  while (improved && pass < 15) {
+    improved = false; pass++;
+    for (let i=0; i<best.length-1; i++) {
+      for (let j=i+2; j<best.length; j++) {
+        const cand = [...best.slice(0,i+1), ...best.slice(i+1,j+1).reverse(), ...best.slice(j+1)];
+        if (routeTimeFromMatrix(cand,depotIdx,mat,0) < routeTimeFromMatrix(best,depotIdx,mat,0)) {
+          best = cand; improved = true;
+        }
       }
     }
   }
   return best;
 }
-function annotateRoute(stops,depot,startTime,sm,dRate){
-  const [h0,m0]=startTime.split(':').map(Number);
-  let cum=h0*60+m0;
-  // Debug: log first stop coords
-  if(stops.length>0){
-    console.log('[annotateRoute] first stop:',stops[0].name,'lat:',stops[0].lat,'lon:',stops[0].lon,'depot lat:',depot.lat,'depot lon:',depot.lon);
-    console.log('[annotateRoute] roadMins depot->stop0:',roadMins(depot,stops[0]));
-  }
-  return stops.map((s,i)=>{
-    const prev=i===0?depot:stops[i-1];
-    const dm=roadMins(prev,s);
-    cum+=dm;
-    const H=Math.floor(cum/60)%24,M=Math.round(cum%60);
-    const etaStr=String(H).padStart(2,'0')+':'+String(M).padStart(2,'0');
-    const mc=parseFloat(((dm+sm)/60*dRate).toFixed(2));
-    cum+=sm;
-    return{...s,driveMins:parseFloat(dm.toFixed(1)),etaStr,marginalCost:mc,saving:parseFloat((s.ce-mc).toFixed(2)),stopNum:i+1};
-  });
-}
-function clarkeWright(stops,depot,shiftMins,sm,dRate){
-  if(!stops.length)return{routes:[]};
-  const savings=[];
-  for(let i=0;i<stops.length;i++){
-    for(let j=i+1;j<stops.length;j++){
-      const si=stops[i],sj=stops[j];
-      const dI=roadMins(depot,si),dJ=roadMins(depot,sj),ij=roadMins(si,sj);
-      const sameRun=si.cx_run&&sj.cx_run&&si.cx_run===sj.cx_run?25:0;
-      savings.push({i,j,saving:dI+dJ-ij+(si.ce+sj.ce)*0.01+sameRun});
+
+// Clarke-Wright using matrix
+function clarkeWrightMatrix(stops, depotIdx, mat, shiftMins, sm, dRate, sameRunBonus) {
+  if (!stops.length) return { routes: [] };
+  const n = stops.length;
+  const savings = [];
+  for (let i=0; i<n; i++) {
+    for (let j=i+1; j<n; j++) {
+      const si = stops[i], sj = stops[j];
+      const dI = mat[depotIdx][i+1], dJ = mat[depotIdx][j+1], ij = mat[i+1][j+1];
+      const runBonus = si.cx_run && sj.cx_run && si.cx_run===sj.cx_run ? sameRunBonus : 0;
+      savings.push({i, j, saving: dI+dJ-ij + (si.ce+sj.ce)*0.01 + runBonus});
     }
   }
-  savings.sort((a,b)=>b.saving-a.saving);
-  const routes=stops.map(s=>({stops:[s]}));
-  const routeOf=stops.map((_,i)=>i);
-  for(const{i,j}of savings){
-    const ri=routeOf[i],rj=routeOf[j];
-    if(ri===rj||!routes[ri]||!routes[rj])continue;
-    const merged=[...routes[ri].stops,...routes[rj].stops];
-    if(totalRouteTime(merged,depot,sm)>shiftMins)continue;
-    routes[ri].stops=merged;
-    for(let k=0;k<stops.length;k++)if(routeOf[k]===rj)routeOf[k]=ri;
-    routes[rj]=null;
+  savings.sort((a,b) => b.saving-a.saving);
+  const routes = stops.map((_,i) => ({idxs:[i]}));
+  const routeOf = stops.map((_,i) => i);
+  for (const {i,j} of savings) {
+    const ri = routeOf[i], rj = routeOf[j];
+    if (ri===rj || !routes[ri] || !routes[rj]) continue;
+    const merged = [...routes[ri].idxs, ...routes[rj].idxs];
+    const matIdxs = merged.map(k=>k+1);
+    if (routeTimeFromMatrix(matIdxs, depotIdx, mat, sm) > shiftMins) continue;
+    routes[ri].idxs = merged;
+    for (let k=0; k<n; k++) if (routeOf[k]===rj) routeOf[k]=ri;
+    routes[rj] = null;
   }
-  return{routes:routes.filter(Boolean).map((r,idx)=>{
-    const ord=twoOpt(nearestNeighbour(r.stops,depot),depot);
-    const hrs=totalRouteTime(ord,depot,sm)/60;
-    const dc=parseFloat((hrs*dRate).toFixed(2));
-    const ceT=parseFloat(ord.reduce((s,st)=>s+st.ce,0).toFixed(2));
-    return{id:idx,stops:ord,hrs:parseFloat(hrs.toFixed(2)),driverCost:dc,ceTotal:ceT,ceSavings:parseFloat((ceT-dc).toFixed(2))};
+  return { routes: routes.filter(Boolean).map((r, idx) => {
+    const ordered = twoOptMatrix(nnOrder(r.idxs.map(k=>k+1), depotIdx, mat), depotIdx, mat);
+    const orderedStops = ordered.map(matIdx => stops[matIdx-1]);
+    const hrs = routeTimeFromMatrix(ordered, depotIdx, mat, sm) / 60;
+    const dc = parseFloat((hrs*dRate).toFixed(2));
+    const ceT = parseFloat(orderedStops.reduce((s,st)=>s+st.ce,0).toFixed(2));
+    return { id:idx, stops:orderedStops, matIdxs:ordered, hrs:parseFloat(hrs.toFixed(2)), driverCost:dc, ceTotal:ceT, ceSavings:parseFloat((ceT-dc).toFixed(2)) };
   })};
 }
 
-// Suspense localStorage
-const SUSP_KEY='ws_driver_suspense';
-function loadSuspense(){try{return JSON.parse(localStorage.getItem(SUSP_KEY)||'[]');}catch{return[];}}
-function saveSuspense(s){try{localStorage.setItem(SUSP_KEY,JSON.stringify(s));}catch(e){}}
+// Annotate stops with ETA, drive time, cost
+function annotateRoute(stops, depotIdx, mat, startTime, sm, dRate) {
+  const [h0,m0] = startTime.split(':').map(Number);
+  let cum = h0*60+m0;
+  let prevMatIdx = depotIdx;
+  return stops.map((s, i) => {
+    const matIdx = s._matIdx || (i+1);
+    const dm = mat[prevMatIdx][matIdx];
+    cum += dm;
+    const H=Math.floor(cum/60)%24, M=Math.round(cum%60);
+    const etaStr = String(H).padStart(2,'0')+':'+String(M).padStart(2,'0');
+    const mc = parseFloat(((dm+sm)/60*dRate).toFixed(2));
+    cum += sm;
+    prevMatIdx = matIdx;
+    return {...s, driveMins:parseFloat(dm.toFixed(1)), etaStr, marginalCost:mc,
+      saving:parseFloat((s.ce-mc).toFixed(2)), stopNum:i+1};
+  });
+}
 
-function ZoneBadge({zone}){
-  const c={metro:{bg:'#DBEAFE',col:'#1D4ED8',l:'METRO'},cou1:{bg:'#FEF3C7',col:'#B45309',l:'COU1'},cou2:{bg:'#FFEDD5',col:'#C2410C',l:'COU2'},cou4:{bg:'#FCE7F3',col:'#9D174D',l:'COU4'}}[zone]||{bg:'#F1F5F9',col:'#64748B',l:zone||'?'};
+// Suspense (Another Day) - persistent localStorage
+const SUSP_KEY = 'ws_driver_suspense';
+function loadSuspense() { try { return JSON.parse(localStorage.getItem(SUSP_KEY)||'[]'); } catch(e) { return []; } }
+function saveSuspense(s) { try { localStorage.setItem(SUSP_KEY, JSON.stringify(s)); } catch(e) {} }
+
+function buildGoogleMapsUrl(stops) {
+  if (!stops||!stops.length) return null;
+  const D = '17+Kirkham+Rd+W+Keysborough+VIC+3173';
+  const wpts = stops.map(s=>encodeURIComponent((s.address||'')+', '+(s.suburb||'')+' VIC '+(s.postcode||'')));
+  return 'https://www.google.com/maps/dir/'+[D,...wpts,D].join('/');
+}
+
+function ZoneBadge({zone}) {
+  const c = {metro:{bg:'#DBEAFE',col:'#1D4ED8',l:'METRO'},cou1:{bg:'#FEF3C7',col:'#B45309',l:'COU1'},cou2:{bg:'#FFEDD5',col:'#C2410C',l:'COU2'},cou4:{bg:'#FCE7F3',col:'#9D174D',l:'COU4'}}[zone]||{bg:'#F1F5F9',col:'#64748B',l:zone||'?'};
   return <span style={{display:'inline-block',padding:'1px 5px',borderRadius:3,background:c.bg,color:c.col,fontSize:8,fontWeight:700,fontFamily:"'Montserrat',sans-serif",letterSpacing:.5}}>{c.l}</span>;
 }
 
-function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onClose,T}){
-  const [shiftHrs,setShiftHrs]=React.useState(()=>parseFloat(localStorage.getItem('ws_opt_shift')||'9'));
-  const [stopMins,setStopMins]=React.useState(()=>parseFloat(localStorage.getItem('ws_opt_stop')||'10'));
-  const [driverRate,setDriverRate]=React.useState(()=>parseFloat(localStorage.getItem('ws_opt_rate')||'30'));
-  const [numDrivers,setNumDrivers]=React.useState(()=>parseInt(localStorage.getItem('ws_opt_drivers')||'1'));
-  const [startTime,setStartTime]=React.useState(()=>localStorage.getItem('ws_opt_start')||'06:00');
-  const [optimising,setOptimising]=React.useState(false);
-  const [driverAStops,setDriverAStops]=React.useState([]);
-  const [driverBStops,setDriverBStops]=React.useState([]);
-  const [cxStops,setCxStops]=React.useState([]);
-  const [suspenseStops,setSuspenseStops]=React.useState(loadSuspense);
-  const [dragOver,setDragOver]=React.useState(null);
-  const [done,setDone]=React.useState(false);
+const GMAPS_KEY = 'AIzaSyDdtmO12PIicsFNhbRGt-gJ_32MZHVl0Rk';
+const DEPOT_PT = {lat:-38.0024, lon:145.1587};
+
+function DeliveryOptimiserModal({csvRows, existingAllocation, onConfirm, onSkip, onClose, T}) {
+  const [shiftHrs,setShiftHrs]   = React.useState(()=>parseFloat(localStorage.getItem('ws_opt_shift')||'9'));
+  const [stopMins,setStopMins]   = React.useState(()=>parseFloat(localStorage.getItem('ws_opt_stop')||'10'));
+  const [driverRate,setDriverRate]= React.useState(()=>parseFloat(localStorage.getItem('ws_opt_rate')||'30'));
+  const [numDrivers,setNumDrivers]= React.useState(()=>parseInt(localStorage.getItem('ws_opt_drivers')||'1'));
+  const [startTime,setStartTime] = React.useState(()=>localStorage.getItem('ws_opt_start')||'06:00');
+
+  const [status,setStatus]       = React.useState('Geocoding addresses...');
+  const [ready,setReady]         = React.useState(false);
+  const [matrixReady,setMatrixReady] = React.useState(false);
+
+  const [allStops,setAllStops]   = React.useState([]);   // geocoded stops
+  const [mat,setMat]             = React.useState(null); // drive time matrix
+  const [lockedStops,setLockedStops] = React.useState({}); // {orderNumber: stopNum}
+
+  const [driverAStops,setDriverAStops] = React.useState([]);
+  const [driverBStops,setDriverBStops] = React.useState([]);
+  const [cxStops,setCxStops]           = React.useState([]);
+  const [suspenseStops,setSuspenseStops] = React.useState(loadSuspense);
+  const [dragOver,setDragOver]         = React.useState(null);
 
   // Persist settings
   React.useEffect(()=>{localStorage.setItem('ws_opt_shift',shiftHrs);},[shiftHrs]);
@@ -556,15 +582,12 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
   React.useEffect(()=>{localStorage.setItem('ws_opt_drivers',numDrivers);},[numDrivers]);
   React.useEffect(()=>{localStorage.setItem('ws_opt_start',startTime);},[startTime]);
 
-  const [geocoding,setGeocoding]=React.useState(true);
-  const [geocodeStatus,setGeocodeStatus]=React.useState('Geocoding addresses...');
-  const [geocodedStops,setGeocodedStops]=React.useState([]);
-
-  // Build raw stops from VIC orders (no coords yet)
-  const allVicStops=React.useMemo(()=>{
+  // Build raw stops from CSV
+  const rawStops = React.useMemo(()=>{
     const om={};
     csvRows.filter(r=>r.SKU!=='FREIGHT'&&r.Product&&(r.CustomerState||'').toUpperCase()==='VIC'&&!isPallet(r))
       .forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r);});
+    const suspIds = new Set(loadSuspense().map(s=>s.orderNumber));
     return Object.entries(om).map(([on,or_],idx)=>{
       const r=or_[0];
       const pc=parseInt(r.Postcode)||3000;
@@ -572,105 +595,150 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
       const ctns=totalC(or_);
       const ce=ceCost(ctns,zone);
       const cx_run=getCXRun(r.Postcode);
-      return{
-        id:idx+1,orderNumber:on,name:r.Customer,
-        address:r.CustomerAddress1||'',suburb:r.CustomerSuburb||'',cx_run,
-        postcode:String(pc),state:'VIC',cartons:ctns,zone,ce,
-        lat:null,lon:null,routable:false,
+      return {
+        id:idx+1, orderNumber:on, name:r.Customer,
+        address:r.CustomerAddress1||'', suburb:r.CustomerSuburb||'', cx_run,
+        postcode:String(pc), state:'VIC', cartons:ctns, zone, ce,
+        lat:null, lon:null, routable:false,
         lines:or_.filter(x=>x.SKU!=='FREIGHT'&&x.Product).map(x=>({sku:x.SKU,qty:parseInt(x.Quantity)||0})),
-        notes:r.Notes||'',driveMins:0,marginalCost:0,
+        notes:r.Notes||'', driveMins:0, marginalCost:0,
       };
     });
   },[csvRows]);
 
-  // Geocode all addresses using Google Maps API on open
+  const suspenseIds = React.useMemo(()=>new Set(suspenseStops.map(s=>s.orderNumber)),[suspenseStops]);
+
+  // Step 1: Geocode all addresses
   React.useEffect(()=>{
-    if(!allVicStops.length){setGeocoding(false);return;}
+    if(!rawStops.length){setReady(true);return;}
     let cancelled=false;
-    async function geocodeAll(){
-      setGeocoding(true);
-      const GMAPS_KEY='AIzaSyDdtmO12PIicsFNhbRGt-gJ_32MZHVl0Rk';
+    async function go(){
+      setReady(false); setMatrixReady(false);
       const results=[];
-      for(let i=0;i<allVicStops.length;i++){
+      for(let i=0;i<rawStops.length;i++){
         if(cancelled)return;
-        const s=allVicStops[i];
-        setGeocodeStatus(`Geocoding ${i+1} of ${allVicStops.length}: ${s.suburb}...`);
-        const query=encodeURIComponent(`${s.address}, ${s.suburb} VIC ${s.postcode}, Australia`);
+        const s=rawStops[i];
+        setStatus(`Geocoding ${i+1}/${rawStops.length}: ${s.suburb}...`);
+        const q=encodeURIComponent(`${s.address}, ${s.suburb} VIC ${s.postcode}, Australia`);
         try{
-          const resp=await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${GMAPS_KEY}`);
+          const resp=await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${q}&key=${GMAPS_KEY}`);
           const data=await resp.json();
           if(data.results&&data.results[0]){
             const loc=data.results[0].geometry.location;
             results.push({...s,lat:loc.lat,lon:loc.lng,routable:true});
-          } else {
-            results.push({...s,routable:false});
-          }
-        } catch(e){
-          results.push({...s,routable:false});
-        }
+          } else { results.push({...s,routable:false}); }
+        } catch(e){ results.push({...s,routable:false}); }
       }
+      if(cancelled)return;
+      setAllStops(results);
+      setReady(true);
+
+      // Step 2: Build drive-time matrix
+      setStatus('Fetching real drive times...');
+      const routable=results.filter(s=>s.routable&&!suspenseIds.has(s.orderNumber));
+      const points=[DEPOT_PT,...routable];
+      const matrix=await buildMatrix(points, GMAPS_KEY);
       if(!cancelled){
-        setGeocodedStops(results);
-        setGeocoding(false);
-        setGeocodeStatus('');
+        setMat({matrix,routable});
+        setMatrixReady(true);
+        setStatus('');
       }
     }
-    geocodeAll();
+    go();
     return()=>{cancelled=true;};
-  },[allVicStops]);
+  },[rawStops]);
 
-  const suspenseIds=React.useMemo(()=>new Set(suspenseStops.map(s=>s.orderNumber)),[suspenseStops]);
-  const activeStops=React.useMemo(()=>geocodedStops.filter(s=>!suspenseIds.has(s.orderNumber)&&s.routable),[geocodedStops,suspenseIds]);
-  const nonRoutableStops=React.useMemo(()=>geocodedStops.filter(s=>!suspenseIds.has(s.orderNumber)&&!s.routable),[geocodedStops,suspenseIds]);
+  // Step 3: Run optimiser when matrix is ready or settings change
+  const optimise = React.useCallback((matData, settings)=>{
+    const {matrix, routable} = matData || (mat&&mat)||{matrix:null,routable:[]};
+    if(!matrix||!routable.length)return;
+    const {shiftH,stopM,dRate,nDrivers,start,sameRunBonus} = settings || {
+      shiftH:shiftHrs, stopM:stopMins, dRate:driverRate,
+      nDrivers:numDrivers, start:startTime, sameRunBonus:25
+    };
+    const shiftMins = shiftH*60;
+    const res = clarkeWrightMatrix(routable, 0, matrix, shiftMins, stopM, dRate, sameRunBonus||25);
+    const sorted = [...res.routes].sort((a,b)=>b.ceSavings-a.ceSavings);
+    const profitable = sorted.filter(r=>r.ceSavings>0);
 
-  // Run optimiser - takes stops as argument to avoid stale closure
-  const runOptimiser=React.useCallback((routableStops,unroutableStops)=>{
-    const stopsToRoute=routableStops||activeStops;
-    const stopsToRx=unroutableStops||nonRoutableStops;
-    if(!stopsToRoute.length&&!stopsToRx.length)return;
-    setOptimising(true);
-    setTimeout(()=>{
-      const shiftMins=shiftHrs*60;
-      const res=clarkeWright(stopsToRoute,DEPOT,shiftMins,stopMins,driverRate);
-      const sorted=[...res.routes].sort((a,b)=>b.ceSavings-a.ceSavings);
-      const profitable=sorted.filter(r=>r.ceSavings>0);
-      let dA=[],dB=[],cx=[...stopsToRx,...stopsToRoute];
-      if(numDrivers>=1&&profitable[0]){
-        const ann=annotateRoute(profitable[0].stops,DEPOT,startTime,stopMins,driverRate);
-        dA=ann;
-        const dAIds=new Set(ann.map(s=>s.orderNumber));
-        cx=[...stopsToRx,...stopsToRoute.filter(s=>!dAIds.has(s.orderNumber))];
-        if(numDrivers>=2&&profitable[1]){
-          const ann2=annotateRoute(profitable[1].stops,DEPOT,startTime,stopMins,driverRate);
-          dB=ann2;
-          const dBIds=new Set(ann2.map(s=>s.orderNumber));
-          cx=[...stopsToRx,...stopsToRoute.filter(s=>!dAIds.has(s.orderNumber)&&!dBIds.has(s.orderNumber))];
-        }
+    const nonRoutable = allStops.filter(s=>!s.routable&&!suspenseIds.has(s.orderNumber));
+
+    let dA=[], dB=[], cx=[...nonRoutable];
+    const routeToAnnotated = (route) => {
+      const pts = [{...DEPOT_PT, _matIdx:0}, ...routable.map((s,i)=>({...s,_matIdx:i+1}))];
+      return route.stops.map((s,i)=>{
+        const matIdx = routable.findIndex(r=>r.orderNumber===s.orderNumber)+1;
+        const prev = i===0?0:routable.findIndex(r=>r.orderNumber===route.stops[i-1].orderNumber)+1;
+        const dm = matrix[prev][matIdx];
+        return {...s, _matIdx:matIdx, driveMins:parseFloat(dm.toFixed(1))};
+      });
+    };
+
+    if(nDrivers>=1&&profitable[0]){
+      const baseStops = routeToAnnotated(profitable[0]);
+      const [h0,m0]=start.split(':').map(Number);
+      let cum=h0*60+m0;
+      dA = baseStops.map((s,i)=>{
+        const dm=s.driveMins;
+        cum+=dm;
+        const H=Math.floor(cum/60)%24,M=Math.round(cum%60);
+        const etaStr=String(H).padStart(2,'0')+':'+String(M).padStart(2,'0');
+        const mc=parseFloat(((dm+stopM)/60*dRate).toFixed(2));
+        cum+=stopM;
+        return{...s,etaStr,marginalCost:mc,saving:parseFloat((s.ce-mc).toFixed(2)),stopNum:i+1};
+      });
+      const dAIds=new Set(dA.map(s=>s.orderNumber));
+      cx=[...nonRoutable,...routable.filter(s=>!dAIds.has(s.orderNumber))];
+
+      if(nDrivers>=2&&profitable[1]){
+        const baseStops2=routeToAnnotated(profitable[1]);
+        let cum2=h0*60+m0;
+        dB=baseStops2.map((s,i)=>{
+          const dm=s.driveMins;
+          cum2+=dm;
+          const H=Math.floor(cum2/60)%24,M=Math.round(cum2%60);
+          const etaStr=String(H).padStart(2,'0')+':'+String(M).padStart(2,'0');
+          const mc=parseFloat(((dm+stopM)/60*dRate).toFixed(2));
+          cum2+=stopM;
+          return{...s,etaStr,marginalCost:mc,saving:parseFloat((s.ce-mc).toFixed(2)),stopNum:i+1};
+        });
+        const dBIds=new Set(dB.map(s=>s.orderNumber));
+        cx=[...nonRoutable,...routable.filter(s=>!dAIds.has(s.orderNumber)&&!dBIds.has(s.orderNumber))];
       }
-      setDriverAStops(dA);
-      setDriverBStops(dB);
-      setCxStops(cx);
-      setOptimising(false);
-    },50);
+    } else {
+      cx=[...nonRoutable,...routable];
+    }
+    setDriverAStops(dA);
+    setDriverBStops(dB);
+    setCxStops(cx);
+  },[mat,allStops,suspenseIds,shiftHrs,stopMins,driverRate,numDrivers,startTime]);
+
+  // Auto-optimise when matrix ready
+  React.useEffect(()=>{
+    if(matrixReady&&mat)optimise(mat,null);
+  },[matrixReady]);
+
+  // Re-optimise on settings change (only if matrix exists)
+  React.useEffect(()=>{
+    if(matrixReady&&mat)optimise(mat,null);
   },[shiftHrs,stopMins,driverRate,numDrivers,startTime]);
 
-  // Trigger optimiser after geocoding completes with fresh stops
-  React.useEffect(()=>{
-    if(!geocoding&&geocodedStops.length){
-      const routable=geocodedStops.filter(s=>!suspenseIds.has(s.orderNumber)&&s.routable);
-      const unroutable=geocodedStops.filter(s=>!suspenseIds.has(s.orderNumber)&&!s.routable);
-      runOptimiser(routable,unroutable);
-    }
-  },[geocoding]);
+  // Recalculate ETAs/costs for a panel after manual drag (keeps stops, updates numbers)
+  function recalcPanel(stops, startH, startM) {
+    if(!stops.length)return stops;
+    let cum=startH*60+startM;
+    return stops.map((s,i)=>{
+      const dm=s.driveMins||0;
+      cum+=dm;
+      const H=Math.floor(cum/60)%24,M=Math.round(cum%60);
+      const etaStr=String(H).padStart(2,'0')+':'+String(M).padStart(2,'0');
+      const mc=parseFloat(((dm+stopMins)/60*driverRate).toFixed(2));
+      cum+=stopMins;
+      return{...s,etaStr,marginalCost:mc,saving:parseFloat((s.ce-mc).toFixed(2)),stopNum:i+1};
+    });
+  }
 
-  // Re-optimise on settings change using current geocoded stops
-  React.useEffect(()=>{
-    if(!geocoding&&geocodedStops.length){
-      const routable=geocodedStops.filter(s=>!suspenseIds.has(s.orderNumber)&&s.routable);
-      const unroutable=geocodedStops.filter(s=>!suspenseIds.has(s.orderNumber)&&!s.routable);
-      runOptimiser(routable,unroutable);
-    }
-  },[shiftHrs,stopMins,driverRate,numDrivers,startTime]);
+  const [startH,startM] = startTime.split(':').map(Number);
 
   // Drag and drop
   const dragRef=React.useRef(null);
@@ -680,44 +748,55 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
     if(!dragRef.current)return;
     const{stop,from}=dragRef.current;
     const remove=lst=>lst.filter(s=>s.orderNumber!==stop.orderNumber);
-    if(from==='driverA')setDriverAStops(remove);
-    else if(from==='driverB')setDriverBStops(remove);
-    else if(from==='cx')setCxStops(remove);
+    let newA=driverAStops, newB=driverBStops, newCx=cxStops;
+    if(from==='driverA')newA=remove(newA);
+    else if(from==='driverB')newB=remove(newB);
+    else if(from==='cx')newCx=remove(newCx);
     else if(from==='suspense'){setSuspenseStops(prev=>{const u=remove(prev);saveSuspense(u);return u;});}
-    if(to==='driverA')setDriverAStops(p=>[...remove(p),{...stop,driver:'A'}]);
-    else if(to==='driverB')setDriverBStops(p=>[...remove(p),{...stop,driver:'B'}]);
-    else if(to==='cx')setCxStops(p=>[...remove(p),stop]);
+    if(to==='driverA')newA=[...remove(newA),stop];
+    else if(to==='driverB')newB=[...remove(newB),stop];
+    else if(to==='cx')newCx=[...remove(newCx),stop];
     else if(to==='suspense'){setSuspenseStops(prev=>{const u=[...remove(prev),stop];saveSuspense(u);return u;});}
+    // Recalc ETAs after move
+    setDriverAStops(recalcPanel(newA,startH,startM));
+    setDriverBStops(recalcPanel(newB,startH,startM));
+    setCxStops(newCx);
     dragRef.current=null;
   };
   const moveStop=(stop,from,to)=>{
     const remove=lst=>lst.filter(s=>s.orderNumber!==stop.orderNumber);
-    if(from==='driverA')setDriverAStops(remove);
-    else if(from==='driverB')setDriverBStops(remove);
-    else if(from==='cx')setCxStops(remove);
+    let newA=driverAStops,newB=driverBStops,newCx=cxStops;
+    if(from==='driverA')newA=remove(newA);
+    else if(from==='driverB')newB=remove(newB);
+    else if(from==='cx')newCx=remove(newCx);
     else if(from==='suspense'){setSuspenseStops(prev=>{const u=remove(prev);saveSuspense(u);return u;});}
-    if(to==='driverA')setDriverAStops(p=>[...remove(p),{...stop,driver:'A'}]);
-    else if(to==='driverB')setDriverBStops(p=>[...remove(p),{...stop,driver:'B'}]);
-    else if(to==='cx')setCxStops(p=>[...remove(p),stop]);
+    if(to==='driverA')newA=[...remove(newA),stop];
+    else if(to==='driverB')newB=[...remove(newB),stop];
+    else if(to==='cx')newCx=[...remove(newCx),stop];
     else if(to==='suspense'){setSuspenseStops(prev=>{const u=[...remove(prev),stop];saveSuspense(u);return u;});}
+    setDriverAStops(recalcPanel(newA,startH,startM));
+    setDriverBStops(recalcPanel(newB,startH,startM));
+    setCxStops(newCx);
   };
 
   // Stats
-  const driverHrsA=driverAStops.length?(totalRouteTime(driverAStops,DEPOT,stopMins)/60).toFixed(1):0;
-  const driverHrsB=driverBStops.length?(totalRouteTime(driverBStops,DEPOT,stopMins)/60).toFixed(1):0;
+  const driverHrsA=driverAStops.length?((driverAStops.reduce((s,st)=>s+(st.driveMins||0),0)+(driverAStops[driverAStops.length-1]?.driveMins||0)+driverAStops.length*stopMins)/60).toFixed(1):0;
+  const driverHrsB=driverBStops.length?((driverBStops.reduce((s,st)=>s+(st.driveMins||0),0)+(driverBStops[driverBStops.length-1]?.driveMins||0)+driverBStops.length*stopMins)/60).toFixed(1):0;
   const driverCostA=parseFloat((driverHrsA*driverRate).toFixed(2));
   const driverCostB=parseFloat((driverHrsB*driverRate).toFixed(2));
-  const ceIfAll=activeStops.reduce((s,st)=>s+st.ce,0);
+  const ceIfAll=[...driverAStops,...driverBStops,...cxStops].reduce((s,st)=>s+(st.ce||0),0);
   const ceSaved=driverAStops.reduce((s,st)=>s+st.ce,0)+driverBStops.reduce((s,st)=>s+st.ce,0)-(driverCostA+driverCostB);
   const allAccounted=[...driverAStops,...driverBStops,...cxStops].length;
-  const totalVic=allVicStops.filter(s=>!suspenseIds.has(s.orderNumber)).length;
+  const totalVic=rawStops.filter(s=>!suspenseIds.has(s.orderNumber)).length;
   const countOk=allAccounted>=totalVic;
   const urlA=buildGoogleMapsUrl(driverAStops);
   const urlB=buildGoogleMapsUrl(driverBStops);
 
+  const isLoading=!ready||!matrixReady;
+
   const StopCard=({stop,panel})=>(
     <div draggable onDragStart={e=>onDragStart(e,stop,panel)}
-      style={{padding:'9px 12px',borderBottom:'1px solid #F1F5F9',display:'flex',gap:8,alignItems:'flex-start',cursor:'grab'}}
+      style={{padding:'9px 12px',borderBottom:'1px solid #F1F5F9',display:'flex',gap:8,alignItems:'flex-start',cursor:'grab',background:'transparent',transition:'background .1s'}}
       onMouseEnter={e=>e.currentTarget.style.background='#F8FAFC'}
       onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
       <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:'#CBD5E1',paddingTop:1,minWidth:14,textAlign:'right'}}>{stop.stopNum||''}</div>
@@ -726,7 +805,7 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
           <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:'#1E3A5F',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{stop.name}</span>
           <ZoneBadge zone={stop.zone}/>
         </div>
-        <div style={{fontSize:10,color:'#64748B',display:'flex',gap:6,flexWrap:'wrap'}}>
+        <div style={{fontSize:10,color:'#64748B',display:'flex',gap:5,flexWrap:'wrap',alignItems:'center'}}>
           <span>{stop.suburb}</span>
           <span style={{color:'#CBD5E1'}}>|</span>
           <span>{stop.cartons} ctns</span>
@@ -734,139 +813,161 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
           <span style={{color:'#2563EB',fontWeight:700}}>${stop.ce.toFixed(2)} CX</span>
           {stop.marginalCost>0&&<span style={{color:'#059669',fontWeight:700}}>${stop.marginalCost.toFixed(2)} driver</span>}
           {stop.etaStr&&<span style={{color:'#94A3B8'}}>ETA {stop.etaStr}</span>}
+          {stop.driveMins>0&&<span style={{color:'#94A3B8'}}>{Math.round(stop.driveMins)}min leg</span>}
           {stop.saving!=null&&stop.marginalCost>0&&<span style={{color:stop.saving>0?'#059669':'#DC2626',fontWeight:600}}>{stop.saving>0?'saves':'costs'} ${Math.abs(stop.saving).toFixed(2)}</span>}
-          {stop.cx_run&&<span style={{color:'#94A3B8',fontSize:9}}>{stop.cx_run.replace(/^[A-Z]-/,'').replace('Z-RUN ','')}</span>}
+          {stop.cx_run&&<span style={{color:'#94A3B8',fontSize:9,fontStyle:'italic'}}>{stop.cx_run.replace('Z-RUN ','').replace(/^[A-Z]-/,'')}</span>}
         </div>
       </div>
       <div style={{display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
-        {panel!=='cx'&&<button onClick={()=>moveStop(stop,panel,'cx')} style={{fontSize:9,padding:'2px 5px',borderRadius:3,border:'1px solid #BFDBFE',background:'#EFF6FF',color:'#2563EB',cursor:'pointer',fontWeight:700}}>CX</button>}
-        {panel!=='driverA'&&<button onClick={()=>moveStop(stop,panel,'driverA')} style={{fontSize:9,padding:'2px 5px',borderRadius:3,border:'1px solid #BBF7D0',background:'#DCFCE7',color:'#15803D',cursor:'pointer',fontWeight:700}}>A</button>}
-        {panel!=='driverB'&&numDrivers>=2&&<button onClick={()=>moveStop(stop,panel,'driverB')} style={{fontSize:9,padding:'2px 5px',borderRadius:3,border:'1px solid #C7D2FE',background:'#E0E7FF',color:'#4338CA',cursor:'pointer',fontWeight:700}}>B</button>}
-        {panel!=='suspense'&&<button onClick={()=>moveStop(stop,panel,'suspense')} style={{fontSize:9,padding:'2px 5px',borderRadius:3,border:'1px solid #DDD6FE',background:'#EDE9FE',color:'#6D28D9',cursor:'pointer',fontWeight:700}}>Later</button>}
+        {panel!=='cx'&&<button onClick={()=>moveStop(stop,panel,'cx')} style={{fontSize:9,padding:'2px 5px',borderRadius:3,border:'1px solid #BFDBFE',background:'#EFF6FF',color:'#2563EB',cursor:'pointer',fontFamily:"'Montserrat',sans-serif",fontWeight:700}}>CX</button>}
+        {panel!=='driverA'&&<button onClick={()=>moveStop(stop,panel,'driverA')} style={{fontSize:9,padding:'2px 5px',borderRadius:3,border:'1px solid #BBF7D0',background:'#DCFCE7',color:'#15803D',cursor:'pointer',fontFamily:"'Montserrat',sans-serif",fontWeight:700}}>A</button>}
+        {panel!=='driverB'&&numDrivers>=2&&<button onClick={()=>moveStop(stop,panel,'driverB')} style={{fontSize:9,padding:'2px 5px',borderRadius:3,border:'1px solid #C7D2FE',background:'#E0E7FF',color:'#4338CA',cursor:'pointer',fontFamily:"'Montserrat',sans-serif",fontWeight:700}}>B</button>}
+        {panel!=='suspense'&&<button onClick={()=>moveStop(stop,panel,'suspense')} style={{fontSize:9,padding:'2px 5px',borderRadius:3,border:'1px solid #DDD6FE',background:'#EDE9FE',color:'#6D28D9',cursor:'pointer',fontFamily:"'Montserrat',sans-serif",fontWeight:700}}>Later</button>}
       </div>
     </div>
   );
 
-  const Panel=({title,icon,stops,panel,accentColor,meta})=>(
-    <div onDragOver={e=>e.preventDefault()} onDrop={e=>onDrop(e,panel)} onDragEnter={()=>setDragOver(panel)} onDragLeave={()=>setDragOver(p=>p===panel?null:p)}
-      style={{background:dragOver===panel?`${accentColor}08`:'#fff',border:`1.5px solid ${dragOver===panel?accentColor:accentColor+'33'}`,borderRadius:12,overflow:'hidden',transition:'all .15s',display:'flex',flexDirection:'column'}}>
+  const Panel=({title,icon,stops,panel,accentColor,meta,footer})=>(
+    <div onDragOver={e=>e.preventDefault()} onDrop={e=>onDrop(e,panel)}
+      onDragEnter={()=>setDragOver(panel)} onDragLeave={()=>setDragOver(p=>p===panel?null:p)}
+      style={{background:dragOver===panel?`${accentColor}08`:'#fff',border:`1.5px solid ${dragOver===panel?accentColor:accentColor+'33'}`,borderRadius:12,overflow:'hidden',display:'flex',flexDirection:'column',transition:'all .15s'}}>
       <div style={{padding:'10px 12px',background:`${accentColor}12`,borderBottom:`1px solid ${accentColor}22`,display:'flex',alignItems:'center',gap:7,flexShrink:0}}>
         <span style={{fontSize:15}}>{icon}</span>
         <span style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:11,color:'#1E3A5F'}}>{title}</span>
         {meta&&<span style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:accentColor,background:`${accentColor}18`,padding:'1px 7px',borderRadius:10}}>{meta}</span>}
         <span style={{marginLeft:'auto',fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:600,color:'#94A3B8'}}>{stops.length} stop{stops.length!==1?'s':''}</span>
       </div>
-      <div style={{flex:1,overflowY:'auto',maxHeight:500}}>
+      <div style={{flex:1,overflowY:'auto',maxHeight:420}}>
         {stops.length===0
-          ?<div style={{padding:'16px 12px',textAlign:'center',color:'#94A3B8',fontSize:11,fontFamily:"'Montserrat',sans-serif"}}>Drop stops here</div>
+          ?<div style={{padding:'20px 12px',textAlign:'center',color:'#94A3B8',fontSize:11,fontFamily:"'Montserrat',sans-serif"}}>Drop stops here</div>
           :stops.map(s=><StopCard key={s.orderNumber} stop={s} panel={panel}/>)}
       </div>
+      {footer&&<div style={{padding:'8px 12px',background:`${accentColor}08`,borderTop:`1px solid ${accentColor}22`,fontFamily:"'Montserrat',sans-serif",fontSize:10,color:accentColor}}>{footer}</div>}
     </div>
   );
 
   return(
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:1000,display:'flex',alignItems:'stretch',justifyContent:'flex-end'}}>
-      {geocoding&&(
-        <div style={{position:'absolute',inset:0,background:'rgba(3,45,96,0.85)',zIndex:10,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16}}>
-          <div style={{fontSize:32}}>📍</div>
-          <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:16,color:'#fff'}}>Geocoding Addresses</div>
-          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,color:'#7EB8F7',maxWidth:320,textAlign:'center'}}>{geocodeStatus}</div>
-          <div style={{width:240,height:4,background:'rgba(255,255,255,0.2)',borderRadius:2,overflow:'hidden'}}>
-            <div style={{height:'100%',background:'#34D399',borderRadius:2,width:geocodedStops.length&&allVicStops.length?(geocodedStops.length/allVicStops.length*100)+'%':'0%',transition:'width .3s'}}/>
+      {isLoading&&(
+        <div style={{position:'absolute',inset:0,background:'rgba(3,45,96,0.9)',zIndex:10,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16}}>
+          <div style={{fontSize:36}}>📍</div>
+          <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:18,color:'#fff'}}>
+            {!ready?'Geocoding Addresses':'Fetching Drive Times'}
+          </div>
+          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,color:'#7EB8F7',maxWidth:360,textAlign:'center'}}>{status}</div>
+          <div style={{width:280,height:5,background:'rgba(255,255,255,0.2)',borderRadius:3,overflow:'hidden',marginTop:4}}>
+            <div style={{height:'100%',background:'#34D399',borderRadius:3,
+              width:!ready?(allStops.length&&rawStops.length?allStops.length/rawStops.length*100+'%':'5%'):'70%',
+              transition:'width .4s'}}/>
+          </div>
+          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:8}}>
+            Using real-time Google Maps drive times
           </div>
         </div>
       )}
-      <div style={{width:'min(1100px,98vw)',height:'100vh',background:'#F8FAFC',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'-8px 0 40px rgba(0,0,0,0.18)'}}>
+
+      <div style={{width:'min(1140px,98vw)',height:'100vh',background:'#F8FAFC',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'-8px 0 40px rgba(0,0,0,0.18)'}}>
 
         {/* Header */}
-        <div style={{background:'linear-gradient(135deg,#032D60,#0D3A72)',padding:'16px 20px',display:'flex',alignItems:'center',gap:14,flexShrink:0}}>
+        <div style={{background:'linear-gradient(135deg,#032D60,#0D3A72)',padding:'14px 20px',display:'flex',alignItems:'center',gap:14,flexShrink:0}}>
           <div style={{flex:1}}>
             <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:16,color:'#fff',letterSpacing:1}}>Victorian Delivery Optimiser</div>
-            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,letterSpacing:1.5,marginTop:2,color:countOk?'#34D399':'#FCA5A5',fontWeight:700}}>
-              {countOk?'✓ ALL '+totalVic+' VIC ORDERS ACCOUNTED FOR':'⚠ '+allAccounted+' / '+totalVic+' VIC ORDERS PLACED — '+( totalVic-allAccounted)+' MISSING'}
+            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,letterSpacing:1.5,marginTop:2,fontWeight:700,
+              color:countOk?'#34D399':'#FCA5A5'}}>
+              {countOk?'OK ALL '+totalVic+' VIC ORDERS ACCOUNTED FOR':'MISSING '+(totalVic-allAccounted)+' OF '+totalVic+' VIC ORDERS'}
             </div>
           </div>
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            {urlA&&<a href={urlA} target="_blank" rel="noopener noreferrer" style={{padding:'7px 13px',borderRadius:8,background:'rgba(255,255,255,0.15)',color:'#fff',fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,textDecoration:'none',border:'1px solid rgba(255,255,255,0.25)'}}>Driver A: Maps</a>}
-            {urlB&&<a href={urlB} target="_blank" rel="noopener noreferrer" style={{padding:'7px 13px',borderRadius:8,background:'rgba(255,255,255,0.15)',color:'#fff',fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,textDecoration:'none',border:'1px solid rgba(255,255,255,0.25)'}}>Driver B: Maps</a>}
-            <button onClick={onClose} style={{width:34,height:34,borderRadius:8,border:'1px solid rgba(255,255,255,0.25)',background:'rgba(255,255,255,0.1)',color:'#fff',fontSize:18,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:300}}>x</button>
+            {urlA&&<a href={urlA} target="_blank" rel="noopener noreferrer" style={{padding:'7px 13px',borderRadius:8,background:'rgba(255,255,255,0.15)',color:'#fff',fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,textDecoration:'none',border:'1px solid rgba(255,255,255,0.25)',whiteSpace:'nowrap'}}>Driver A: Maps</a>}
+            {urlB&&<a href={urlB} target="_blank" rel="noopener noreferrer" style={{padding:'7px 13px',borderRadius:8,background:'rgba(255,255,255,0.15)',color:'#fff',fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,textDecoration:'none',border:'1px solid rgba(255,255,255,0.25)',whiteSpace:'nowrap'}}>Driver B: Maps</a>}
+            <button onClick={onClose} style={{width:32,height:32,borderRadius:8,border:'1px solid rgba(255,255,255,0.25)',background:'rgba(255,255,255,0.1)',color:'#fff',fontSize:18,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>x</button>
           </div>
         </div>
 
-        {/* Metrics bar */}
-        <div style={{background:'#fff',borderBottom:'1px solid #E2E8F0',padding:'10px 20px',display:'flex',gap:20,flexShrink:0,flexWrap:'wrap'}}>
+        {/* Metrics */}
+        <div style={{background:'#fff',borderBottom:'1px solid #E2E8F0',padding:'10px 20px',display:'flex',gap:24,flexShrink:0,flexWrap:'wrap',alignItems:'center'}}>
           {[
-            ['CX if all sent','$'+ceIfAll.toFixed(2),'#2563EB'],
+            ['CX if all sent','$'+ceIfAll.toFixed(2),'#64748B'],
             ['Driver A cost','$'+driverCostA.toFixed(2),'#059669'],
             numDrivers>=2&&['Driver B cost','$'+driverCostB.toFixed(2),'#4338CA'],
-            ['You save','$'+Math.max(0,ceSaved).toFixed(2),ceSaved>0?'#059669':'#DC2626'],
+            ['You save','$'+(Math.max(0,ceSaved)).toFixed(2),ceSaved>0?'#059669':'#DC2626'],
           ].filter(Boolean).map(([l,v,c])=>(
             <div key={l} style={{textAlign:'center'}}>
-              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:16,fontWeight:800,color:c}}>{v}</div>
+              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:18,fontWeight:800,color:c}}>{v}</div>
               <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:'#94A3B8',letterSpacing:.5}}>{l.toUpperCase()}</div>
             </div>
           ))}
-          <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>
-            <button onClick={()=>runOptimiser(activeStops,nonRoutableStops)} disabled={optimising||geocoding} style={{padding:'7px 14px',borderRadius:8,border:'1.5px solid #BFDBFE',background:'#EFF6FF',color:'#2563EB',fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:'pointer'}}>
-              {optimising?'Optimising...':geocoding?'Geocoding...':'Re-optimise'}
+          <div style={{marginLeft:'auto',display:'flex',gap:8}}>
+            <button onClick={()=>matrixReady&&mat&&optimise(mat,null)} disabled={!matrixReady}
+              style={{padding:'7px 14px',borderRadius:8,border:'1.5px solid #BFDBFE',background:'#EFF6FF',color:'#2563EB',fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:matrixReady?'pointer':'default',opacity:matrixReady?1:0.5}}>
+              Re-optimise
             </button>
           </div>
         </div>
 
-        {/* Main content */}
+        {/* Content */}
         <div style={{flex:1,display:'flex',overflow:'hidden'}}>
 
-          {/* Sidebar settings */}
-          <div style={{width:200,background:'#fff',borderRight:'1px solid #E2E8F0',padding:14,display:'flex',flexDirection:'column',gap:12,overflowY:'auto',flexShrink:0}}>
+          {/* Sidebar */}
+          <div style={{width:196,background:'#fff',borderRight:'1px solid #E2E8F0',padding:14,display:'flex',flexDirection:'column',gap:12,overflowY:'auto',flexShrink:0}}>
             <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:'#94A3B8',letterSpacing:2}}>SETTINGS</div>
             {[
-              ['Shift hours',shiftHrs,setShiftHrs,6,14,1],
+              ['Shift hours',shiftHrs,setShiftHrs,6,14,0.5],
               ['Stop time (min)',stopMins,setStopMins,5,30,5],
-              ['Rate ($/hr)',driverRate,setDriverRate,20,60,5],
+              ['Rate ($/hr)',driverRate,setDriverRate,20,80,5],
             ].map(([label,val,set,min,max,step])=>(
               <div key={label}>
                 <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
                   <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:'#64748B'}}>{label}</span>
                   <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:'#1E3A5F'}}>{val}</span>
                 </div>
-                <input type="range" min={min} max={max} step={step} value={val} onChange={e=>set(Number(e.target.value))} style={{width:'100%',accentColor:'#2563EB'}}/>
+                <input type="range" min={min} max={max} step={step} value={val}
+                  onChange={e=>set(parseFloat(e.target.value))}
+                  style={{width:'100%',accentColor:'#2563EB'}}/>
               </div>
             ))}
             <div>
               <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:'#64748B',marginBottom:4}}>Drivers</div>
               <div style={{display:'flex',gap:6}}>
-                {[1,2].map(n=><button key={n} onClick={()=>setNumDrivers(n)} style={{flex:1,padding:'5px 0',borderRadius:6,border:`1.5px solid ${numDrivers===n?'#2563EB':'#E2E8F0'}`,background:numDrivers===n?'#EFF6FF':'#fff',color:numDrivers===n?'#2563EB':'#94A3B8',fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:700,cursor:'pointer'}}>{n}</button>)}
+                {[1,2].map(n=><button key={n} onClick={()=>setNumDrivers(n)}
+                  style={{flex:1,padding:'5px 0',borderRadius:6,border:`1.5px solid ${numDrivers===n?'#2563EB':'#E2E8F0'}`,background:numDrivers===n?'#EFF6FF':'#fff',color:numDrivers===n?'#2563EB':'#94A3B8',fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:700,cursor:'pointer'}}>{n}</button>)}
               </div>
             </div>
             <div>
               <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:'#64748B',marginBottom:4}}>Start time</div>
-              <input type="time" value={startTime} onChange={e=>setStartTime(e.target.value)} style={{width:'100%',padding:'5px 8px',borderRadius:6,border:'1.5px solid #E2E8F0',fontFamily:"'Montserrat',sans-serif",fontSize:12}}/>
+              <input type="time" value={startTime} onChange={e=>setStartTime(e.target.value)}
+                style={{width:'100%',padding:'5px 8px',borderRadius:6,border:'1.5px solid #E2E8F0',fontFamily:"'Montserrat',sans-serif",fontSize:12}}/>
             </div>
-            <div style={{borderTop:'1px solid #F1F5F9',paddingTop:12}}>
-              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:'#94A3B8',letterSpacing:2,marginBottom:8}}>CX RATES</div>
+            <div style={{borderTop:'1px solid #F1F5F9',paddingTop:10}}>
+              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:'#94A3B8',letterSpacing:2,marginBottom:8}}>CX RATES (inc. GST)</div>
               {Object.entries(CE_RATES).map(([zone,r])=>(
-                <div key={zone} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:'1px solid #F8FAFC',fontFamily:"'Montserrat',sans-serif",fontSize:10}}>
+                <div key={zone} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',fontFamily:"'Montserrat',sans-serif",fontSize:10}}>
                   <span style={{fontWeight:700,color:'#64748B',textTransform:'uppercase'}}>{zone}</span>
-                  <span style={{color:'#1E3A5F'}}>${(r.base*(1+FUEL_LEVY)).toFixed(2)}</span>
+                  <span style={{color:'#1E3A5F'}}>${(r.base*(1+FUEL_LEVY)*GST).toFixed(2)} base</span>
                 </div>
               ))}
             </div>
+            {suspenseStops.length>0&&(
+              <button onClick={()=>{setSuspenseStops([]);saveSuspense([]);}}
+                style={{padding:'5px 0',borderRadius:6,border:'1px solid #FECACA',background:'#FEF2F2',color:'#DC2626',fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,cursor:'pointer'}}>
+                Clear Another Day ({suspenseStops.length})
+              </button>
+            )}
           </div>
 
-          {/* Panels - CX left, Driver(s) right, Another Day below */}
+          {/* Panels */}
           <div style={{flex:1,padding:16,display:'flex',flexDirection:'column',gap:12,overflowY:'auto',background:'#F8FAFC'}}>
-            <div style={{display:'grid',gridTemplateColumns:numDrivers>=2?'1fr 1fr 1fr':'1fr 1fr',gap:12,flex:1}}>
+            <div style={{display:'grid',gridTemplateColumns:numDrivers>=2?'1fr 1fr 1fr':'1fr 1fr',gap:12}}>
               <Panel title="Cold Xpress" icon="❄️" stops={cxStops} panel="cx" accentColor="#2563EB"
                 meta={cxStops.length?'$'+cxStops.reduce((s,st)=>s+st.ce,0).toFixed(2):''}/>
               <Panel title="Driver A" icon="🚐" stops={driverAStops} panel="driverA" accentColor="#059669"
-                meta={driverAStops.length?driverHrsA+'h | $'+driverCostA:''}/>
+                meta={driverAStops.length?driverHrsA+'h | $'+driverCostA:''}
+                footer={driverAStops.length?'Real drive times via Google Maps':''}/>
               {numDrivers>=2&&<Panel title="Driver B" icon="🚐" stops={driverBStops} panel="driverB" accentColor="#4338CA"
                 meta={driverBStops.length?driverHrsB+'h | $'+driverCostB:''}/>}
             </div>
-            {suspenseStops.length>0&&(
-              <Panel title="Another Day" icon="🗓" stops={suspenseStops} panel="suspense" accentColor="#6D28D9"
-                meta={suspenseStops.length+' held'}/>
-            )}
+            <Panel title="Another Day" icon="🗓" stops={suspenseStops} panel="suspense" accentColor="#6D28D9"
+              meta={suspenseStops.length?suspenseStops.length+' held — persists until cleared':'Drag stops here to hold for a future delivery day'}/>
           </div>
         </div>
 
@@ -877,7 +978,7 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
             const alloc=[...driverAStops.map(s=>({...s,driver:'A'})),...driverBStops.map(s=>({...s,driver:'B'}))];
             onConfirm(alloc);
           }} disabled={driverAStops.length===0&&driverBStops.length===0}
-            style={{padding:'9px 22px',borderRadius:8,border:'none',background:driverAStops.length>0||driverBStops.length>0?'#059669':'#94A3B8',color:'#fff',fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:800,cursor:driverAStops.length>0||driverBStops.length>0?'pointer':'default'}}>
+            style={{padding:'9px 22px',borderRadius:8,border:'none',background:driverAStops.length>0||driverBStops.length>0?'#059669':'#94A3B8',color:'#fff',fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:800,cursor:'pointer'}}>
             Confirm Allocation ({driverAStops.length+driverBStops.length} stops)
           </button>
         </div>
@@ -886,273 +987,6 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
   );
 }
 
-
-function parseCSV(text){
-  const TEA_SKUS_PC=new Set(['LTEA350','PTEA350','RTEA350']);
-  const lines=text.split(/\r?\n/).filter(Boolean);
-  if(lines.length<2)return[];
-  const headers=lines[0].split(",").map(h=>h.replace(/^"|"$/g,"").trim());
-  return lines.slice(1).map(line=>{
-    const vals=[];let inQ=false,cur="";
-    for(const ch of line){if(ch==='"'){inQ=!inQ}else if(ch===','&&!inQ){vals.push(cur);cur=""}else cur+=ch}
-    vals.push(cur);
-    const obj={};headers.forEach((h,i)=>obj[h]=(vals[i]||"").replace(/^"|"$/g,"").trim());
-    // Classify Product from SKU — Ordermentum Product field is unreliable (e.g. "JUICE")
-    const sku=(obj.SKU||'').trim();
-    if(sku&&sku!=='FREIGHT'){
-      if(TEA_SKUS_PC.has(sku)) obj.Product='TEA';
-      else if(sku.endsWith('350')) obj.Product='350';
-      else if(sku.endsWith('1L')||sku==='LTEA1'||sku==='PTEA1'||sku==='RTEA1') obj.Product='1L';
-    }
-    return obj;
-  });
-}
-const packSize=p=>p==="TEA"?18:p==="1L"?12:24;
-const cartons=(qty,p)=>Math.ceil((parseInt(qty)||0)/packSize(p));
-const totalC=rows=>rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product).reduce((s,r)=>s+cartons(r.Quantity,r.Product),0);
-const isPallet=r=>(r.CustomerVisibilityGroup&&r.CustomerVisibilityGroup.toUpperCase()!=="REGULAR"&&r.CustomerVisibilityGroup!=="")||(r.CustomerPriceGroup&&r.CustomerPriceGroup.toUpperCase()!=="REGULAR"&&r.CustomerPriceGroup!=="")||(r.Customergroup&&r.Customergroup.toUpperCase()!=="REGULAR"&&r.Customergroup!=="");
-
-/* ── ANALYTICS ── */
-function buildAnalytics(rows,prevIds=[]){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Name&&r.Product);
-  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
-  const totalRevenue=nf.reduce((s,r)=>s+(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0),0);
-  const totalBottles=nf.reduce((s,r)=>s+(parseInt(r.Quantity)||0),0);
-  const totalOrders=Object.keys(om).length;
-  const avgOrderValue=totalOrders>0?totalRevenue/totalOrders:0;
-  const productTotals={};nf.forEach(r=>{productTotals[r.Name]=(productTotals[r.Name]||0)+(parseInt(r.Quantity)||0)});
-  const courierTotals={};
-  Object.values(om).forEach(or_=>{
-    const c=or_[0].Courier||"Unknown",st=or_[0].CustomerState||"?";
-    if(!courierTotals[c])courierTotals[c]={orders:0,bottles:0,revenue:0,states:new Set()};
-    courierTotals[c].orders++;courierTotals[c].states.add(st);
-    or_.forEach(r=>{courierTotals[c].bottles+=(parseInt(r.Quantity)||0);courierTotals[c].revenue+=(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0)});
-  });
-  const staffTotals={};
-  Object.values(om).forEach(or_=>{
-    const am=or_[0].AccountManager||"Unknown";
-    if(!staffTotals[am])staffTotals[am]={orders:0,revenue:0,customers:new Set()};
-    staffTotals[am].orders++;staffTotals[am].customers.add(or_[0].CustomerId);
-    or_.forEach(r=>staffTotals[am].revenue+=(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0));
-  });
-  const stateTotals={};
-  Object.values(om).forEach(or_=>{
-    const st=or_[0].CustomerState||"?";
-    if(!stateTotals[st])stateTotals[st]={orders:0,revenue:0};
-    stateTotals[st].orders++;
-    or_.forEach(r=>stateTotals[st].revenue+=(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0));
-  });
-  const allCustomerIds=[...new Set(nf.map(r=>r.CustomerId))];
-  const newCustomers=allCustomerIds.filter(id=>!prevIds.includes(id));
-  const returningCustomers=allCustomerIds.filter(id=>prevIds.includes(id));
-  return{totalRevenue,totalBottles,totalOrders,avgOrderValue,productTotals,courierTotals,staffTotals,stateTotals,allCustomerIds,newCustomers,returningCustomers,date:new Date().toLocaleDateString("en-AU")};
-}
-
-/* ── VALIDATION ── */
-function validate(rows){
-  const issues=[];
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT");
-  const pr=nf.filter(r=>r.Product);
-  const allONs=[...new Set(nf.map(r=>r.OrderNumber).filter(Boolean))];
-  const withProd=[...new Set(pr.map(r=>r.OrderNumber))];
-  allONs.forEach(on=>{if(!withProd.includes(on))issues.push({severity:"error",message:`Order ${on} has no product lines.`,rule:"MISSING_PRODUCTS"})});
-  const om={};pr.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
-  Object.entries(om).forEach(([on,or_])=>{
-    const r=or_[0];
-    if(!r.Customer?.trim())issues.push({severity:"error",message:`Order ${on}: Customer name missing.`,rule:"NO_CUSTOMER"});
-    if(!r.Courier?.trim())issues.push({severity:"error",message:`Order ${on} (${r.Customer}): No courier assigned.`,rule:"NO_COURIER"});
-    if(!r.CustomerAddress1?.trim())issues.push({severity:"error",message:`Order ${on} (${r.Customer}): Delivery address missing.`,rule:"NO_ADDRESS"});
-    if(!r.CustomerSuburb?.trim())issues.push({severity:"warning",message:`Order ${on} (${r.Customer}): Suburb missing.`,rule:"NO_SUBURB"});
-    if(!r.Postcode?.trim())issues.push({severity:"warning",message:`Order ${on} (${r.Customer}): Postcode missing.`,rule:"NO_POSTCODE"});
-  });
-  pr.forEach(r=>{const q=parseInt(r.Quantity);if(isNaN(q)||q<=0)issues.push({severity:"error",message:`Order ${r.OrderNumber}: "${r.Name}" invalid qty.`,rule:"BAD_QTY"})});
-  const omc={};pr.forEach(r=>{if(!omc[r.OrderNumber])omc[r.OrderNumber]=new Set();omc[r.OrderNumber].add(r.Customer)});
-  Object.entries(omc).forEach(([on,cs])=>{if(cs.size>1)issues.push({severity:"error",message:`Order ${on} linked to multiple customers.`,rule:"DUPE_ORDER"})});
-  return{issues,errors:issues.filter(i=>i.severity==="error"),warnings:issues.filter(i=>i.severity==="warning"),totalOrders:allONs.length,coveredOrders:withProd.length,canProceed:issues.filter(i=>i.severity==="error").length===0};
-}
-
-/* ── CELL HELPERS ── */
-const H=(v,b=true,bg="FFD3D3D3",a="center")=>({v,bold:b,bg,align:a});
-const Cv=(v,b=false,bg=null,a=null)=>({v,bold:b,bg,align:a});
-const N=(v,b=false)=>({v,t:'n',bold:b});
-const E=null;
-
-/* ── SHEET GENERATORS ── */
-function genProduction(rows,palletOnly=false){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(palletOnly?isPallet(r):!isPallet(r)));
-  function section(sr,title,lc,prod){
-    if(!sr.length)return[];
-    const skus=[...new Set(sr.map(r=>r.Name))].sort();
-    const couriers=[...new Set(sr.map(r=>r.Courier))].sort();
-    const out=[];
-    out.push([{v:title,bold:true,bg:"FF1F4E79",align:"left"},E,E,E,E,E,E,E,E,E,E,E,E,E,{v:"LABELS",bold:true},{v:lc,bold:true}]);
-    out.push([E,E,E,E,E,E,E,E,E,E,E,E,E,E,{v:"CUSTOMERGROUP",bold:true},{v:palletOnly?"PALLET":"REGULAR",bold:true}]);
-    out.push([{v:"Labelling Date:",bold:true},E,E,{v:"Staff Working:",bold:true},E,E,E,E,E,E,E,E,E,E,{v:"PRODUCT",bold:true},{v:prod==="TEA"?"TEAS":prod,bold:true}]);
-    out.push([E]);out.push([E,E,E,{v:"Batch Number:",bold:true}]);
-    out.push([H("Courier"),H("OrderNumber"),H("CustomerId"),H("Customer"),...skus.map(s=>H(s)),H("Grand Total"),H("Cartons")]);
-    let gt={};skus.forEach(s=>gt[s]=0);let gtB=0,gtC=0;
-    couriers.forEach(c=>{
-      const cr=sr.filter(r=>r.Courier===c),omap={};
-      cr.forEach(r=>{if(!omap[r.OrderNumber])omap[r.OrderNumber]=[];omap[r.OrderNumber].push(r)});
-      let cB=0,cC=0,cT={};skus.forEach(s=>cT[s]=0);let first=true;
-      Object.entries(omap).forEach(([on,or_])=>{
-        const r=or_[0],sm={};or_.forEach(r=>sm[r.Name]=parseInt(r.Quantity)||0);
-        const rB=skus.reduce((s,k)=>s+(sm[k]||0),0),rC=totalC(or_);
-        out.push([first?{v:c,bold:true}:E,Cv(on),N(parseInt(r.CustomerId)),Cv(r.Customer),...skus.map(s=>sm[s]?N(sm[s]):E),N(rB),N(rC)]);
-        first=false;skus.forEach(s=>{cT[s]+=sm[s]||0;gt[s]+=sm[s]||0});cB+=rB;cC+=rC;gtB+=rB;gtC+=rC;
-      });
-      out.push([E,E,E,{v:"Total",bold:true,bg:"FFFFF2CC"},...skus.map(s=>({v:cT[s],t:'n',bold:true,bg:"FFFFF2CC"})),{v:cB,t:'n',bold:true,bg:"FFFFF2CC"},{v:cC,t:'n',bold:true,bg:"FFFFF2CC"}]);
-      out.push([E]);
-    });
-    out.push([{v:"Grand Total",bold:true,bg:"FF1F4E79",align:"left"},E,E,E,...skus.map(s=>({v:gt[s],t:'n',bold:true,bg:"FFBDD7EE"})),{v:gtB,t:'n',bold:true,bg:"FFBDD7EE"},{v:gtC,t:'n',bold:true,bg:"FFBDD7EE"}]);
-    out.push([E],[E]);
-    return out;
-  }
-  const today=new Date().toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
-  return[{name:palletOnly?"Pallet Production":"Production",rows:[[{v:today.toUpperCase(),bold:true,bg:"FF1F4E79",align:"left"}],[E],...section(nf.filter(r=>r.Product==="350"),"350ml Orders","WHITE","350"),...section(nf.filter(r=>r.Product==="TEA"),"Tea Orders","CLEAR","TEA"),...section(nf.filter(r=>r.Product==="1L"),"1L Orders","WHITE","1L")],colWidths:[18,14,13,28,...Array(20).fill(16),13,10]}];
-}
-function genColdXpress(rows,date){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="COLDXPRESS"&&!isPallet(r));
-  if(!nf.length)return[{name:"Sheet1",rows:[[Cv("No COLDXPRESS orders")]]}];
-  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
-  const sr=[];
-  sr.push([{v:"COLD XPRESS MANIFEST",bold:true,bg:"FF002060",align:"left"}]);
-  sr.push([{v:"PLEASE EMAIL TO MANIFESTS@COLDXPRESS.COM.AU"}]);
-  sr.push([{v:"SUPPLIER NAME:",bold:true},{v:"Wholesale State"}]);
-  sr.push([{v:"MANIFEST REFERENCE:",bold:true},{v:date||new Date().toLocaleDateString("en-AU")}]);
-  sr.push([E]);
-  sr.push(["INV NO.","DELIVERY DATE","STORE NO","STORE NAME","ADDRESS","SUBURB","STATE","POSTCODE","CARTONS","PALLETS","WEIGHT (KG)","INV. VALUE","COD","TEMP","COMMENT"].map(h=>H(h,true,"FFD9E1F2","center")));
-  Object.entries(om).forEach(([on,or_])=>{const r=or_[0];sr.push([Cv(on),Cv(r.DeliveryDate||r.DueDate||""),E,Cv(r.Customer),Cv(r.CustomerAddress1),Cv(r.CustomerSuburb),Cv(r.CustomerState),N(parseInt(r.Postcode)),N(totalC(or_)),E,E,E,E,Cv("chilled"),E])});
-  return[{name:"Sheet1",rows:sr,colWidths:[14,16,10,28,28,18,8,10,10,10,13,12,10,10,20]}];
-}
-function genDK(rows){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="DKDISTRIBUTION"&&!isPallet(r));
-  if(!nf.length)return[{name:"jobs",rows:[[Cv("No DK orders")]]}];
-  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
-  const sr=[["Order ID","Date","Order Type","Notes","Address 1","Address 2","Address 3","Postal Code","City","State","Country","Location","Last Name","Phone","Delivery Instructions","Email","GROUP","Volume"].map(h=>H(h,true,"FFBDD7EE","center"))];
-  Object.entries(om).forEach(([on,or_])=>{const r=or_[0];sr.push([Cv(on),E,Cv("Business"),Cv(r.Customer),Cv(r.CustomerAddress1),Cv(r.CustomerAddress2||""),E,N(parseInt(r.Postcode)),Cv(r.CustomerSuburb),Cv(r.CustomerState),E,E,E,E,Cv(r.Notes||""),E,Cv("WS"),N(totalC(or_))])});
-  return[{name:"jobs",rows:sr,colWidths:[14,12,12,28,28,20,12,12,18,8,10,12,14,14,28,20,8,10]}];
-}
-function genCoolCouriers(rows){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="COOLCOURIERS"&&!isPallet(r));
-  if(!nf.length)return[{name:"Manifest",rows:[[Cv("No COOLCOURIERS orders")]]}];
-  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
-  const sr=[];
-  sr.push([{v:"COOL COURIERS MANIFEST",bold:true,bg:"FF1A3C5E",align:"left"}]);
-  sr.push([{v:"Wholesale State Cold Pressed Juices",bold:true}]);
-  sr.push([{v:"Manifest Date:",bold:true},{v:new Date().toLocaleDateString("en-AU")}]);sr.push([E]);
-  sr.push(["Order No.","Customer Name","Address","Suburb","State","Postcode","Special Instructions","Items","Total Cartons","Delivery Date"].map(h=>H(h,true,"FFD6E4F0","center")));
-  Object.entries(om).forEach(([on,or_])=>{const r=or_[0];const items=or_.filter(x=>x.SKU!=="FREIGHT"&&x.Product).map(x=>`${x.Name} x${x.Quantity}`).join(", ");sr.push([Cv(on),Cv(r.Customer),Cv(r.CustomerAddress1+(r.CustomerAddress2?", "+r.CustomerAddress2:"")),Cv(r.CustomerSuburb),Cv(r.CustomerState),N(parseInt(r.Postcode)),Cv(r.Notes||""),Cv(items),N(totalC(or_)),Cv(r.DeliveryDate||r.DueDate||"")])});
-  return[{name:"Manifest",rows:sr,colWidths:[14,28,30,18,8,10,24,50,14,14]}];
-}
-function genWsDriver(rows,allocation,date){
-  const alloc=allocation||[];
-  const allocMap={};alloc.forEach(a=>{allocMap[a.orderNumber]=a;});
-  const nf=rows.filter(r=>r.SKU!=='FREIGHT'&&r.Product&&(r.Courier==='WSDRIVER'||allocMap[r.OrderNumber]));
-  if(!nf.length)return[{name:'Run Sheet',rows:[[Cv('No driver stops allocated')]]}];
-  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r);});
-  const sr=[];
-  sr.push([{v:'WHOLESALE STATE DELIVERY RUN',bold:true,bg:'FF1A3C5E',align:'left'}]);
-  sr.push([{v:'Depot: 17 Kirkham Rd W, Keysborough VIC 3173'}]);
-  sr.push([{v:'Date:',bold:true},{v:date||new Date().toLocaleDateString('en-AU')}]);
-  sr.push([E]);
-  sr.push(['Stop #','ETA','Order','Customer','Address','Suburb','State','Postcode','Cartons','Products','Drive Mins','Cost $'].map(h=>H(h,true,'FFB8D4E8','center')));
-  Object.entries(om).sort((a,b)=>(allocMap[a[0]]?.stopNum||99)-(allocMap[b[0]]?.stopNum||99)).forEach(([on,or_],i)=>{
-    const r=or_[0],a=allocMap[on]||{};
-    const ctns=totalC(or_);
-    const prods=or_.filter(x=>x.SKU!=='FREIGHT'&&x.Product).map(x=>x.Name+' x'+x.Quantity).join(', ');
-    sr.push([N(i+1),Cv(a.etaStr||''),Cv(on),Cv(r.Customer),Cv(r.CustomerAddress1),Cv(r.CustomerSuburb),Cv(r.CustomerState),N(parseInt(r.Postcode)),N(ctns),Cv(prods),N(Math.round(a.driveMins||0)),N(parseFloat((a.marginalCost||0).toFixed(2)))]);
-  });
-  return[{name:'Run Sheet',rows:sr,colWidths:[8,10,14,28,30,18,8,10,10,50,12,12]}];
-}
-
-function buildPrint(rows,isBacks,sheetName,customerIdOverride){
-  const hdrRow=["Order","#file","SKU","#copies","Customer","Customer ID",".PDF","CODE","#pages","#papersize","#duplex","#orientation","#trayname"].map(h=>H(h,true,"FFBDD7EE","center"));
-  const dr=[];
-  if(isBacks){
-    const t=rows.length;
-    dr.push([N(t+1),Cv(""),Cv("BLANK"),N(24),E,Cv("BLANK"),Cv(".PDF"),Cv("BLANK.PDF"),E,E,E,E,E]);
-    [...rows].reverse().forEach((r,i)=>{const rn=t-i,row=dr.length+2;dr.push([N(rn),{v:`=IF(D${row}>0,CONCATENATE('File address'!$B$1,"\\",F${row},"\\",H${row}),"")`,t:'f'},Cv(r.SKU),N(parseInt(r.Quantity)),Cv(r.Customer),Cv("BACKS"),Cv(".PDF"),{v:`=CONCATENATE(C${row},G${row})`,t:'f'},{v:`=IF(D${row}>0,"all","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},{v:`=IF(D${row}>0,"Portrait","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'}])});
-  }else{
-    dr.push([N(1),Cv(""),Cv("BLANK"),N(24),E,Cv("BLANK"),Cv(".PDF"),Cv("BLANK.PDF"),E,E,E,E,E,E]);
-    rows.forEach((r,i)=>{const on=i+2,row=on+1;dr.push([N(on),{v:`=IF(D${row}>0,CONCATENATE('File address'!$B$1,"\\",F${row},"\\",H${row}),"")`,t:'f'},Cv(r.SKU),N(parseInt(r.Quantity)),Cv(r.Customer),Cv(customerIdOverride||String(r.CustomerId)),Cv(".PDF"),{v:`=CONCATENATE(C${row},G${row})`,t:'f'},{v:`=IF(D${row}>0,"all","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},{v:`=IF(D${row}>0,"Portrait","")`,t:'f'},{v:`=IF(D${row}>0,"As in printer","")`,t:'f'},E])});
-  }
-  return[{name:sheetName,rows:[hdrRow,...dr],colWidths:[8,60,18,10,28,14,8,22,8,16,16,12,16]},{name:"File address",rows:[[{v:"Place your file address here",bold:true},Cv("G:\\My Drive\\Print Files")]],colWidths:[30,40]}];
-}
-function genPrints(rows,palletOnly=false){
-  // Regular prints: exclude pallet/special customers entirely
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(palletOnly?isPallet(r):!isPallet(r)));
-  const sort=pr=>[...pr].sort((a,b)=>{for(const k of['Courier','Customer','OrderNumber','SKU']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
-  const r350=sort(nf.filter(r=>r.Product==="350")),rT=sort(nf.filter(r=>r.Product==="TEA")),r1=sort(nf.filter(r=>r.Product==="1L"));
-  return{f350:buildPrint(r350,false,"FRONTS"),b350:buildPrint(r350,true,"BACKS"),fT:buildPrint(rT,false,"FRONTS"),bT:buildPrint(rT,true,"BACKS"),f1:buildPrint(r1,false,"FRONTS","1L")};
-}
-function genSpecialPrints(rows,dateStr){
-  const TEA_SKUS=new Set(['LTEA350','PTEA350','RTEA350']);
-  function classifyProduct(r){
-    const sku=(r.SKU||'').trim();
-    if(TEA_SKUS.has(sku))return'TEA';
-    if(sku.endsWith('350'))return'350';
-    if(sku.endsWith('1')||sku.endsWith('1L'))return'1L';
-    return r.Product||'';
-  }
-  const special=rows.filter(r=>r.SKU!=='FREIGHT'&&r.SKU&&isPallet(r));
-  if(!special.length)return[];
-  const byCustomer={};
-  special.forEach(r=>{
-    const key=r.Customer||r.CustomerId||'SPECIAL';
-    if(!byCustomer[key])byCustomer[key]=[];
-    // Fix quantity to integer, classify product from SKU
-    byCustomer[key].push({...r,Product:classifyProduct(r),Quantity:String(Math.round(parseFloat(r.Quantity)||0))});
-  });
-  const files=[];
-  const d=dateStr||new Date().toLocaleDateString('en-AU').replace(/\//g,'-');
-  Object.entries(byCustomer).forEach(([customer,crows])=>{
-    const safeName=customer.replace(/[^a-zA-Z0-9]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').toUpperCase();
-    // Use BackLabels as the customer ID override (e.g. "SONOMA") — this is what goes in col F of fronts/backs
-    const backLabel=crows[0].BackLabels||crows[0].CustomerId||safeName;
-    const sort=pr=>[...pr].sort((a,b)=>{for(const k of['SKU','OrderNumber']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
-    const r350=sort(crows.filter(r=>r.Product==='350'));
-    const rT=sort(crows.filter(r=>r.Product==='TEA'));
-    const r1=sort(crows.filter(r=>r.Product==='1L'));
-    if(r350.length){
-      files.push({sheets:buildPrint(r350,false,'FRONTS',backLabel),name:`${safeName}-${d}_350ml_Fronts.xlsx`});
-      files.push({sheets:buildPrint(r350,true,'BACKS',backLabel),name:`${safeName}-${d}_350ml_Backs.xlsx`});
-    }
-    if(rT.length){
-      files.push({sheets:buildPrint(rT,false,'FRONTS',backLabel),name:`${safeName}-${d}_Tea_Fronts.xlsx`});
-      files.push({sheets:buildPrint(rT,true,'BACKS',backLabel),name:`${safeName}-${d}_Tea_Backs.xlsx`});
-    }
-    if(r1.length){
-      files.push({sheets:buildPrint(r1,false,'FRONTS','1L'),name:`${safeName}-${d}_1L_Fronts.xlsx`});
-    }
-  });
-  return files;
-}
-
-/* ── STATUS ── */
-const ST={
-  "Order Confirmed":    {color:T.sage,  bg:T.sageL, border:"#B8E6B8"},
-  "In Production":      {color:T.blue,  bg:T.blueL, border:"#BFDBFE"},
-  "With Courier":       {color:T.amber, bg:T.amberL,border:T.amberB},
-  "Delivered":          {color:T.teal,  bg:T.tealL, border:"#99F6E4"},
-};
-const ALL_ST=Object.keys(ST);
-
-const MOCK_LOG=[
-  {id:1,from:"notifications@ordermentum.com",subject:"Invoice - Wholesale State Cold Pressed Juices #OMI17714",time:"2:39 PM",type:"order",ref:"OMO17714",action:"Confirmed"},
-  {id:2,from:"notifications@ordermentum.com",subject:"Invoice - Wholesale State Cold Pressed Juices #OMI17707",time:"12:34 PM",type:"order",ref:"OMO17707",action:"Confirmed"},
-  {id:3,from:"manifests@coldxpress.com.au",  subject:"Manifest Confirmed – Wholesale State 04/03/2026",time:"11:14 AM",type:"manifest",ref:null,action:"In Transit (CX)"},
-  {id:4,from:"noreply@dkdistributions.com.au",subject:"POD Confirmed – OMO17701 The Bower Cafe",time:"2:47 PM",type:"pod",ref:"OMO17701",action:"Delivered"},
-  {id:5,from:"noreply@dkdistributions.com.au",subject:"POD Confirmed – OMO17704 Staple Bakery",time:"3:12 PM",type:"pod",ref:"OMO17704",action:"Delivered"},
-];
-
-/* ── SMALL COMPONENTS ── */
-function Pill({status}){const s=ST[status]||ST["Confirmed"];return<span className="pill" style={{background:s.bg,color:s.color,border:`1px solid ${s.border}`}}><span className="dot" style={{background:s.color}}/>{status}</span>}
-function EBadge({type}){const cfg={order:{c:T.sage,bg:T.sageL,l:"ORDER"},manifest:{c:T.blue,bg:T.blueL,l:"MANIFEST"},pod:{c:T.teal,bg:T.tealL,l:"POD"}}[type]||{c:T.inkL,bg:T.creamD,l:"EMAIL"};return<span className="ebadge" style={{background:cfg.bg,color:cfg.c}}>{cfg.l}</span>}
-const f$=v=>`$${(v||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",")}`;
-const fN=v=>(v||0).toLocaleString();
-
-/* ── VAL MODAL ── */
 function VicTile({csvRows,driverAllocation,onOpen,T}){
   const vn=[...new Set(csvRows.filter(r=>r.SKU!=='FREIGHT'&&r.Product&&(r.CustomerState||'').toUpperCase()==='VIC'&&!isPallet(r)).map(r=>r.OrderNumber))].length;
   if(!vn)return null;
