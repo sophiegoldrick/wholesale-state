@@ -552,40 +552,42 @@ const MOCK_LOG=[
 
 /* ── SMALL COMPONENTS ── */
 function ZoneBadge({zone}){
-  const c={metro:{bg:"#DBEAFE",col:"#1D4ED8",l:"METRO"},cou1:{bg:"#FEF3C7",col:"#B45309",l:"COU1"},cou2:{bg:"#FFEDD5",col:"#C2410C",l:"COU2"},cou4:{bg:"#FCE7F3",col:"#9D174D",l:"COU4"}}[zone]||{bg:"#F1F5F9",col:"#64748B",l:zone||"?"};
+  var c={metro:{bg:"#DBEAFE",col:"#1D4ED8",l:"METRO"},cou1:{bg:"#FEF3C7",col:"#B45309",l:"COU1"},cou2:{bg:"#FFEDD5",col:"#C2410C",l:"COU2"},cou4:{bg:"#FCE7F3",col:"#9D174D",l:"COU4"}}[zone]||{bg:"#F1F5F9",col:"#64748B",l:zone||"?"};
   return <span style={{display:"inline-block",padding:"1px 6px",borderRadius:3,background:c.bg,color:c.col,fontSize:8,fontWeight:700}}>{c.l}</span>;
 }
 function StopCard({stop,panel,onMove,nd}){
   return(
-    <div draggable onDragStart={e=>{e.dataTransfer.setData("text/plain",JSON.stringify({on:stop.orderNumber,p:panel}));}}
+    <div draggable onDragStart={function(e){e.dataTransfer.setData("text/plain",JSON.stringify({on:stop.orderNumber,p:panel}));}}
       style={{padding:"9px 12px",borderBottom:"1px solid #F1F5F9",display:"flex",gap:8,cursor:"grab"}}
-      onMouseEnter={e=>{e.currentTarget.style.background="#F8FAFC";}}
-      onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
+      onMouseEnter={function(e){e.currentTarget.style.background="#F8FAFC";}}
+      onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:3}}>
           <span style={{fontSize:11,fontWeight:700,color:"#1E3A5F"}}>{stop.name}</span>
           <ZoneBadge zone={stop.zone}/>
         </div>
         <div style={{fontSize:10,color:"#64748B",display:"flex",gap:5,flexWrap:"wrap"}}>
-          <span>{stop.suburb}</span><span>|</span>
-          <span>{stop.cartons} ctns</span><span>|</span>
+          <span>{stop.suburb}</span>
+          <span>{"| "}</span>
+          <span>{stop.cartons} ctns</span>
+          <span>{"| "}</span>
           <span style={{color:"#2563EB",fontWeight:700}}>${stop.ce.toFixed(2)} CX</span>
           {stop.etaStr&&<span style={{color:"#94A3B8"}}>ETA {stop.etaStr}</span>}
           {stop.driveMins>0&&<span style={{color:"#94A3B8"}}>{Math.round(stop.driveMins)}min</span>}
         </div>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:2,flexShrink:0}}>
-        {panel!=="cx"&&<button onClick={()=>onMove(stop,panel,"cx")} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #BFDBFE",background:"#EFF6FF",color:"#2563EB",cursor:"pointer",fontWeight:700}}>CX</button>}
-        {panel!=="driverA"&&<button onClick={()=>onMove(stop,panel,"driverA")} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #BBF7D0",background:"#DCFCE7",color:"#15803D",cursor:"pointer",fontWeight:700}}>A</button>}
-        {panel!=="driverB"&&nd>=2&&<button onClick={()=>onMove(stop,panel,"driverB")} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #C7D2FE",background:"#E0E7FF",color:"#4338CA",cursor:"pointer",fontWeight:700}}>B</button>}
-        {panel!=="suspense"&&<button onClick={()=>onMove(stop,panel,"suspense")} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #DDD6FE",background:"#EDE9FE",color:"#6D28D9",cursor:"pointer",fontWeight:700}}>Later</button>}
+        {panel!=="cx"&&<button onClick={function(){onMove(stop,panel,"cx");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #BFDBFE",background:"#EFF6FF",color:"#2563EB",cursor:"pointer",fontWeight:700}}>CX</button>}
+        {panel!=="driverA"&&<button onClick={function(){onMove(stop,panel,"driverA");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #BBF7D0",background:"#DCFCE7",color:"#15803D",cursor:"pointer",fontWeight:700}}>A</button>}
+        {panel!=="driverB"&&nd>=2&&<button onClick={function(){onMove(stop,panel,"driverB");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #C7D2FE",background:"#E0E7FF",color:"#4338CA",cursor:"pointer",fontWeight:700}}>B</button>}
+        {panel!=="suspense"&&<button onClick={function(){onMove(stop,panel,"suspense");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #DDD6FE",background:"#EDE9FE",color:"#6D28D9",cursor:"pointer",fontWeight:700}}>Later</button>}
       </div>
     </div>
   );
 }
 function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd}){
   return(
-    <div onDragOver={e=>{e.preventDefault();}} onDrop={e=>{e.preventDefault();try{const d=JSON.parse(e.dataTransfer.getData("text/plain"));onDrop(d.on,d.p,panel);}catch(err){}}}
+    <div onDragOver={function(e){e.preventDefault();}} onDrop={function(e){e.preventDefault();try{var d=JSON.parse(e.dataTransfer.getData("text/plain"));onDrop(d.on,d.p,panel);}catch(err){}}}
       style={{background:dov?"#f0fdf4":"#fff",border:"1.5px solid "+(dov?color:color+"33"),borderRadius:12,overflow:"hidden",display:"flex",flexDirection:"column"}}>
       <div style={{padding:"10px 14px",background:color+"12",borderBottom:"1px solid "+color+"22",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
         <span style={{fontSize:14}}>{icon}</span>
@@ -596,28 +598,29 @@ function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd}){
       <div style={{flex:1,overflowY:"auto",maxHeight:460}}>
         {stops.length===0
           ?<div style={{padding:"24px",textAlign:"center",color:"#CBD5E1",fontSize:11}}>Drop stops here</div>
-          :stops.map(s=><StopCard key={s.orderNumber} stop={s} panel={panel} onMove={onMove} nd={nd}/>)}
+          :stops.map(function(s){return <StopCard key={s.orderNumber} stop={s} panel={panel} onMove={onMove} nd={nd}/>;})
+        }
       </div>
     </div>
   );
 }
 function genWsDriver(rows,alloc,date){
-  const am={};(alloc||[]).forEach(a=>{am[a.orderNumber]=a;});
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(r.Courier==="WSDRIVER"||am[r.OrderNumber]));
+  var am={};(alloc||[]).forEach(function(a){am[a.orderNumber]=a;});
+  var nf=rows.filter(function(r){return r.SKU!=="FREIGHT"&&r.Product&&(r.Courier==="WSDRIVER"||am[r.OrderNumber]);});
   if(!nf.length)return[{name:"Run Sheet",rows:[[Cv("No stops")]]}];
-  const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r);});
-  const sr=[[{v:"WHOLESALE STATE DELIVERY RUN",bold:true,bg:"FF1A3C5E"}],[E],["Stop","ETA","Order","Customer","Address","Suburb","PC","Ctns"].map(h=>H(h,true,"FFB8D4E8","center"))];
-  Object.entries(om).sort((a,b)=>((am[a[0]]&&am[a[0]].stopNum)||99)-((am[b[0]]&&am[b[0]].stopNum)||99)).forEach(([on,or_],i)=>{
-    const r=or_[0],a=am[on]||{};
+  var om={};nf.forEach(function(r){if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r);});
+  var sr=[[{v:"WHOLESALE STATE DELIVERY RUN",bold:true,bg:"FF1A3C5E"}],[E],["Stop","ETA","Order","Customer","Address","Suburb","PC","Ctns"].map(function(h){return H(h,true,"FFB8D4E8","center");})];
+  Object.entries(om).sort(function(a,b){return ((am[a[0]]&&am[a[0]].stopNum)||99)-((am[b[0]]&&am[b[0]].stopNum)||99);}).forEach(function(entry,i){
+    var on=entry[0],or_=entry[1],r=or_[0],a=am[on]||{};
     sr.push([N(i+1),Cv(a.etaStr||""),Cv(on),Cv(r.Customer),Cv(r.CustomerAddress1||""),Cv(r.CustomerSuburb||""),N(parseInt(r.Postcode)),N(totalC(or_))]);
   });
   return[{name:"Run Sheet",rows:sr,colWidths:[6,10,14,28,30,18,8,8]}];
 }
 function VicTile({csvRows,driverAllocation,onOpen,T}){
-  const vn=[...new Set(csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(r.CustomerState||"").toUpperCase()==="VIC"&&!isPallet(r)).map(r=>r.OrderNumber))].length;
+  var vn=[...new Set(csvRows.filter(function(r){return r.SKU!=="FREIGHT"&&r.Product&&(r.CustomerState||"").toUpperCase()==="VIC"&&!isPallet(r);}).map(function(r){return r.OrderNumber;}))].length;
   if(!vn)return null;
-  const has=driverAllocation&&driverAllocation.length>0;
-  const skipped=driverAllocation!==null&&driverAllocation!==undefined&&driverAllocation.length===0;
+  var has=driverAllocation&&driverAllocation.length>0;
+  var skipped=driverAllocation!==null&&driverAllocation!==undefined&&driverAllocation.length===0;
   return(
     <div onClick={onOpen} style={{marginTop:14,background:has?"#EFF9F4":skipped?"#F8FAFC":"#EEF6FF",border:"1.5px solid "+(has?"#34D399":skipped?"#CBD5E1":"#60A5FA"),borderRadius:14,padding:"16px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}>
       <div style={{flex:1}}>
@@ -628,74 +631,64 @@ function VicTile({csvRows,driverAllocation,onOpen,T}){
     </div>
   );
 }
+function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
+  var shiftHrs=parseFloat(localStorage.getItem("ws_opt_shift")||"9");
+  var stopMins=parseFloat(localStorage.getItem("ws_opt_stop")||"10");
+  var driverRate=parseFloat(localStorage.getItem("ws_opt_rate")||"30");
+  var numDrivers=parseInt(localStorage.getItem("ws_opt_drivers")||"1");
+  var startTime=localStorage.getItem("ws_opt_start")||"06:00";
+  var sh=React.useState(shiftHrs), setShiftHrs=sh[1]; shiftHrs=sh[0];
+  var sm=React.useState(stopMins), setStopMins=sm[1]; stopMins=sm[0];
+  var dr=React.useState(driverRate), setDriverRate=dr[1]; driverRate=dr[0];
+  var nd=React.useState(numDrivers), setNumDrivers=nd[1]; numDrivers=nd[0];
+  var st=React.useState(startTime), setStartTime=st[1]; startTime=st[0];
+  var ph=React.useState("idle"), setPhase=ph[1]; var phase=ph[0];
+  var gp=React.useState(0), setGeoProgress=gp[1]; var geoProgress=gp[0];
+  var gt=React.useState(0), setGeoTotal=gt[1]; var geoTotal=gt[0];
+  var dA_=React.useState([]), setDriverAStops=dA_[1]; var driverAStops=dA_[0];
+  var dB_=React.useState([]), setDriverBStops=dB_[1]; var driverBStops=dB_[0];
+  var cx_=React.useState([]), setCxStops=cx_[1]; var cxStops=cx_[0];
+  var susp_=React.useState(function(){try{return JSON.parse(localStorage.getItem("ws_driver_suspense")||"[]");}catch(e){return[];}}), setSuspenseStops=susp_[1]; var suspenseStops=susp_[0];
+  var dov_=React.useState(null), setDragOver=dov_[1]; var dragOver=dov_[0];
 
-function DeliveryOptimiserModal({csvRows, onConfirm, onSkip, onClose, T}) {
-  const [shiftHrs,setShiftHrs]    = React.useState(()=>parseFloat(localStorage.getItem('ws_opt_shift')||'9'));
-  const [stopMins,setStopMins]    = React.useState(()=>parseFloat(localStorage.getItem('ws_opt_stop')||'10'));
-  const [driverRate,setDriverRate]= React.useState(()=>parseFloat(localStorage.getItem('ws_opt_rate')||'30'));
-  const [numDrivers,setNumDrivers]= React.useState(()=>parseInt(localStorage.getItem('ws_opt_drivers')||'1'));
-  const [startTime,setStartTime]  = React.useState(()=>localStorage.getItem('ws_opt_start')||'06:00');
+  React.useEffect(function(){localStorage.setItem("ws_opt_shift",shiftHrs);},[shiftHrs]);
+  React.useEffect(function(){localStorage.setItem("ws_opt_stop",stopMins);},[stopMins]);
+  React.useEffect(function(){localStorage.setItem("ws_opt_rate",driverRate);},[driverRate]);
+  React.useEffect(function(){localStorage.setItem("ws_opt_drivers",numDrivers);},[numDrivers]);
+  React.useEffect(function(){localStorage.setItem("ws_opt_start",startTime);},[startTime]);
 
-  const [phase,setPhase]          = React.useState('idle'); // idle | geocoding | optimising | done
-  const [geocodeProgress,setGeocodeProgress] = React.useState(0);
-  const [geocodeTotal,setGeocodeTotal]       = React.useState(0);
+  var suspIds=React.useMemo(function(){return new Set(suspenseStops.map(function(s){return s.orderNumber;}));}, [suspenseStops]);
 
-  const [driverAStops,setDriverAStops] = React.useState([]);
-  const [driverBStops,setDriverBStops] = React.useState([]);
-  const [cxStops,setCxStops]           = React.useState([]);
-  const [suspenseStops,setSuspenseStops] = React.useState(()=>{
-    try{return JSON.parse(localStorage.getItem('ws_driver_suspense')||'[]');}catch(e){return[];}
-  });
-  const [dragOver,setDragOver] = React.useState(null);
+  function saveSusp(s){try{localStorage.setItem("ws_driver_suspense",JSON.stringify(s));}catch(e){}}
 
-  // Persist settings
-  React.useEffect(()=>{localStorage.setItem('ws_opt_shift',shiftHrs);},[shiftHrs]);
-  React.useEffect(()=>{localStorage.setItem('ws_opt_stop',stopMins);},[stopMins]);
-  React.useEffect(()=>{localStorage.setItem('ws_opt_rate',driverRate);},[driverRate]);
-  React.useEffect(()=>{localStorage.setItem('ws_opt_drivers',numDrivers);},[numDrivers]);
-  React.useEffect(()=>{localStorage.setItem('ws_opt_start',startTime);},[startTime]);
+  var PC_COORDS={"3000":[-37.814,144.963],"3001":[-37.814,144.963],"3006":[-37.823,144.953],"3008":[-37.820,144.940],"3011":[-37.800,144.889],"3012":[-37.793,144.876],"3013":[-37.783,144.876],"3015":[-37.832,144.913],"3016":[-37.851,144.906],"3018":[-37.874,144.865],"3019":[-37.863,144.856],"3020":[-37.763,144.828],"3021":[-37.751,144.831],"3022":[-37.778,144.817],"3023":[-37.769,144.802],"3024":[-37.860,144.764],"3026":[-37.860,144.773],"3027":[-37.854,144.747],"3028":[-37.878,144.784],"3029":[-37.892,144.765],"3030":[-37.889,144.736],"3031":[-37.783,144.929],"3032":[-37.774,144.916],"3033":[-37.790,144.840],"3034":[-37.801,144.836],"3036":[-37.769,144.836],"3037":[-37.735,144.811],"3038":[-37.731,144.798],"3039":[-37.758,144.923],"3040":[-37.755,144.920],"3041":[-37.746,144.930],"3042":[-37.740,144.879],"3043":[-37.730,144.938],"3044":[-37.713,144.955],"3046":[-37.708,144.960],"3047":[-37.698,144.957],"3048":[-37.685,144.957],"3049":[-37.724,144.907],"3051":[-37.797,144.947],"3052":[-37.790,144.958],"3053":[-37.804,144.970],"3054":[-37.791,144.964],"3055":[-37.774,144.958],"3056":[-37.764,144.975],"3057":[-37.754,144.978],"3058":[-37.744,144.983],"3059":[-37.692,144.944],"3060":[-37.730,144.972],"3061":[-37.684,144.963],"3062":[-37.671,144.973],"3063":[-37.677,144.989],"3064":[-37.667,144.984],"3065":[-37.807,144.980],"3066":[-37.808,144.987],"3068":[-37.804,145.000],"3070":[-37.767,145.003],"3071":[-37.757,145.005],"3072":[-37.746,145.007],"3073":[-37.735,145.007],"3074":[-37.721,145.006],"3075":[-37.713,145.010],"3076":[-37.644,145.018],"3078":[-37.789,145.015],"3079":[-37.779,145.029],"3081":[-37.766,145.036],"3082":[-37.702,145.020],"3083":[-37.753,145.017],"3084":[-37.756,145.046],"3085":[-37.744,145.041],"3087":[-37.763,145.057],"3088":[-37.750,145.059],"3089":[-37.693,145.039],"3090":[-37.731,145.043],"3091":[-37.678,145.039],"3093":[-37.771,145.076],"3094":[-37.758,145.073],"3095":[-37.743,145.068],"3099":[-37.660,145.060],"3101":[-37.808,145.030],"3102":[-37.817,145.039],"3103":[-37.824,145.047],"3104":[-37.808,145.051],"3105":[-37.797,145.054],"3106":[-37.803,145.118],"3107":[-37.759,145.152],"3108":[-37.812,145.125],"3109":[-37.818,145.143],"3111":[-37.822,145.153],"3113":[-37.831,145.167],"3114":[-37.839,145.179],"3115":[-37.847,145.185],"3116":[-37.826,145.225],"3121":[-37.820,145.018],"3122":[-37.847,145.062],"3123":[-37.836,145.059],"3124":[-37.843,145.073],"3125":[-37.843,145.100],"3126":[-37.831,145.084],"3127":[-37.819,145.089],"3128":[-37.817,145.099],"3129":[-37.824,145.107],"3130":[-37.835,145.125],"3131":[-37.825,145.127],"3132":[-37.813,145.139],"3133":[-37.817,145.153],"3134":[-37.823,145.167],"3135":[-37.829,145.187],"3136":[-37.840,145.221],"3137":[-37.848,145.208],"3138":[-37.825,145.238],"3139":[-37.867,145.311],"3140":[-37.839,145.252],"3141":[-37.849,144.999],"3142":[-37.861,145.014],"3143":[-37.882,145.032],"3144":[-37.875,145.051],"3145":[-37.893,145.045],"3146":[-37.867,145.065],"3147":[-37.889,145.070],"3148":[-37.896,145.083],"3149":[-37.878,145.087],"3150":[-37.890,145.108],"3151":[-37.850,145.195],"3152":[-37.856,145.222],"3153":[-37.848,145.243],"3154":[-37.843,145.267],"3155":[-37.859,145.271],"3156":[-37.873,145.246],"3158":[-37.922,145.280],"3160":[-37.941,145.327],"3161":[-37.870,145.058],"3162":[-37.899,145.048],"3163":[-37.908,145.054],"3165":[-37.906,145.072],"3166":[-37.886,145.082],"3167":[-37.900,145.081],"3168":[-37.908,145.094],"3169":[-37.919,145.101],"3170":[-37.927,145.106],"3171":[-37.941,145.116],"3172":[-37.950,145.131],"3173":[-38.002,145.159],"3174":[-37.959,145.147],"3175":[-37.965,145.195],"3177":[-37.990,145.215],"3178":[-37.972,145.222],"3179":[-37.860,145.241],"3180":[-37.874,145.233],"3181":[-37.851,144.999],"3182":[-37.868,144.983],"3183":[-37.874,144.993],"3184":[-37.879,144.984],"3185":[-37.887,145.001],"3186":[-37.894,145.011],"3187":[-37.902,145.018],"3188":[-37.911,145.027],"3189":[-37.921,145.034],"3190":[-37.930,145.043],"3191":[-37.913,145.044],"3192":[-37.941,145.057],"3193":[-37.952,145.063],"3194":[-37.940,145.056],"3195":[-37.959,145.066],"3196":[-37.967,145.069],"3197":[-37.975,145.071],"3198":[-37.984,145.073],"3199":[-37.994,145.080],"3200":[-38.001,145.086],"3201":[-37.963,145.079],"3202":[-37.921,145.079],"3204":[-37.901,145.062],"3205":[-37.844,144.947],"3206":[-37.840,144.928],"3207":[-37.848,144.939],"3212":[-38.070,144.318],"3214":[-38.090,144.340],"3215":[-38.109,144.359],"3216":[-38.130,144.380],"3218":[-38.149,144.349],"3219":[-38.139,144.389],"3220":[-38.148,144.362],"3335":[-37.590,144.710],"3337":[-37.630,144.630],"3338":[-37.580,144.640],"3340":[-37.700,144.620],"3341":[-37.600,144.570],"3342":[-37.670,144.600],"3350":[-37.562,143.862],"3380":[-37.279,143.132],"3381":[-37.310,143.200],"3427":[-37.580,144.820],"3429":[-37.570,144.820],"3431":[-37.350,144.600],"3434":[-37.320,144.590],"3435":[-37.300,144.580],"3440":[-37.402,144.539],"3442":[-37.358,144.527],"3444":[-37.139,144.462],"3450":[-37.173,144.247],"3451":[-37.217,144.290],"3453":[-36.854,144.287],"3458":[-37.180,144.020],"3460":[-37.280,144.060],"3461":[-37.350,144.120],"3462":[-37.420,144.140],"3463":[-37.480,144.190],"3500":[-34.185,142.158],"3550":[-36.762,144.282],"3551":[-36.680,144.447],"3555":[-36.697,144.292],"3556":[-36.630,144.230],"3607":[-36.380,145.400],"3608":[-36.583,145.207],"3610":[-36.438,145.392],"3612":[-36.250,145.600],"3616":[-36.136,145.459],"3620":[-36.063,145.073],"3621":[-36.109,145.079],"3630":[-36.383,145.400],"3631":[-36.357,145.455],"3635":[-36.382,145.399],"3636":[-36.059,145.484],"3638":[-36.116,145.486],"3644":[-35.887,145.569],"3658":[-37.101,145.019],"3659":[-37.050,144.998],"3660":[-36.782,145.401],"3662":[-36.735,145.458],"3664":[-36.784,145.433],"3666":[-36.684,145.357],"3669":[-36.640,145.420],"3672":[-36.573,145.538],"3675":[-36.456,145.596],"3677":[-36.386,145.869],"3678":[-36.680,146.880],"3683":[-36.059,146.459],"3685":[-36.059,146.459],"3687":[-36.060,146.920],"3688":[-36.121,146.878],"3690":[-36.120,146.888],"3691":[-36.120,146.888],"3697":[-36.780,147.100],"3698":[-36.700,147.150],"3699":[-36.650,147.190],"3700":[-36.100,147.350],"3701":[-36.200,147.450],"3707":[-36.050,147.550],"3711":[-37.370,145.660],"3712":[-37.300,145.620],"3713":[-37.220,145.670],"3715":[-37.180,145.610],"3717":[-37.090,145.700],"3719":[-37.010,145.700],"3720":[-36.890,145.780],"3722":[-36.760,145.900],"3730":[-36.010,146.400],"3737":[-36.620,147.250],"3738":[-36.540,147.280],"3741":[-36.724,147.073],"3747":[-36.360,146.680],"3749":[-36.380,146.720],"3750":[-37.691,145.078],"3752":[-37.643,145.110],"3753":[-37.600,145.110],"3754":[-37.607,145.146],"3756":[-37.280,145.040],"3757":[-37.590,145.030],"3758":[-37.310,145.000],"3763":[-37.560,145.060],"3764":[-37.310,144.980],"3765":[-37.852,145.291],"3766":[-37.830,145.380],"3770":[-37.560,145.680],"3775":[-37.450,145.730],"3777":[-37.453,145.766],"3779":[-37.380,145.810],"3781":[-37.935,145.440],"3782":[-37.960,145.460],"3783":[-37.942,145.539],"3785":[-37.730,145.430],"3787":[-37.700,145.450],"3788":[-37.680,145.470],"3791":[-37.786,145.501],"3793":[-37.792,145.557],"3797":[-37.855,145.665],"3799":[-37.880,145.700],"3802":[-38.009,145.236],"3803":[-38.030,145.252],"3804":[-38.051,145.278],"3805":[-38.063,145.303],"3806":[-38.074,145.316],"3807":[-38.093,145.337],"3808":[-38.093,145.337],"3809":[-38.077,145.491],"3810":[-38.081,145.494],"3812":[-38.100,145.560],"3813":[-38.119,145.648],"3814":[-38.144,145.691],"3815":[-38.169,145.790],"3816":[-38.180,145.890],"3818":[-38.180,145.990],"3820":[-38.169,145.934],"3823":[-38.220,146.140],"3824":[-38.240,146.290],"3825":[-38.264,146.348],"3831":[-38.259,146.500],"3840":[-38.235,146.548],"3842":[-38.294,146.617],"3844":[-38.322,146.699],"3847":[-38.102,147.057],"3850":[-38.110,147.065],"3851":[-38.073,147.209],"3854":[-38.044,147.168],"3857":[-38.098,147.261],"3858":[-38.153,147.345],"3860":[-38.207,146.890],"3862":[-37.953,146.895],"3865":[-37.780,147.220],"3869":[-38.350,146.780],"3871":[-38.580,146.250],"3874":[-38.614,146.329],"3875":[-37.830,147.570],"3880":[-37.785,148.009],"3882":[-37.510,148.080],"3885":[-37.440,148.280],"3888":[-37.312,148.403],"3890":[-37.300,148.500],"3892":[-37.780,148.600],"3896":[-37.160,148.420],"3898":[-36.850,148.180],"3903":[-38.205,146.395],"3904":[-38.260,146.438],"3909":[-38.413,146.534],"3910":[-38.007,145.091],"3911":[-38.381,145.198],"3912":[-38.337,145.166],"3913":[-38.296,145.170],"3915":[-38.362,145.260],"3916":[-38.411,145.278],"3918":[-38.437,145.321],"3919":[-38.465,145.363],"3922":[-38.488,145.893],"3925":[-38.508,146.023],"3926":[-38.483,145.454],"3929":[-38.497,145.482],"3930":[-38.492,145.492],"3931":[-38.502,145.506],"3934":[-38.503,145.543],"3936":[-38.329,145.051],"3937":[-38.506,145.563],"3939":[-38.490,145.593],"3941":[-38.479,145.621],"3942":[-38.453,145.648],"3943":[-38.438,145.691],"3944":[-38.407,145.718],"3945":[-38.611,146.143],"3950":[-38.609,146.239],"3953":[-38.620,146.333],"3956":[-38.641,146.458],"3959":[-38.679,146.577],"3960":[-38.692,146.631],"3962":[-38.730,146.693],"3965":[-38.763,146.735],"3966":[-38.809,146.795],"3971":[-38.831,146.881],"3975":[-38.022,145.286],"3976":[-37.996,145.253],"3977":[-38.039,145.315],"3980":[-38.400,145.720],"3981":[-38.431,145.716],"3984":[-38.470,145.754],"3988":[-38.521,145.842],"3995":[-38.575,146.042],"3996":[-38.572,146.043]};
 
-  function saveSusp(s){try{localStorage.setItem('ws_driver_suspense',JSON.stringify(s));}catch(e){}}
-
-  // Build raw stop list from CSV - no state, pure computation
-  const suspIds = React.useMemo(()=>new Set(suspenseStops.map(s=>s.orderNumber)),[suspenseStops]);
-
-  function buildRawStops() {
-    const om={};
-    csvRows.filter(r=>r.SKU!=='FREIGHT'&&r.Product&&(r.CustomerState||'').toUpperCase()==='VIC'&&!isPallet(r))
-      .forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r);});
-    return Object.entries(om).map(([on,or_],idx)=>{
-      const r=or_[0];
-      const pc=parseInt(r.Postcode)||3000;
-      const zone=getZone(pc);
-      const ctns=totalC(or_);
-      const ce=ceCost(ctns,zone);
-      return{
-        id:idx+1, orderNumber:on, name:r.Customer,
-        address:r.CustomerAddress1||'', suburb:r.CustomerSuburb||'',
-        postcode:String(pc), state:'VIC', cartons:ctns, zone, ce,
-        cx_run:getCXRun(r.Postcode),
-        lat:null, lon:null, routable:false,
-        lines:or_.filter(x=>x.SKU!=='FREIGHT'&&x.Product).map(x=>({sku:x.SKU,qty:parseInt(x.Quantity)||0})),
-        notes:r.Notes||'',
-      };
+  function buildRawStops(){
+    var om={};
+    csvRows.filter(function(r){return r.SKU!=="FREIGHT"&&r.Product&&(r.CustomerState||"").toUpperCase()==="VIC"&&!isPallet(r);})
+      .forEach(function(r){if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r);});
+    return Object.entries(om).map(function(entry,idx){
+      var on=entry[0],or_=entry[1],r=or_[0];
+      var pc=String(parseInt(r.Postcode)||3000);
+      var zone=getZone(pc);
+      var ctns=totalC(or_);
+      var ce=ceCost(ctns,zone);
+      return{id:idx+1,orderNumber:on,name:r.Customer,address:r.CustomerAddress1||"",suburb:r.CustomerSuburb||"",postcode:pc,zone:zone,cartons:ctns,ce:ce,cx_run:getCXRun(r.Postcode),lat:null,lon:null,routable:false,notes:r.Notes||""};
     });
   }
 
-  const totalVic = React.useMemo(()=>buildRawStops().filter(s=>!suspIds.has(s.orderNumber)).length,[csvRows,suspIds]);
+  var totalVic=React.useMemo(function(){return buildRawStops().filter(function(s){return !suspIds.has(s.orderNumber);}).length;},[csvRows,suspIds]);
 
-  // Core: haversine matrix
-  function buildMatrix(points) {
-    const n=points.length, mat=[];
-    for(let i=0;i<n;i++){
+  function buildMatrix(points){
+    var n=points.length,mat=[];
+    for(var i=0;i<n;i++){
       mat[i]=[];
-      for(let j=0;j<n;j++){
+      for(var j=0;j<n;j++){
         if(i===j){mat[i][j]=0;continue;}
-        const a=points[i],b=points[j];
-        const R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180;
-        const x=Math.pow(Math.sin(dLat/2),2)+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.pow(Math.sin(dLon/2),2);
-        const km=R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
-        mat[i][j]=km*1.35/50*60;
+        var a=points[i],b=points[j];
+        var R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180;
+        var x=Math.pow(Math.sin(dLat/2),2)+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.pow(Math.sin(dLon/2),2);
+        mat[i][j]=R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))*1.35/50*60;
       }
     }
     return mat;
@@ -703,373 +696,187 @@ function DeliveryOptimiserModal({csvRows, onConfirm, onSkip, onClose, T}) {
 
   function routeTime(idxs,mat,sm){
     if(!idxs.length)return 0;
-    let t=mat[0][idxs[0]];
-    for(let i=1;i<idxs.length;i++)t+=mat[idxs[i-1]][idxs[i]];
-    t+=mat[idxs[idxs.length-1]][0];
-    return t+idxs.length*sm;
+    var t=mat[0][idxs[0]];
+    for(var i=1;i<idxs.length;i++)t+=mat[idxs[i-1]][idxs[i]];
+    return t+mat[idxs[idxs.length-1]][0]+idxs.length*sm;
   }
 
   function nnSort(idxs,mat){
-    const rem=[...idxs],out=[];let cur=0;
+    var rem=idxs.slice(),out=[],cur=0;
     while(rem.length){
-      let bi=0,bd=Infinity;
-      rem.forEach((idx,i)=>{if(mat[cur][idx]<bd){bd=mat[cur][idx];bi=i;}});
+      var bi=0,bd=Infinity;
+      for(var i=0;i<rem.length;i++){if(mat[cur][rem[i]]<bd){bd=mat[cur][rem[i]];bi=i;}}
       out.push(rem[bi]);cur=rem[bi];rem.splice(bi,1);
     }
     return out;
   }
 
   function clarkeWright(stops,mat,shiftMins,sm,dRate){
-    const n=stops.length;
+    var n=stops.length;
     if(!n)return[];
-    // stops[i] maps to matrix index i+1 (index 0 = depot)
-    const savings=[];
-    for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
-      const dI=mat[0][i+1],dJ=mat[0][j+1],ij=mat[i+1][j+1];
-      const bonus=stops[i].cx_run&&stops[j].cx_run&&stops[i].cx_run===stops[j].cx_run?15:0;
-      savings.push({i,j,sv:dI+dJ-ij+bonus});
-    }
-    savings.sort((a,b)=>b.sv-a.sv);
-    const routes=stops.map((_,i)=>({idxs:[i+1]})); // matrix indices
-    const routeOf=stops.map((_,i)=>i);
-    for(const{i,j}of savings){
-      const ri=routeOf[i],rj=routeOf[j];
+    var savings=[];
+    for(var i=0;i<n;i++){for(var j=i+1;j<n;j++){
+      savings.push({i:i,j:j,sv:mat[0][i+1]+mat[0][j+1]-mat[i+1][j+1]});
+    }}
+    savings.sort(function(a,b){return b.sv-a.sv;});
+    var routes=stops.map(function(_,i){return {idxs:[i+1]};});
+    var routeOf=stops.map(function(_,i){return i;});
+    for(var k=0;k<savings.length;k++){
+      var sv=savings[k],ri=routeOf[sv.i],rj=routeOf[sv.j];
       if(ri===rj||!routes[ri]||!routes[rj])continue;
-      const merged=[...routes[ri].idxs,...routes[rj].idxs];
+      var merged=routes[ri].idxs.concat(routes[rj].idxs);
       if(routeTime(nnSort(merged,mat),mat,sm)>shiftMins)continue;
       routes[ri].idxs=merged;
-      for(let k=0;k<n;k++)if(routeOf[k]===rj)routeOf[k]=ri;
+      for(var m=0;m<n;m++)if(routeOf[m]===rj)routeOf[m]=ri;
       routes[rj]=null;
     }
-    return routes.filter(Boolean).map(r=>{
-      const ord=nnSort(r.idxs,mat);
-      const ordStops=ord.map(mi=>stops[mi-1]);
-      const hrs=routeTime(ord,mat,sm)/60;
-      const cost=parseFloat((hrs*dRate).toFixed(2));
-      const ceT=parseFloat(ordStops.reduce((s,st)=>s+st.ce,0).toFixed(2));
-      return{stops:ordStops,matIdxs:ord,hrs,driverCost:cost,ceTotal:ceT,ceSavings:parseFloat((ceT-cost).toFixed(2))};
-    }).sort((a,b)=>b.ceSavings-a.ceSavings);
+    return routes.filter(Boolean).map(function(r){
+      var ord=nnSort(r.idxs,mat),ordStops=ord.map(function(mi){return stops[mi-1];});
+      var hrs=routeTime(ord,mat,sm)/60,cost=parseFloat((hrs*dRate).toFixed(2));
+      var ceT=parseFloat(ordStops.reduce(function(s,st){return s+st.ce;},0).toFixed(2));
+      return{stops:ordStops,matIdxs:ord,hrs:hrs,driverCost:cost,ceTotal:ceT,ceSavings:parseFloat((ceT-cost).toFixed(2))};
+    }).sort(function(a,b){return b.ceSavings-a.ceSavings;});
   }
 
   function annotate(stops,matIdxs,mat,sm,dRate,startT){
-    const [h0,m0]=startT.split(':').map(Number);
-    let cum=h0*60+m0,prev=0;
-    return stops.map((s,i)=>{
-      const mi=matIdxs[i];
-      const dm=mat[prev][mi];
+    var parts=startT.split(":"),h0=parseInt(parts[0]),m0=parseInt(parts[1]);
+    var cum=h0*60+m0,prev=0;
+    return stops.map(function(s,i){
+      var mi=matIdxs[i],dm=mat[prev][mi];
       cum+=dm;
-      const H=Math.floor(cum/60)%24,M=Math.round(cum%60);
-      const eta=String(H).padStart(2,'0')+':'+String(M).padStart(2,'0');
-      const mc=parseFloat(((dm+sm)/60*dRate).toFixed(2));
-      cum+=sm; prev=mi;
-      return{...s,driveMins:parseFloat(dm.toFixed(1)),etaStr:eta,marginalCost:mc,
-        saving:parseFloat((s.ce-mc).toFixed(2)),stopNum:i+1};
+      var H=Math.floor(cum/60)%24,M=Math.round(cum%60);
+      var eta=(H<10?"0":"")+H+":"+(M<10?"0":"")+M;
+      var mc=parseFloat(((dm+sm)/60*dRate).toFixed(2));
+      cum+=sm;prev=mi;
+      return Object.assign({},s,{driveMins:parseFloat(dm.toFixed(1)),etaStr:eta,marginalCost:mc,saving:parseFloat((s.ce-mc).toFixed(2)),stopNum:i+1});
     });
   }
 
-  // THE MAIN FLOW - single async function, no React state handoffs mid-flight
-  const runningRef = React.useRef(false);
-  async function runFull(sh,sm,dr,nd,st) {
-    if(runningRef.current)return;
-    runningRef.current=true;
-    const raw=buildRawStops();
-    const active=raw.filter(s=>!suspIds.has(s.orderNumber));
-    const nonSusp=raw.filter(s=>suspIds.has(s.orderNumber));
-    if(!active.length){setPhase('done');runningRef.current=false;return;}
-
-    // Geocode
-    setPhase('geocoding');
-    setGeocodeTotal(active.length);
-    setGeocodeProgress(0);
-    const GMAPS='AIzaSyDdtmO12PIicsFNhbRGt-gJ_32MZHVl0Rk';
-    const geocoded=[];
-    for(let i=0;i<active.length;i++){
-      const s=active[i];
-      setGeocodeProgress(i+1);
-      const q=encodeURIComponent(`${s.address}, ${s.suburb} VIC ${s.postcode}, Australia`);
-      try{
-        const res=await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${q}&key=${GMAPS}`);
-        const d=await res.json();
-        if(d.results&&d.results[0]){
-          const loc=d.results[0].geometry.location;
-          geocoded.push({...s,lat:loc.lat,lon:loc.lng,routable:true});
-        } else geocoded.push({...s,routable:false});
-      } catch(e){geocoded.push({...s,routable:false});}
+  function runFull(){
+    var raw=buildRawStops();
+    var active=raw.filter(function(s){return !suspIds.has(s.orderNumber);});
+    if(!active.length){setPhase("done");return;}
+    setPhase("optimising");
+    var geocoded=active.map(function(s){
+      var coord=PC_COORDS[s.postcode];
+      if(coord)return Object.assign({},s,{lat:coord[0],lon:coord[1],routable:true});
+      return Object.assign({},s,{routable:false});
+    });
+    var routable=geocoded.filter(function(s){return s.routable;});
+    var notRoutable=geocoded.filter(function(s){return !s.routable;});
+    if(!routable.length){setCxStops(notRoutable);setDriverAStops([]);setDriverBStops([]);setPhase("done");return;}
+    var depot={lat:-38.0024,lon:145.1587};
+    var mat=buildMatrix([depot].concat(routable));
+    var routes=clarkeWright(routable,mat,shiftHrs*60,stopMins,driverRate);
+    var profitable=routes.filter(function(r){return r.ceSavings>0;});
+    var dA=[],dB=[],used={};
+    if(numDrivers>=1&&profitable[0]){
+      dA=annotate(profitable[0].stops,profitable[0].matIdxs,mat,stopMins,driverRate,startTime);
+      dA.forEach(function(s){used[s.orderNumber]=true;});
     }
-
-    const routable=geocoded.filter(s=>s.routable);
-    const notRoutable=geocoded.filter(s=>!s.routable);
-
-    // Optimise
-    setPhase('optimising');
-    const shiftMins=(sh||shiftHrs)*60;
-    const smins=sm||stopMins;
-    const drate=dr||driverRate;
-    const ndrivers=nd||numDrivers;
-    const stime=st||startTime;
-
-    if(!routable.length){
-      setCxStops([...notRoutable]);
-      setDriverAStops([]);setDriverBStops([]);
-      setPhase('done');runningRef.current=false;return;
+    if(numDrivers>=2&&profitable[1]){
+      dB=annotate(profitable[1].stops,profitable[1].matIdxs,mat,stopMins,driverRate,startTime);
+      dB.forEach(function(s){used[s.orderNumber]=true;});
     }
-
-    const depot={lat:-38.0024,lon:145.1587};
-    const points=[depot,...routable];
-    const mat=buildMatrix(points);
-    const routes=clarkeWright(routable,mat,shiftMins,smins,drate);
-    const profitable=routes.filter(r=>r.ceSavings>0);
-
-    let dA=[],dB=[],cx=[...notRoutable];
-    const used=new Set();
-
-    if(ndrivers>=1&&profitable[0]){
-      const r=profitable[0];
-      dA=annotate(r.stops,r.matIdxs,mat,smins,drate,stime);
-      dA.forEach(s=>used.add(s.orderNumber));
-    }
-    if(ndrivers>=2&&profitable[1]){
-      const r=profitable[1];
-      dB=annotate(r.stops,r.matIdxs,mat,smins,drate,stime);
-      dB.forEach(s=>used.add(s.orderNumber));
-    }
-    cx=[...notRoutable,...routable.filter(s=>!used.has(s.orderNumber))];
-
-    setDriverAStops(dA);
-    setDriverBStops(dB);
-    setCxStops(cx);
-    setPhase('done');
-    runningRef.current=false;
+    var cx=notRoutable.concat(routable.filter(function(s){return !used[s.orderNumber];}));
+    setDriverAStops(dA);setDriverBStops(dB);setCxStops(cx);setPhase("done");
   }
 
-  // Run on mount
-  React.useEffect(()=>{runFull();},[]);
+  React.useEffect(function(){runFull();},[]);
 
-  // Re-run when settings change (only after first run)
-  const firstRun=React.useRef(true);
-  React.useEffect(()=>{
-    if(firstRun.current){firstRun.current=false;return;}
-    runFull(shiftHrs,stopMins,driverRate,numDrivers,startTime);
-  },[shiftHrs,stopMins,driverRate,numDrivers,startTime]);
-
-  // Recalc ETAs after drag without re-optimising
   function recalc(stops){
-    const [h0,m0]=startTime.split(':').map(Number);
-    let cum=h0*60+m0;
-    return stops.map((s,i)=>{
-      const dm=s.driveMins||0;
-      cum+=dm;
-      const H=Math.floor(cum/60)%24,M=Math.round(cum%60);
-      const eta=String(H).padStart(2,'0')+':'+String(M).padStart(2,'0');
-      const mc=parseFloat(((dm+stopMins)/60*driverRate).toFixed(2));
+    var parts=startTime.split(":"),h0=parseInt(parts[0]),m0=parseInt(parts[1]),cum=h0*60+m0;
+    return stops.map(function(s,i){
+      var dm=s.driveMins||0;cum+=dm;
+      var H=Math.floor(cum/60)%24,M=Math.round(cum%60);
+      var eta=(H<10?"0":"")+H+":"+(M<10?"0":"")+M;
+      var mc=parseFloat(((dm+stopMins)/60*driverRate).toFixed(2));
       cum+=stopMins;
-      return{...s,etaStr:eta,marginalCost:mc,saving:parseFloat((s.ce-mc).toFixed(2)),stopNum:i+1};
+      return Object.assign({},s,{etaStr:eta,marginalCost:mc,saving:parseFloat((s.ce-mc).toFixed(2)),stopNum:i+1});
     });
   }
 
-  const dragRef=React.useRef(null);
   function move(stop,from,to){
-    const rm=lst=>lst.filter(s=>s.orderNumber!==stop.orderNumber);
-    let nA=driverAStops,nB=driverBStops,nC=cxStops;
-    if(from==='driverA')nA=rm(nA);
-    else if(from==='driverB')nB=rm(nB);
-    else if(from==='cx')nC=rm(nC);
-    else if(from==='suspense'){const u=rm(suspenseStops);setSuspenseStops(u);saveSusp(u);}
-    if(to==='driverA')nA=[...rm(nA),stop];
-    else if(to==='driverB')nB=[...rm(nB),stop];
-    else if(to==='cx')nC=[...rm(nC),stop];
-    else if(to==='suspense'){const u=[...rm(suspenseStops),stop];setSuspenseStops(u);saveSusp(u);}
-    setDriverAStops(recalc(nA));
-    setDriverBStops(recalc(nB));
-    setCxStops(nC);
+    var rm=function(lst){return lst.filter(function(s){return s.orderNumber!==stop.orderNumber;});};
+    var nA=driverAStops,nB=driverBStops,nC=cxStops;
+    if(from==="driverA")nA=rm(nA);else if(from==="driverB")nB=rm(nB);else if(from==="cx")nC=rm(nC);
+    else if(from==="suspense"){var u=rm(suspenseStops);setSuspenseStops(u);saveSusp(u);}
+    if(to==="driverA")nA=rm(nA).concat([stop]);else if(to==="driverB")nB=rm(nB).concat([stop]);else if(to==="cx")nC=rm(nC).concat([stop]);
+    else if(to==="suspense"){var u2=rm(suspenseStops).concat([stop]);setSuspenseStops(u2);saveSusp(u2);}
+    setDriverAStops(recalc(nA));setDriverBStops(recalc(nB));setCxStops(nC);
   }
 
-  // Stats
-  const dA_hrs=driverAStops.length?(driverAStops.reduce((s,st)=>s+(st.driveMins||0),0)+driverAStops.length*stopMins)/60:0;
-  const dB_hrs=driverBStops.length?(driverBStops.reduce((s,st)=>s+(st.driveMins||0),0)+driverBStops.length*stopMins)/60:0;
-  const dA_cost=parseFloat((dA_hrs*driverRate).toFixed(2));
-  const dB_cost=parseFloat((dB_hrs*driverRate).toFixed(2));
-  const ceAll=[...driverAStops,...driverBStops,...cxStops].reduce((s,st)=>s+(st.ce||0),0);
-  const saved=[...driverAStops,...driverBStops].reduce((s,st)=>s+st.ce,0)-(dA_cost+dB_cost);
-  const placed=[...driverAStops,...driverBStops,...cxStops].length;
-  const countOk=placed>=totalVic;
-  const urlA=driverAStops.length?'https://www.google.com/maps/dir/17+Kirkham+Rd+W+Keysborough+VIC+3173/'+driverAStops.map(s=>encodeURIComponent(s.address+', '+s.suburb+' VIC '+s.postcode)).join('/'):null;
-
-  const isLoading=phase==='geocoding'||phase==='optimising';
-
-  function ZoneBadge({zone}){
-    const c={metro:{bg:'#DBEAFE',col:'#1D4ED8',l:'METRO'},cou1:{bg:'#FEF3C7',col:'#B45309',l:'COU1'},cou2:{bg:'#FFEDD5',col:'#C2410C',l:'COU2'},cou4:{bg:'#FCE7F3',col:'#9D174D',l:'COU4'}}[zone]||{bg:'#F1F5F9',col:'#64748B',l:zone||'?'};
-    return <span style={{display:'inline-block',padding:'1px 6px',borderRadius:3,background:c.bg,color:c.col,fontSize:8,fontWeight:700,fontFamily:"'Montserrat',sans-serif"}}>{c.l}</span>;
+  function handleDrop(orderNumber,from,to){
+    var find=function(lst){return lst.find(function(s){return s.orderNumber===orderNumber;});};
+    var stop=find(driverAStops)||find(driverBStops)||find(cxStops)||find(suspenseStops);
+    if(stop)move(stop,from,to);
+    setDragOver(null);
   }
 
-  function StopCard({stop,panel}){
-    return(
-      <div draggable onDragStart={e=>{dragRef.current={stop,panel};}}
-        style={{padding:'9px 12px',borderBottom:'1px solid #F1F5F9',display:'flex',gap:8,cursor:'grab'}}
-        onMouseEnter={e=>e.currentTarget.style.background='#F8FAFC'}
-        onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-        <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:'#CBD5E1',minWidth:14,textAlign:'right',paddingTop:1}}>{stop.stopNum||''}</div>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:3}}>
-            <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:'#1E3A5F',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{stop.name}</span>
-            <ZoneBadge zone={stop.zone}/>
-          </div>
-          <div style={{fontSize:10,color:'#64748B',display:'flex',gap:5,flexWrap:'wrap'}}>
-            <span>{stop.suburb}</span>
-            <span style={{color:'#CBD5E1'}}>|</span>
-            <span>{stop.cartons} ctns</span>
-            <span style={{color:'#CBD5E1'}}>|</span>
-            <span style={{color:'#2563EB',fontWeight:700}}>${stop.ce.toFixed(2)} CX</span>
-            {stop.marginalCost>0&&<><span style={{color:'#059669',fontWeight:700}}>${stop.marginalCost.toFixed(2)} driver</span><span style={{color:stop.saving>0?'#059669':'#DC2626',fontWeight:600}}>{stop.saving>0?'saves':'costs'} ${Math.abs(stop.saving).toFixed(2)}</span></>}
-            {stop.etaStr&&<span style={{color:'#94A3B8'}}>ETA {stop.etaStr}</span>}
-            {stop.driveMins>0&&<span style={{color:'#94A3B8'}}>{Math.round(stop.driveMins)}min</span>}
-            {stop.cx_run&&<span style={{color:'#CBD5E1',fontSize:9}}>{stop.cx_run.replace('Z-RUN ','').replace(/^[A-Z]-/,'')}</span>}
-          </div>
-        </div>
-        <div style={{display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
-          {panel!=='cx'&&<button onClick={()=>move(stop,panel,'cx')} style={{fontSize:9,padding:'2px 6px',borderRadius:3,border:'1px solid #BFDBFE',background:'#EFF6FF',color:'#2563EB',cursor:'pointer',fontFamily:"'Montserrat',sans-serif",fontWeight:700}}>CX</button>}
-          {panel!=='driverA'&&<button onClick={()=>move(stop,panel,'driverA')} style={{fontSize:9,padding:'2px 6px',borderRadius:3,border:'1px solid #BBF7D0',background:'#DCFCE7',color:'#15803D',cursor:'pointer',fontFamily:"'Montserrat',sans-serif",fontWeight:700}}>A</button>}
-          {panel!=='driverB'&&numDrivers>=2&&<button onClick={()=>move(stop,panel,'driverB')} style={{fontSize:9,padding:'2px 6px',borderRadius:3,border:'1px solid #C7D2FE',background:'#E0E7FF',color:'#4338CA',cursor:'pointer',fontFamily:"'Montserrat',sans-serif",fontWeight:700}}>B</button>}
-          {panel!=='suspense'&&<button onClick={()=>move(stop,panel,'suspense')} style={{fontSize:9,padding:'2px 6px',borderRadius:3,border:'1px solid #DDD6FE',background:'#EDE9FE',color:'#6D28D9',cursor:'pointer',fontFamily:"'Montserrat',sans-serif",fontWeight:700}}>Later</button>}
-        </div>
-      </div>
-    );
-  }
-
-  function Panel({title,icon,stops,panel,color,meta}){
-    return(
-      <div onDragOver={e=>e.preventDefault()}
-        onDrop={e=>{e.preventDefault();if(dragRef.current)move(dragRef.current.stop,dragRef.current.panel,panel);dragRef.current=null;}}
-        onDragEnter={()=>setDragOver(panel)} onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
-        style={{background:dragOver===panel?color+'11':'#fff',border:'1.5px solid '+(dragOver===panel?color:color+'33'),borderRadius:12,overflow:'hidden',display:'flex',flexDirection:'column',transition:'border-color .15s'}}>
-        <div style={{padding:'10px 14px',background:color+'12',borderBottom:'1px solid '+color+'22',display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-          <span style={{fontSize:14}}>{icon}</span>
-          <span style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:11,color:'#1E3A5F'}}>{title}</span>
-          {meta&&<span style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color,background:color+'18',padding:'1px 8px',borderRadius:10}}>{meta}</span>}
-          <span style={{marginLeft:'auto',fontFamily:"'Montserrat',sans-serif",fontSize:10,color:'#94A3B8'}}>{stops.length} stop{stops.length!==1?'s':''}</span>
-        </div>
-        <div style={{flex:1,overflowY:'auto',maxHeight:460}}>
-          {stops.length===0
-            ?<div style={{padding:'24px',textAlign:'center',color:'#CBD5E1',fontSize:11,fontFamily:"'Montserrat',sans-serif"}}>Drop stops here</div>
-            :stops.map(s=><StopCard key={s.orderNumber} stop={s} panel={panel}/>)}
-        </div>
-      </div>
-    );
-  }
+  var dA_hrs=driverAStops.length?(driverAStops.reduce(function(s,st){return s+(st.driveMins||0);},0)+driverAStops.length*stopMins)/60:0;
+  var dB_hrs=driverBStops.length?(driverBStops.reduce(function(s,st){return s+(st.driveMins||0);},0)+driverBStops.length*stopMins)/60:0;
+  var dA_cost=parseFloat((dA_hrs*driverRate).toFixed(2));
+  var dB_cost=parseFloat((dB_hrs*driverRate).toFixed(2));
+  var ceAll=[].concat(driverAStops,driverBStops,cxStops).reduce(function(s,st){return s+(st.ce||0);},0);
+  var saved=[].concat(driverAStops,driverBStops).reduce(function(s,st){return s+st.ce;},0)-(dA_cost+dB_cost);
+  var placed=driverAStops.length+driverBStops.length+cxStops.length;
+  var countOk=placed>=totalVic;
+  var isLoading=phase==="optimising";
 
   return(
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',zIndex:1000,display:'flex',alignItems:'stretch',justifyContent:'flex-end'}}>
-
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:1000,display:"flex",alignItems:"stretch",justifyContent:"flex-end"}}>
       {isLoading&&(
-        <div style={{position:'absolute',inset:0,background:'rgba(3,45,96,0.92)',zIndex:20,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:18}}>
-          <div style={{fontSize:40}}>📍</div>
-          <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:20,color:'#fff'}}>
-            {phase==='geocoding'?'Geocoding Addresses':'Optimising Routes'}
-          </div>
-          {phase==='geocoding'&&<div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,color:'#7EB8F7'}}>
-            {geocodeProgress} of {geocodeTotal}: finding exact coordinates...
-          </div>}
-          <div style={{width:300,height:6,background:'rgba(255,255,255,0.2)',borderRadius:3,overflow:'hidden'}}>
-            <div style={{height:'100%',background:'#34D399',borderRadius:3,transition:'width .3s',
-              width:phase==='geocoding'&&geocodeTotal?(geocodeProgress/geocodeTotal*100)+'%':'80%'}}/>
-          </div>
+        <div style={{position:"absolute",inset:0,background:"rgba(3,45,96,0.92)",zIndex:20,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:18}}>
+          <div style={{fontSize:40}}>{"⚡"}</div>
+          <div style={{fontSize:20,fontWeight:800,color:"#fff"}}>Optimising Routes...</div>
         </div>
       )}
-
-      <div style={{width:'min(1160px,98vw)',height:'100vh',background:'#F8FAFC',display:'flex',flexDirection:'column',boxShadow:'-8px 0 40px rgba(0,0,0,0.2)'}}>
-
-        {/* Header */}
-        <div style={{background:'linear-gradient(135deg,#032D60,#0D3A72)',padding:'14px 22px',display:'flex',alignItems:'center',gap:16,flexShrink:0}}>
+      <div style={{width:"min(1160px,98vw)",height:"100vh",background:"#F8FAFC",display:"flex",flexDirection:"column",boxShadow:"-8px 0 40px rgba(0,0,0,0.2)"}}>
+        <div style={{background:"linear-gradient(135deg,#032D60,#0D3A72)",padding:"14px 22px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
           <div style={{flex:1}}>
-            <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:16,color:'#fff',letterSpacing:1}}>Victorian Delivery Optimiser</div>
-            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,letterSpacing:1.5,marginTop:2,color:countOk?'#34D399':'#FCA5A5'}}>
-              {countOk?'OK ALL '+totalVic+' VIC ORDERS ACCOUNTED FOR':placed+' OF '+totalVic+' ORDERS PLACED'}
-            </div>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",letterSpacing:1}}>Victorian Delivery Optimiser</div>
+            <div style={{fontSize:10,fontWeight:700,letterSpacing:1.5,marginTop:2,color:countOk?"#34D399":"#FCA5A5"}}>{countOk?"OK ALL "+totalVic+" VIC ORDERS ACCOUNTED FOR":placed+" OF "+totalVic+" ORDERS PLACED"}</div>
           </div>
-          {urlA&&<a href={urlA} target="_blank" rel="noopener noreferrer"
-            style={{padding:'7px 14px',borderRadius:8,background:'rgba(255,255,255,0.15)',color:'#fff',fontSize:11,fontWeight:700,textDecoration:'none',border:'1px solid rgba(255,255,255,0.3)',fontFamily:"'Montserrat',sans-serif"}}>
-            Driver A in Maps
-          </a>}
-          <button onClick={onClose} style={{width:32,height:32,borderRadius:8,border:'1px solid rgba(255,255,255,0.3)',background:'rgba(255,255,255,0.1)',color:'#fff',fontSize:20,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>x</button>
+          <button onClick={onClose} style={{width:32,height:32,borderRadius:8,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#fff",fontSize:20,cursor:"pointer"}}>x</button>
         </div>
-
-        {/* Metrics */}
-        <div style={{background:'#fff',borderBottom:'1px solid #E2E8F0',padding:'10px 22px',display:'flex',gap:28,alignItems:'center',flexShrink:0}}>
-          {[['CX if all sent','$'+ceAll.toFixed(2),'#64748B'],['Driver A','$'+dA_cost.toFixed(2)+' | '+dA_hrs.toFixed(1)+'h','#059669'],numDrivers>=2&&['Driver B','$'+dB_cost.toFixed(2)+' | '+dB_hrs.toFixed(1)+'h','#4338CA'],['You save','$'+Math.max(0,saved).toFixed(2),saved>0?'#059669':'#DC2626']].filter(Boolean).map(([l,v,c])=>(
-            <div key={l}>
-              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:18,fontWeight:800,color:c}}>{v}</div>
-              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:'#94A3B8',letterSpacing:.5}}>{l.toUpperCase()}</div>
-            </div>
-          ))}
-          <button onClick={()=>runFull()} disabled={isLoading} style={{marginLeft:'auto',padding:'7px 16px',borderRadius:8,border:'1.5px solid #BFDBFE',background:'#EFF6FF',color:'#2563EB',fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:'pointer'}}>
-            Re-optimise
-          </button>
+        <div style={{background:"#fff",borderBottom:"1px solid #E2E8F0",padding:"10px 22px",display:"flex",gap:28,alignItems:"center",flexShrink:0}}>
+          <div><div style={{fontSize:18,fontWeight:800,color:"#64748B"}}>${ceAll.toFixed(2)}</div><div style={{fontSize:9,color:"#94A3B8"}}>CX IF ALL SENT</div></div>
+          <div><div style={{fontSize:18,fontWeight:800,color:"#059669"}}>${dA_cost.toFixed(2)} | {dA_hrs.toFixed(1)}h</div><div style={{fontSize:9,color:"#94A3B8"}}>DRIVER A</div></div>
+          {numDrivers>=2&&<div><div style={{fontSize:18,fontWeight:800,color:"#4338CA"}}>${dB_cost.toFixed(2)} | {dB_hrs.toFixed(1)}h</div><div style={{fontSize:9,color:"#94A3B8"}}>DRIVER B</div></div>}
+          <div><div style={{fontSize:18,fontWeight:800,color:saved>0?"#059669":"#DC2626"}}>${Math.max(0,saved).toFixed(2)}</div><div style={{fontSize:9,color:"#94A3B8"}}>YOU SAVE</div></div>
+          <button onClick={function(){runFull();}} disabled={isLoading} style={{marginLeft:"auto",padding:"7px 16px",borderRadius:8,border:"1.5px solid #BFDBFE",background:"#EFF6FF",color:"#2563EB",fontSize:11,fontWeight:700,cursor:"pointer"}}>Re-optimise</button>
         </div>
-
-        {/* Body */}
-        <div style={{flex:1,display:'flex',overflow:'hidden'}}>
-
-          {/* Sidebar */}
-          <div style={{width:200,background:'#fff',borderRight:'1px solid #E2E8F0',padding:16,display:'flex',flexDirection:'column',gap:14,overflowY:'auto',flexShrink:0}}>
-            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:'#94A3B8',letterSpacing:2}}>SETTINGS</div>
-            {[['Shift hours',shiftHrs,setShiftHrs,6,14,0.5],['Stop time (min)',stopMins,setStopMins,5,30,5],['Rate ($/hr)',driverRate,setDriverRate,20,80,5]].map(([l,v,s,mn,mx,st])=>(
-              <div key={l}>
-                <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-                  <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:'#64748B'}}>{l}</span>
-                  <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:'#1E3A5F'}}>{v}</span>
-                </div>
-                <input type="range" min={mn} max={mx} step={st} value={v} onChange={e=>s(parseFloat(e.target.value))} style={{width:'100%',accentColor:'#2563EB'}}/>
-              </div>
-            ))}
+        <div style={{flex:1,display:"flex",overflow:"hidden"}}>
+          <div style={{width:200,background:"#fff",borderRight:"1px solid #E2E8F0",padding:16,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",flexShrink:0}}>
+            <div style={{fontSize:9,fontWeight:700,color:"#94A3B8",letterSpacing:2}}>SETTINGS</div>
+            {[["Shift hours",shiftHrs,setShiftHrs,6,14,0.5],["Stop time (min)",stopMins,setStopMins,5,30,5],["Rate ($/hr)",driverRate,setDriverRate,20,80,5]].map(function(item){
+              var l=item[0],v=item[1],s=item[2],mn=item[3],mx=item[4],step=item[5];
+              return(<div key={l}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,color:"#64748B"}}>{l}</span><span style={{fontSize:11,fontWeight:700,color:"#1E3A5F"}}>{v}</span></div><input type="range" min={mn} max={mx} step={step} value={v} onChange={function(e){s(parseFloat(e.target.value));}} style={{width:"100%",accentColor:"#2563EB"}}/></div>);
+            })}
             <div>
-              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:'#64748B',marginBottom:6}}>Drivers</div>
-              <div style={{display:'flex',gap:6}}>
-                {[1,2].map(n=><button key={n} onClick={()=>setNumDrivers(n)} style={{flex:1,padding:'6px 0',borderRadius:6,border:'1.5px solid '+(numDrivers===n?'#2563EB':'#E2E8F0'),background:numDrivers===n?'#EFF6FF':'#fff',color:numDrivers===n?'#2563EB':'#94A3B8',fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:700,cursor:'pointer'}}>{n}</button>)}
+              <div style={{fontSize:10,color:"#64748B",marginBottom:6}}>Drivers</div>
+              <div style={{display:"flex",gap:6}}>
+                {[1,2].map(function(n){return(<button key={n} onClick={function(){setNumDrivers(n);}} style={{flex:1,padding:"6px 0",borderRadius:6,border:"1.5px solid "+(numDrivers===n?"#2563EB":"#E2E8F0"),background:numDrivers===n?"#EFF6FF":"#fff",color:numDrivers===n?"#2563EB":"#94A3B8",fontSize:12,fontWeight:700,cursor:"pointer"}}>{n}</button>);})}
               </div>
             </div>
             <div>
-              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:'#64748B',marginBottom:4}}>Start time</div>
-              <input type="time" value={startTime} onChange={e=>setStartTime(e.target.value)} style={{width:'100%',padding:'6px 8px',borderRadius:6,border:'1.5px solid #E2E8F0',fontFamily:"'Montserrat',sans-serif",fontSize:12}}/>
+              <div style={{fontSize:10,color:"#64748B",marginBottom:4}}>Start time</div>
+              <input type="time" value={startTime} onChange={function(e){setStartTime(e.target.value);}} style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1.5px solid #E2E8F0",fontSize:12}}/>
             </div>
-            <div style={{borderTop:'1px solid #F1F5F9',paddingTop:12}}>
-              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,fontWeight:700,color:'#94A3B8',letterSpacing:2,marginBottom:8}}>CX RATES inc. GST</div>
-              {Object.entries(CE_RATES).map(([z,r])=>(
-                <div key={z} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',fontFamily:"'Montserrat',sans-serif",fontSize:10}}>
-                  <span style={{fontWeight:700,color:'#64748B',textTransform:'uppercase'}}>{z}</span>
-                  <span style={{color:'#1E3A5F'}}>${(r.base*(1+FUEL_LEVY)*GST).toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-            {suspenseStops.length>0&&(
-              <button onClick={()=>{setSuspenseStops([]);saveSusp([]);}} style={{padding:'6px',borderRadius:6,border:'1px solid #FECACA',background:'#FEF2F2',color:'#DC2626',fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,cursor:'pointer'}}>
-                Clear Another Day ({suspenseStops.length})
-              </button>
-            )}
+            {suspenseStops.length>0&&<button onClick={function(){setSuspenseStops([]);saveSusp([]);}} style={{padding:"6px",borderRadius:6,border:"1px solid #FECACA",background:"#FEF2F2",color:"#DC2626",fontSize:10,fontWeight:700,cursor:"pointer"}}>Clear Another Day ({suspenseStops.length})</button>}
           </div>
-
-          {/* Panels */}
-          <div style={{flex:1,padding:16,display:'flex',flexDirection:'column',gap:12,overflowY:'auto',background:'#F8FAFC'}}>
-            <div style={{display:'grid',gridTemplateColumns:numDrivers>=2?'1fr 1fr 1fr':'1fr 1fr',gap:12,flex:1}}>
-              <Panel title="Cold Xpress" icon="❄️" stops={cxStops} panel="cx" color="#2563EB"
-                meta={cxStops.length?'$'+cxStops.reduce((s,st)=>s+st.ce,0).toFixed(2):''}/>
-              <Panel title="Driver A" icon="🚐" stops={driverAStops} panel="driverA" color="#059669"
-                meta={driverAStops.length?dA_hrs.toFixed(1)+'h | $'+dA_cost:''}/>
-              {numDrivers>=2&&<Panel title="Driver B" icon="🚐" stops={driverBStops} panel="driverB" color="#4338CA"
-                meta={driverBStops.length?dB_hrs.toFixed(1)+'h | $'+dB_cost:''}/>}
+          <div style={{flex:1,padding:16,display:"flex",flexDirection:"column",gap:12,overflowY:"auto",background:"#F8FAFC"}}>
+            <div style={{display:"grid",gridTemplateColumns:numDrivers>=2?"1fr 1fr 1fr":"1fr 1fr",gap:12,flex:1}}>
+              <DelivPanel title="Cold Xpress" icon="❄️" stops={cxStops} panel="cx" color="#2563EB" onMove={move} onDrop={handleDrop} dov={dragOver==="cx"} nd={numDrivers} meta={cxStops.length?"$"+cxStops.reduce(function(s,st){return s+st.ce;},0).toFixed(2):""}/>
+              <DelivPanel title="Driver A" icon="🚐" stops={driverAStops} panel="driverA" color="#059669" onMove={move} onDrop={handleDrop} dov={dragOver==="driverA"} nd={numDrivers} meta={driverAStops.length?dA_hrs.toFixed(1)+"h | $"+dA_cost:""}/>
+              {numDrivers>=2&&<DelivPanel title="Driver B" icon="🚐" stops={driverBStops} panel="driverB" color="#4338CA" onMove={move} onDrop={handleDrop} dov={dragOver==="driverB"} nd={numDrivers} meta={driverBStops.length?dB_hrs.toFixed(1)+"h | $"+dB_cost:""}/>}
             </div>
-            <Panel title="Another Day" icon="🗓" stops={suspenseStops} panel="suspense" color="#6D28D9"
-              meta={suspenseStops.length?suspenseStops.length+' held':''}/>
+            <DelivPanel title="Another Day" icon="🗓" stops={suspenseStops} panel="suspense" color="#6D28D9" onMove={move} onDrop={handleDrop} dov={dragOver==="suspense"} nd={numDrivers} meta={suspenseStops.length?suspenseStops.length+" held":""}/>
           </div>
         </div>
-
-        {/* Footer */}
-        <div style={{background:'#fff',borderTop:'1px solid #E2E8F0',padding:'12px 22px',display:'flex',gap:10,justifyContent:'flex-end',flexShrink:0}}>
-          <button onClick={onSkip} style={{padding:'9px 20px',borderRadius:8,border:'1.5px solid #E2E8F0',background:'#fff',color:'#64748B',fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:700,cursor:'pointer'}}>No driver this week</button>
-          <button onClick={()=>onConfirm([...driverAStops.map(s=>({...s,driver:'A'})),...driverBStops.map(s=>({...s,driver:'B'}))])}
-            disabled={!driverAStops.length&&!driverBStops.length}
-            style={{padding:'9px 24px',borderRadius:8,border:'none',background:driverAStops.length||driverBStops.length?'#059669':'#94A3B8',color:'#fff',fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:800,cursor:'pointer'}}>
-            Confirm Allocation ({driverAStops.length+driverBStops.length} stops)
-          </button>
+        <div style={{background:"#fff",borderTop:"1px solid #E2E8F0",padding:"12px 22px",display:"flex",gap:10,justifyContent:"flex-end",flexShrink:0}}>
+          <button onClick={onSkip} style={{padding:"9px 20px",borderRadius:8,border:"1.5px solid #E2E8F0",background:"#fff",color:"#64748B",fontSize:12,fontWeight:700,cursor:"pointer"}}>No driver this week</button>
+          <button onClick={function(){onConfirm(driverAStops.map(function(s){return Object.assign({},s,{driver:"A"});}).concat(driverBStops.map(function(s){return Object.assign({},s,{driver:"B"});})));}} disabled={!driverAStops.length&&!driverBStops.length} style={{padding:"9px 24px",borderRadius:8,border:"none",background:driverAStops.length||driverBStops.length?"#059669":"#94A3B8",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer"}}>Confirm Allocation ({driverAStops.length+driverBStops.length} stops)</button>
         </div>
       </div>
     </div>
@@ -2047,7 +1854,7 @@ function App(){
   return(
     <>
       <style>{currentCSS}</style>
-      {showOptimiser&&<DeliveryOptimiserModal csvRows={csvRows} onConfirm={(alloc)=>{const nums=new Set(alloc.map(a=>a.orderNumber));const mutated=rowsRef.current.map(r=>nums.has(r.OrderNumber)?{...r,Courier:"WSDRIVER"}:r);rowsRef.current=mutated;setCsvRows(mutated);setDriverAllocation(alloc);setDone({});setShowOptimiser(false);}} onSkip={()=>{setDriverAllocation([]);setShowOptimiser(false);}} onClose={()=>setShowOptimiser(false)} T={T}/> }
+      {showOptimiser&&<DeliveryOptimiserModal csvRows={csvRows} onConfirm={function(alloc){var nums=new Set(alloc.map(function(a){return a.orderNumber;}));var mutated=rowsRef.current.map(function(r){return nums.has(r.OrderNumber)?Object.assign({},r,{Courier:"WSDRIVER"}):r;});rowsRef.current=mutated;setCsvRows(mutated);setDriverAllocation(alloc);setDone({});setShowOptimiser(false);}} onSkip={function(){setDriverAllocation([]);setShowOptimiser(false);}} onClose={function(){setShowOptimiser(false);}} T={T}/> }
       {valModal&&<ValModal result={valModal.result} label={valModal.label} onProceed={()=>doGen(valModal.type,true)} onCancel={()=>setValModal(null)} labelRequestSent={labelRequestSent} onRequestLabels={async()=>{try{const resp=await apiFetch("/api/request-labels",{method:"POST",body:JSON.stringify({customers:driveWarnings})});if(resp.ok){setLabelRequestSent(true);}else{const e=await resp.json();alert("Failed to send: "+(e.error||"Unknown error"));}}catch(e){alert("Failed to send: "+e.message);}}}/>}
       {genModal&&<GenSuccessModal modal={genModal} onClose={()=>setGenModal(null)} apiFetch={apiFetch} T={T}/>}
       <div style={{minHeight:"100vh",background:T.cream,display:"flex",flexDirection:"column"}}>
@@ -2176,7 +1983,7 @@ function App(){
                   )}
                 </div>
 
-                {csvName&&<VicTile csvRows={csvRows} driverAllocation={driverAllocation} onOpen={()=>setShowOptimiser(true)} T={T}/>}
+                {csvName&&<VicTile csvRows={csvRows} driverAllocation={driverAllocation} onOpen={function(){setShowOptimiser(true);}} T={T}/>}
                 {/* RIGHT — Generate buttons */}
                 <div style={{display:"flex",flexDirection:"column",gap:11}}>
                   {/* Template upload status */}
