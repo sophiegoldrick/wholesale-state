@@ -477,6 +477,11 @@ function twoOpt(stops,depot){
 function annotateRoute(stops,depot,startTime,sm,dRate){
   const [h0,m0]=startTime.split(':').map(Number);
   let cum=h0*60+m0;
+  // Debug: log first stop coords
+  if(stops.length>0){
+    console.log('[annotateRoute] first stop:',stops[0].name,'lat:',stops[0].lat,'lon:',stops[0].lon,'depot lat:',depot.lat,'depot lon:',depot.lon);
+    console.log('[annotateRoute] roadMins depot->stop0:',roadMins(depot,stops[0]));
+  }
   return stops.map((s,i)=>{
     const prev=i===0?depot:stops[i-1];
     const dm=roadMins(prev,s);
@@ -618,28 +623,28 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
   const activeStops=React.useMemo(()=>geocodedStops.filter(s=>!suspenseIds.has(s.orderNumber)&&s.routable),[geocodedStops,suspenseIds]);
   const nonRoutableStops=React.useMemo(()=>geocodedStops.filter(s=>!suspenseIds.has(s.orderNumber)&&!s.routable),[geocodedStops,suspenseIds]);
 
-  // Run optimiser
-  const runOptimiser=React.useCallback(()=>{
+  // Run optimiser - takes stops as argument to avoid stale closure
+  const runOptimiser=React.useCallback((routableStops,unroutableStops)=>{
+    const stopsToRoute=routableStops||activeStops;
+    const stopsToRx=unroutableStops||nonRoutableStops;
+    if(!stopsToRoute.length&&!stopsToRx.length)return;
     setOptimising(true);
     setTimeout(()=>{
       const shiftMins=shiftHrs*60;
-      const res=clarkeWright(activeStops,DEPOT,shiftMins,stopMins,driverRate);
-      // Sort by savings descending, only take profitable routes
+      const res=clarkeWright(stopsToRoute,DEPOT,shiftMins,stopMins,driverRate);
       const sorted=[...res.routes].sort((a,b)=>b.ceSavings-a.ceSavings);
       const profitable=sorted.filter(r=>r.ceSavings>0);
-      let dA=[],dB=[],cx=[...nonRoutableStops,...activeStops];
+      let dA=[],dB=[],cx=[...stopsToRx,...stopsToRoute];
       if(numDrivers>=1&&profitable[0]){
-        const route=profitable[0];
-        const ann=annotateRoute(route.stops,DEPOT,startTime,stopMins,driverRate);
+        const ann=annotateRoute(profitable[0].stops,DEPOT,startTime,stopMins,driverRate);
         dA=ann;
         const dAIds=new Set(ann.map(s=>s.orderNumber));
-        cx=activeStops.filter(s=>!dAIds.has(s.orderNumber));
+        cx=[...stopsToRx,...stopsToRoute.filter(s=>!dAIds.has(s.orderNumber))];
         if(numDrivers>=2&&profitable[1]){
-          const route2=profitable[1];
-          const ann2=annotateRoute(route2.stops,DEPOT,startTime,stopMins,driverRate);
+          const ann2=annotateRoute(profitable[1].stops,DEPOT,startTime,stopMins,driverRate);
           dB=ann2;
           const dBIds=new Set(ann2.map(s=>s.orderNumber));
-          cx=cx.filter(s=>!dBIds.has(s.orderNumber));
+          cx=[...stopsToRx,...stopsToRoute.filter(s=>!dAIds.has(s.orderNumber)&&!dBIds.has(s.orderNumber))];
         }
       }
       setDriverAStops(dA);
@@ -647,12 +652,25 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
       setCxStops(cx);
       setOptimising(false);
     },50);
-  },[activeStops,nonRoutableStops,shiftHrs,stopMins,driverRate,numDrivers,startTime]);
+  },[shiftHrs,stopMins,driverRate,numDrivers,startTime]);
 
-  // Auto re-optimise when settings change or geocoding finishes
+  // Trigger optimiser after geocoding completes with fresh stops
   React.useEffect(()=>{
-    if(!geocoding&&geocodedStops.length)runOptimiser();
-  },[geocoding,shiftHrs,stopMins,driverRate,numDrivers,startTime]);
+    if(!geocoding&&geocodedStops.length){
+      const routable=geocodedStops.filter(s=>!suspenseIds.has(s.orderNumber)&&s.routable);
+      const unroutable=geocodedStops.filter(s=>!suspenseIds.has(s.orderNumber)&&!s.routable);
+      runOptimiser(routable,unroutable);
+    }
+  },[geocoding]);
+
+  // Re-optimise on settings change using current geocoded stops
+  React.useEffect(()=>{
+    if(!geocoding&&geocodedStops.length){
+      const routable=geocodedStops.filter(s=>!suspenseIds.has(s.orderNumber)&&s.routable);
+      const unroutable=geocodedStops.filter(s=>!suspenseIds.has(s.orderNumber)&&!s.routable);
+      runOptimiser(routable,unroutable);
+    }
+  },[shiftHrs,stopMins,driverRate,numDrivers,startTime]);
 
   // Drag and drop
   const dragRef=React.useRef(null);
@@ -789,8 +807,8 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
             </div>
           ))}
           <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>
-            <button onClick={runOptimiser} disabled={optimising} style={{padding:'7px 14px',borderRadius:8,border:'1.5px solid #BFDBFE',background:'#EFF6FF',color:'#2563EB',fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:'pointer'}}>
-              {optimising?'Optimising...':'Re-optimise'}
+            <button onClick={()=>runOptimiser(activeStops,nonRoutableStops)} disabled={optimising||geocoding} style={{padding:'7px 14px',borderRadius:8,border:'1.5px solid #BFDBFE',background:'#EFF6FF',color:'#2563EB',fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,cursor:'pointer'}}>
+              {optimising?'Optimising...':geocoding?'Geocoding...':'Re-optimise'}
             </button>
           </div>
         </div>
