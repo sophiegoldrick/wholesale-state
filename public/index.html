@@ -561,17 +561,14 @@ function StopCard({stop,panel,onMove,nd}){
       style={{padding:"9px 12px",borderBottom:"1px solid #F1F5F9",display:"flex",gap:8,cursor:"grab"}}
       onMouseEnter={e=>{e.currentTarget.style.background="#F8FAFC";}}
       onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
-      <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:"#CBD5E1",minWidth:14,textAlign:"right",paddingTop:1}}>{stop.stopNum||""}</div>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:3}}>
-          <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:"#1E3A5F",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stop.name}</span>
+          <span style={{fontSize:11,fontWeight:700,color:"#1E3A5F"}}>{stop.name}</span>
           <ZoneBadge zone={stop.zone}/>
         </div>
         <div style={{fontSize:10,color:"#64748B",display:"flex",gap:5,flexWrap:"wrap"}}>
-          <span>{stop.suburb}</span>
-          <span>|</span>
-          <span>{stop.cartons} ctns</span>
-          <span>|</span>
+          <span>{stop.suburb}</span><span>|</span>
+          <span>{stop.cartons} ctns</span><span>|</span>
           <span style={{color:"#2563EB",fontWeight:700}}>${stop.ce.toFixed(2)} CX</span>
           {stop.etaStr&&<span style={{color:"#94A3B8"}}>ETA {stop.etaStr}</span>}
           {stop.driveMins>0&&<span style={{color:"#94A3B8"}}>{Math.round(stop.driveMins)}min</span>}
@@ -592,7 +589,7 @@ function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd}){
       style={{background:dov?"#f0fdf4":"#fff",border:"1.5px solid "+(dov?color:color+"33"),borderRadius:12,overflow:"hidden",display:"flex",flexDirection:"column"}}>
       <div style={{padding:"10px 14px",background:color+"12",borderBottom:"1px solid "+color+"22",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
         <span style={{fontSize:14}}>{icon}</span>
-        <span style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:11,color:"#1E3A5F"}}>{title}</span>
+        <span style={{fontSize:11,fontWeight:800,color:"#1E3A5F"}}>{title}</span>
         {meta&&<span style={{fontSize:10,fontWeight:700,color:color,padding:"1px 8px",borderRadius:10}}>{meta}</span>}
         <span style={{marginLeft:"auto",fontSize:10,color:"#94A3B8"}}>{stops.length} stop{stops.length!==1?"s":""}</span>
       </div>
@@ -624,7 +621,7 @@ function VicTile({csvRows,driverAllocation,onOpen,T}){
   return(
     <div onClick={onOpen} style={{marginTop:14,background:has?"#EFF9F4":skipped?"#F8FAFC":"#EEF6FF",border:"1.5px solid "+(has?"#34D399":skipped?"#CBD5E1":"#60A5FA"),borderRadius:14,padding:"16px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}>
       <div style={{flex:1}}>
-        <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:13,color:"#1E3A5F",marginBottom:2}}>{has?"Delivery Run - "+driverAllocation.length+" stops":skipped?"All Victorian to Cold Xpress":"Sort Victorian Deliveries"}</div>
+        <div style={{fontSize:13,fontWeight:800,color:"#1E3A5F",marginBottom:2}}>{has?"Delivery Run - "+driverAllocation.length+" stops":skipped?"All Victorian to Cold Xpress":"Sort Victorian Deliveries"}</div>
         <div style={{fontSize:11,color:"#64748B"}}>{vn} VIC orders</div>
       </div>
       <div style={{fontSize:11,color:"#60A5FA",fontWeight:700}}>{has||skipped?"edit":"set up"}</div>
@@ -773,11 +770,12 @@ function DeliveryOptimiserModal({csvRows, onConfirm, onSkip, onClose, T}) {
   // THE MAIN FLOW - single async function, no React state handoffs mid-flight
   const runningRef = React.useRef(false);
   async function runFull(sh,sm,dr,nd,st) {
+    if(runningRef.current)return;
     runningRef.current=true;
-    try{
     const raw=buildRawStops();
     const active=raw.filter(s=>!suspIds.has(s.orderNumber));
-    if(!active.length){setPhase('done');return;}
+    const nonSusp=raw.filter(s=>suspIds.has(s.orderNumber));
+    if(!active.length){setPhase('done');runningRef.current=false;return;}
 
     // Geocode
     setPhase('geocoding');
@@ -804,16 +802,16 @@ function DeliveryOptimiserModal({csvRows, onConfirm, onSkip, onClose, T}) {
 
     // Optimise
     setPhase('optimising');
-    const shiftMins=(sh!=null?sh:shiftHrs)*60;
-    const smins=sm!=null?sm:stopMins;
-    const drate=dr!=null?dr:driverRate;
-    const ndrivers=nd!=null?nd:numDrivers;
-    const stime=st!=null?st:startTime;
+    const shiftMins=(sh||shiftHrs)*60;
+    const smins=sm||stopMins;
+    const drate=dr||driverRate;
+    const ndrivers=nd||numDrivers;
+    const stime=st||startTime;
 
     if(!routable.length){
       setCxStops([...notRoutable]);
       setDriverAStops([]);setDriverBStops([]);
-      setPhase('done');return;
+      setPhase('done');runningRef.current=false;return;
     }
 
     const depot={lat:-38.0024,lon:145.1587};
@@ -841,8 +839,7 @@ function DeliveryOptimiserModal({csvRows, onConfirm, onSkip, onClose, T}) {
     setDriverBStops(dB);
     setCxStops(cx);
     setPhase('done');
-    }catch(err){console.error('runFull error:',err);setPhase('done');}
-    finally{runningRef.current=false;}
+    runningRef.current=false;
   }
 
   // Run on mount
@@ -944,8 +941,8 @@ function DeliveryOptimiserModal({csvRows, onConfirm, onSkip, onClose, T}) {
       <div onDragOver={e=>e.preventDefault()}
         onDrop={e=>{e.preventDefault();if(dragRef.current)move(dragRef.current.stop,dragRef.current.panel,panel);dragRef.current=null;}}
         onDragEnter={()=>setDragOver(panel)} onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
-        style={{background:dragOver===panel?color+'11':'#fff',border:`1.5px solid ${dragOver===panel?color:color+'33'}`,borderRadius:12,overflow:'hidden',display:'flex',flexDirection:'column',transition:'border-color .15s'}}>
-        <div style={{padding:'10px 14px',background:color+'12',borderBottom:`1px solid ${color}22`,display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+        style={{background:dragOver===panel?color+'11':'#fff',border:'1.5px solid '+(dragOver===panel?color:color+'33'),borderRadius:12,overflow:'hidden',display:'flex',flexDirection:'column',transition:'border-color .15s'}}>
+        <div style={{padding:'10px 14px',background:color+'12',borderBottom:'1px solid '+color+'22',display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
           <span style={{fontSize:14}}>{icon}</span>
           <span style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:11,color:'#1E3A5F'}}>{title}</span>
           {meta&&<span style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color,background:color+'18',padding:'1px 8px',borderRadius:10}}>{meta}</span>}
@@ -1027,7 +1024,7 @@ function DeliveryOptimiserModal({csvRows, onConfirm, onSkip, onClose, T}) {
             <div>
               <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:'#64748B',marginBottom:6}}>Drivers</div>
               <div style={{display:'flex',gap:6}}>
-                {[1,2].map(n=><button key={n} onClick={()=>setNumDrivers(n)} style={{flex:1,padding:'6px 0',borderRadius:6,border:`1.5px solid ${numDrivers===n?'#2563EB':'#E2E8F0'}`,background:numDrivers===n?'#EFF6FF':'#fff',color:numDrivers===n?'#2563EB':'#94A3B8',fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:700,cursor:'pointer'}}>{n}</button>)}
+                {[1,2].map(n=><button key={n} onClick={()=>setNumDrivers(n)} style={{flex:1,padding:'6px 0',borderRadius:6,border:'1.5px solid '+(numDrivers===n?'#2563EB':'#E2E8F0'),background:numDrivers===n?'#EFF6FF':'#fff',color:numDrivers===n?'#2563EB':'#94A3B8',fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:700,cursor:'pointer'}}>{n}</button>)}
               </div>
             </div>
             <div>
