@@ -773,12 +773,11 @@ function DeliveryOptimiserModal({csvRows, onConfirm, onSkip, onClose, T}) {
   // THE MAIN FLOW - single async function, no React state handoffs mid-flight
   const runningRef = React.useRef(false);
   async function runFull(sh,sm,dr,nd,st) {
-    if(runningRef.current)return;
     runningRef.current=true;
+    try{
     const raw=buildRawStops();
     const active=raw.filter(s=>!suspIds.has(s.orderNumber));
-    const nonSusp=raw.filter(s=>suspIds.has(s.orderNumber));
-    if(!active.length){setPhase('done');runningRef.current=false;return;}
+    if(!active.length){setPhase('done');return;}
 
     // Geocode
     setPhase('geocoding');
@@ -805,16 +804,16 @@ function DeliveryOptimiserModal({csvRows, onConfirm, onSkip, onClose, T}) {
 
     // Optimise
     setPhase('optimising');
-    const shiftMins=(sh||shiftHrs)*60;
-    const smins=sm||stopMins;
-    const drate=dr||driverRate;
-    const ndrivers=nd||numDrivers;
-    const stime=st||startTime;
+    const shiftMins=(sh!=null?sh:shiftHrs)*60;
+    const smins=sm!=null?sm:stopMins;
+    const drate=dr!=null?dr:driverRate;
+    const ndrivers=nd!=null?nd:numDrivers;
+    const stime=st!=null?st:startTime;
 
     if(!routable.length){
       setCxStops([...notRoutable]);
       setDriverAStops([]);setDriverBStops([]);
-      setPhase('done');runningRef.current=false;return;
+      setPhase('done');return;
     }
 
     const depot={lat:-38.0024,lon:145.1587};
@@ -842,7 +841,8 @@ function DeliveryOptimiserModal({csvRows, onConfirm, onSkip, onClose, T}) {
     setDriverBStops(dB);
     setCxStops(cx);
     setPhase('done');
-    runningRef.current=false;
+    }catch(err){console.error('runFull error:',err);setPhase('done');}
+    finally{runningRef.current=false;}
   }
 
   // Run on mount
