@@ -385,27 +385,7 @@ function ceCost(cartons,zone){
 // DELIVERY OPTIMISER ENGINE v2
 // ============================================================
 
-// Real drive time via Google Maps Distance Matrix API
-async function getRealDriveMins(origins, destinations, apiKey) {
-  const orig = origins.map(o=>`${o.lat},${o.lon}`).join('|');
-  const dest = destinations.map(d=>`${d.lat},${d.lon}`).join('|');
-  const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(orig)}&destinations=${encodeURIComponent(dest)}&mode=driving&departure_time=now&key=${apiKey}`;
-  try {
-    const r = await fetch(url);
-    const d = await r.json();
-    if (d.rows && d.rows[0] && d.rows[0].elements) {
-      return d.rows[0].elements.map(el =>
-        el.status === 'OK' ? el.duration_in_traffic
-          ? el.duration_in_traffic.value / 60
-          : el.duration.value / 60
-        : null
-      );
-    }
-  } catch(e) {}
-  return null;
-}
-
-// Haversine fallback (km)
+// Haversine distance between two geocoded points
 function hvDist(a, b) {
   const R=6371, dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
   const x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
@@ -413,35 +393,21 @@ function hvDist(a, b) {
 }
 function hvMins(a, b) { return hvDist(a,b)*1.32/48*60; }
 
-// Build full NxN drive-time matrix for a set of points (depot + stops)
-// Returns matrix[i][j] = minutes from point i to point j
-async function buildMatrix(points, apiKey) {
+// Build NxN drive-time matrix using haversine (geocoded coords are accurate enough for routing)
+function buildMatrix(points) {
   const n = points.length;
-  const mat = Array.from({length:n}, (_,i) => Array.from({length:n}, (_,j) => hvMins(points[i],points[j])));
-  // Batch via Distance Matrix (max 10x10 per call)
-  const BATCH = 10;
-  try {
-    for (let i=0; i<n; i+=BATCH) {
-      const origs = points.slice(i, i+BATCH);
-      for (let j=0; j<n; j+=BATCH) {
-        const dests = points.slice(j, j+BATCH);
-        const origStr = origs.map(p=>`${p.lat},${p.lon}`).join('|');
-        const destStr = dests.map(p=>`${p.lat},${p.lon}`).join('|');
-        const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(origStr)}&destinations=${encodeURIComponent(destStr)}&mode=driving&key=${apiKey}`;
-        const resp = await fetch(url);
-        const data = await resp.json();
-        if (data.rows) {
-          data.rows.forEach((row, ri) => {
-            row.elements.forEach((el, ci) => {
-              if (el.status === 'OK') {
-                mat[i+ri][j+ci] = el.duration.value / 60;
-              }
-            });
-          });
-        }
-      }
+  const mat = [];
+  for (let i=0; i<n; i++) {
+    mat[i] = [];
+    for (let j=0; j<n; j++) {
+      if (i===j) { mat[i][j]=0; continue; }
+      const a=points[i], b=points[j];
+      const R=6371, dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
+      const x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+      const km=R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+      mat[i][j]=km*1.32/50*60; // road factor 1.32, avg 50km/h
     }
-  } catch(e) { console.warn('Distance Matrix failed, using haversine:', e.message); }
+  }
   return mat;
 }
 
@@ -638,11 +604,11 @@ function DeliveryOptimiserModal({csvRows, existingAllocation, onConfirm, onSkip,
       setAllStops(results);
       setReady(true);
 
-      // Step 2: Build drive-time matrix
-      setStatus('Fetching real drive times...');
+      // Step 2: Build drive-time matrix from geocoded coordinates
+      setStatus('Building route matrix...');
       const routable=results.filter(s=>s.routable&&!suspenseIds.has(s.orderNumber));
       const points=[DEPOT_PT,...routable];
-      const matrix=await buildMatrix(points, GMAPS_KEY);
+      const matrix=buildMatrix(points);
       if(!cancelled){
         setMat({matrix,routable});
         setMatrixReady(true);
@@ -857,7 +823,7 @@ function DeliveryOptimiserModal({csvRows, existingAllocation, onConfirm, onSkip,
         <div style={{position:'absolute',inset:0,background:'rgba(3,45,96,0.9)',zIndex:10,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16}}>
           <div style={{fontSize:36}}>📍</div>
           <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:18,color:'#fff'}}>
-            {!ready?'Geocoding Addresses':'Fetching Drive Times'}
+            {!ready?'Geocoding Addresses':'Building Route Matrix'}
           </div>
           <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,color:'#7EB8F7',maxWidth:360,textAlign:'center'}}>{status}</div>
           <div style={{width:280,height:5,background:'rgba(255,255,255,0.2)',borderRadius:3,overflow:'hidden',marginTop:4}}>
@@ -967,7 +933,7 @@ function DeliveryOptimiserModal({csvRows, existingAllocation, onConfirm, onSkip,
                 meta={cxStops.length?'$'+cxStops.reduce((s,st)=>s+st.ce,0).toFixed(2):''}/>
               <Panel title="Driver A" icon="🚐" stops={driverAStops} panel="driverA" accentColor="#059669"
                 meta={driverAStops.length?driverHrsA+'h | $'+driverCostA:''}
-                footer={driverAStops.length?'Real drive times via Google Maps':''}/>
+                footer={driverAStops.length?'Geocoded addresses + haversine routing':''}/>
               {numDrivers>=2&&<Panel title="Driver B" icon="🚐" stops={driverBStops} panel="driverB" accentColor="#4338CA"
                 meta={driverBStops.length?driverHrsB+'h | $'+driverCostB:''}/>}
             </div>
