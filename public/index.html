@@ -527,7 +527,6 @@ function DeliveryOptimiserModal({csvRows, onConfirm, onSkip, onClose, T}) {
   // THE MAIN FLOW - single async function, no React state handoffs mid-flight
   const runningRef = React.useRef(false);
   async function runFull(sh,sm,dr,nd,st) {
-    if(runningRef.current)return;
     runningRef.current=true;
     try{
     const raw=buildRawStops();
