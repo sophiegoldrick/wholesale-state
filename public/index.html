@@ -427,7 +427,7 @@ const PC_COORDS={
   3920:{lat:-38.389,lon:145.351},3926:{lat:-38.549,lon:145.451},3930:{lat:-38.629,lon:145.451},
 };
 function getCoords(pc){
-  return PC_COORDS[parseInt(pc)]||{lat:-37.95,lon:145.1};
+  return PC_COORDS[parseInt(pc)]||null;
 }
 function haversine(a,b){
   const R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180;
@@ -551,7 +551,11 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
   React.useEffect(()=>{localStorage.setItem('ws_opt_drivers',numDrivers);},[numDrivers]);
   React.useEffect(()=>{localStorage.setItem('ws_opt_start',startTime);},[startTime]);
 
-  // Build stops from VIC orders
+  const [geocoding,setGeocoding]=React.useState(true);
+  const [geocodeStatus,setGeocodeStatus]=React.useState('Geocoding addresses...');
+  const [geocodedStops,setGeocodedStops]=React.useState([]);
+
+  // Build raw stops from VIC orders (no coords yet)
   const allVicStops=React.useMemo(()=>{
     const om={};
     csvRows.filter(r=>r.SKU!=='FREIGHT'&&r.Product&&(r.CustomerState||'').toUpperCase()==='VIC'&&!isPallet(r))
@@ -560,7 +564,6 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
       const r=or_[0];
       const pc=parseInt(r.Postcode)||3000;
       const zone=getZone(pc);
-      const coords=getCoords(pc);
       const ctns=totalC(or_);
       const ce=ceCost(ctns,zone);
       const cx_run=getCXRun(r.Postcode);
@@ -568,15 +571,52 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
         id:idx+1,orderNumber:on,name:r.Customer,
         address:r.CustomerAddress1||'',suburb:r.CustomerSuburb||'',cx_run,
         postcode:String(pc),state:'VIC',cartons:ctns,zone,ce,
-        lat:coords.lat,lon:coords.lon,
+        lat:null,lon:null,routable:false,
         lines:or_.filter(x=>x.SKU!=='FREIGHT'&&x.Product).map(x=>({sku:x.SKU,qty:parseInt(x.Quantity)||0})),
         notes:r.Notes||'',driveMins:0,marginalCost:0,
       };
     });
   },[csvRows]);
 
+  // Geocode all addresses using Google Maps API on open
+  React.useEffect(()=>{
+    if(!allVicStops.length){setGeocoding(false);return;}
+    let cancelled=false;
+    async function geocodeAll(){
+      setGeocoding(true);
+      const GMAPS_KEY='AIzaSyDdtmO12PIicsFNhbRGt-gJ_32MZHVl0Rk';
+      const results=[];
+      for(let i=0;i<allVicStops.length;i++){
+        if(cancelled)return;
+        const s=allVicStops[i];
+        setGeocodeStatus(`Geocoding ${i+1} of ${allVicStops.length}: ${s.suburb}...`);
+        const query=encodeURIComponent(`${s.address}, ${s.suburb} VIC ${s.postcode}, Australia`);
+        try{
+          const resp=await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${GMAPS_KEY}`);
+          const data=await resp.json();
+          if(data.results&&data.results[0]){
+            const loc=data.results[0].geometry.location;
+            results.push({...s,lat:loc.lat,lon:loc.lng,routable:true});
+          } else {
+            results.push({...s,routable:false});
+          }
+        } catch(e){
+          results.push({...s,routable:false});
+        }
+      }
+      if(!cancelled){
+        setGeocodedStops(results);
+        setGeocoding(false);
+        setGeocodeStatus('');
+      }
+    }
+    geocodeAll();
+    return()=>{cancelled=true;};
+  },[allVicStops]);
+
   const suspenseIds=React.useMemo(()=>new Set(suspenseStops.map(s=>s.orderNumber)),[suspenseStops]);
-  const activeStops=React.useMemo(()=>allVicStops.filter(s=>!suspenseIds.has(s.orderNumber)),[allVicStops,suspenseIds]);
+  const activeStops=React.useMemo(()=>geocodedStops.filter(s=>!suspenseIds.has(s.orderNumber)&&s.routable),[geocodedStops,suspenseIds]);
+  const nonRoutableStops=React.useMemo(()=>geocodedStops.filter(s=>!suspenseIds.has(s.orderNumber)&&!s.routable),[geocodedStops,suspenseIds]);
 
   // Run optimiser
   const runOptimiser=React.useCallback(()=>{
@@ -587,7 +627,7 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
       // Sort by savings descending, only take profitable routes
       const sorted=[...res.routes].sort((a,b)=>b.ceSavings-a.ceSavings);
       const profitable=sorted.filter(r=>r.ceSavings>0);
-      let dA=[],dB=[],cx=[...activeStops];
+      let dA=[],dB=[],cx=[...nonRoutableStops,...activeStops];
       if(numDrivers>=1&&profitable[0]){
         const route=profitable[0];
         const ann=annotateRoute(route.stops,DEPOT,startTime,stopMins,driverRate);
@@ -607,10 +647,12 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
       setCxStops(cx);
       setOptimising(false);
     },50);
-  },[activeStops,shiftHrs,stopMins,driverRate,numDrivers,startTime]);
+  },[activeStops,nonRoutableStops,shiftHrs,stopMins,driverRate,numDrivers,startTime]);
 
-  // Auto re-optimise when settings change
-  React.useEffect(()=>{runOptimiser();},[shiftHrs,stopMins,driverRate,numDrivers,startTime]);
+  // Auto re-optimise when settings change or geocoding finishes
+  React.useEffect(()=>{
+    if(!geocoding&&geocodedStops.length)runOptimiser();
+  },[geocoding,shiftHrs,stopMins,driverRate,numDrivers,startTime]);
 
   // Drag and drop
   const dragRef=React.useRef(null);
@@ -650,7 +692,7 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
   const ceIfAll=activeStops.reduce((s,st)=>s+st.ce,0);
   const ceSaved=driverAStops.reduce((s,st)=>s+st.ce,0)+driverBStops.reduce((s,st)=>s+st.ce,0)-(driverCostA+driverCostB);
   const allAccounted=[...driverAStops,...driverBStops,...cxStops].length;
-  const totalVic=activeStops.length;
+  const totalVic=allVicStops.filter(s=>!suspenseIds.has(s.orderNumber)).length;
   const countOk=allAccounted>=totalVic;
   const urlA=buildGoogleMapsUrl(driverAStops);
   const urlB=buildGoogleMapsUrl(driverBStops);
@@ -706,6 +748,16 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
 
   return(
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:1000,display:'flex',alignItems:'stretch',justifyContent:'flex-end'}}>
+      {geocoding&&(
+        <div style={{position:'absolute',inset:0,background:'rgba(3,45,96,0.85)',zIndex:10,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16}}>
+          <div style={{fontSize:32}}>📍</div>
+          <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:16,color:'#fff'}}>Geocoding Addresses</div>
+          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,color:'#7EB8F7',maxWidth:320,textAlign:'center'}}>{geocodeStatus}</div>
+          <div style={{width:240,height:4,background:'rgba(255,255,255,0.2)',borderRadius:2,overflow:'hidden'}}>
+            <div style={{height:'100%',background:'#34D399',borderRadius:2,width:geocodedStops.length&&allVicStops.length?(geocodedStops.length/allVicStops.length*100)+'%':'0%',transition:'width .3s'}}/>
+          </div>
+        </div>
+      )}
       <div style={{width:'min(1100px,98vw)',height:'100vh',background:'#F8FAFC',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'-8px 0 40px rgba(0,0,0,0.18)'}}>
 
         {/* Header */}
