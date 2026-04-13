@@ -531,11 +531,11 @@ function ZoneBadge({zone}){
 }
 
 function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onClose,T}){
-  const [shiftHrs,setShiftHrs]=React.useState(9);
-  const [stopMins,setStopMins]=React.useState(10);
-  const [driverRate,setDriverRate]=React.useState(30);
-  const [numDrivers,setNumDrivers]=React.useState(1);
-  const [startTime,setStartTime]=React.useState('06:00');
+  const [shiftHrs,setShiftHrs]=React.useState(()=>parseFloat(localStorage.getItem('ws_opt_shift')||'9'));
+  const [stopMins,setStopMins]=React.useState(()=>parseFloat(localStorage.getItem('ws_opt_stop')||'10'));
+  const [driverRate,setDriverRate]=React.useState(()=>parseFloat(localStorage.getItem('ws_opt_rate')||'30'));
+  const [numDrivers,setNumDrivers]=React.useState(()=>parseInt(localStorage.getItem('ws_opt_drivers')||'1'));
+  const [startTime,setStartTime]=React.useState(()=>localStorage.getItem('ws_opt_start')||'06:00');
   const [optimising,setOptimising]=React.useState(false);
   const [driverAStops,setDriverAStops]=React.useState([]);
   const [driverBStops,setDriverBStops]=React.useState([]);
@@ -543,6 +543,13 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
   const [suspenseStops,setSuspenseStops]=React.useState(loadSuspense);
   const [dragOver,setDragOver]=React.useState(null);
   const [done,setDone]=React.useState(false);
+
+  // Persist settings
+  React.useEffect(()=>{localStorage.setItem('ws_opt_shift',shiftHrs);},[shiftHrs]);
+  React.useEffect(()=>{localStorage.setItem('ws_opt_stop',stopMins);},[stopMins]);
+  React.useEffect(()=>{localStorage.setItem('ws_opt_rate',driverRate);},[driverRate]);
+  React.useEffect(()=>{localStorage.setItem('ws_opt_drivers',numDrivers);},[numDrivers]);
+  React.useEffect(()=>{localStorage.setItem('ws_opt_start',startTime);},[startTime]);
 
   // Build stops from VIC orders
   const allVicStops=React.useMemo(()=>{
@@ -599,7 +606,8 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
     },50);
   },[activeStops,shiftHrs,stopMins,driverRate,numDrivers,startTime]);
 
-  React.useEffect(()=>{runOptimiser();},[]);
+  // Auto re-optimise when settings change
+  React.useEffect(()=>{runOptimiser();},[shiftHrs,stopMins,driverRate,numDrivers,startTime]);
 
   // Drag and drop
   const dragRef=React.useRef(null);
@@ -664,6 +672,7 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
           {stop.marginalCost>0&&<span style={{color:'#059669',fontWeight:700}}>${stop.marginalCost.toFixed(2)} driver</span>}
           {stop.etaStr&&<span style={{color:'#94A3B8'}}>ETA {stop.etaStr}</span>}
           {stop.saving!=null&&stop.marginalCost>0&&<span style={{color:stop.saving>0?'#059669':'#DC2626',fontWeight:600}}>{stop.saving>0?'saves':'costs'} ${Math.abs(stop.saving).toFixed(2)}</span>}
+          {stop.cx_run&&<span style={{color:'#94A3B8',fontSize:9}}>{stop.cx_run.replace(/^[A-Z]-/,'').replace('Z-RUN ','')}</span>}
         </div>
       </div>
       <div style={{display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
@@ -700,8 +709,8 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
         <div style={{background:'linear-gradient(135deg,#032D60,#0D3A72)',padding:'16px 20px',display:'flex',alignItems:'center',gap:14,flexShrink:0}}>
           <div style={{flex:1}}>
             <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:16,color:'#fff',letterSpacing:1}}>Victorian Delivery Optimiser</div>
-            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,color:'#7EB8F7',letterSpacing:1.5,marginTop:2}}>
-              {countOk?'ALL '+totalVic+' VIC ORDERS ACCOUNTED FOR':allAccounted+' / '+totalVic+' VIC ORDERS PLACED'}
+            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,letterSpacing:1.5,marginTop:2,color:countOk?'#34D399':'#FCA5A5',fontWeight:700}}>
+              {countOk?'✓ ALL '+totalVic+' VIC ORDERS ACCOUNTED FOR':'⚠ '+allAccounted+' / '+totalVic+' VIC ORDERS PLACED — '+( totalVic-allAccounted)+' MISSING'}
             </div>
           </div>
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
@@ -790,7 +799,7 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
 
         {/* Footer */}
         <div style={{background:'#fff',borderTop:'1px solid #E2E8F0',padding:'12px 20px',display:'flex',gap:10,justifyContent:'flex-end',flexShrink:0}}>
-          <button onClick={onSkip} style={{padding:'9px 18px',borderRadius:8,border:'1.5px solid #E2E8F0',background:'#fff',color:'#64748B',fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:700,cursor:'pointer'}}>All to CX</button>
+          <button onClick={onSkip} style={{padding:'9px 18px',borderRadius:8,border:'1.5px solid #E2E8F0',background:'#fff',color:'#64748B',fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:700,cursor:'pointer'}}>No driver this week</button>
           <button onClick={()=>{
             const alloc=[...driverAStops.map(s=>({...s,driver:'A'})),...driverBStops.map(s=>({...s,driver:'B'}))];
             onConfirm(alloc);
