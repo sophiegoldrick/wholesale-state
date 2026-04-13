@@ -488,7 +488,7 @@ function annotateRoute(stops,depot,startTime,sm,dRate){
     return{...s,driveMins:parseFloat(dm.toFixed(1)),etaStr,marginalCost:mc,saving:parseFloat((s.ce-mc).toFixed(2)),stopNum:i+1};
   });
 }
-function clarkeWright(stops,depot,shiftMins,sm){
+function clarkeWright(stops,depot,shiftMins,sm,dRate){
   if(!stops.length)return{routes:[]};
   const savings=[];
   for(let i=0;i<stops.length;i++){
@@ -514,9 +514,9 @@ function clarkeWright(stops,depot,shiftMins,sm){
   return{routes:routes.filter(Boolean).map((r,idx)=>{
     const ord=twoOpt(nearestNeighbour(r.stops,depot),depot);
     const hrs=totalRouteTime(ord,depot,sm)/60;
-    const dc=hrs*30;
-    const ceT=ord.reduce((s,st)=>s+st.ce,0);
-    return{id:idx,stops:ord,hrs:parseFloat(hrs.toFixed(2)),driverCost:parseFloat(dc.toFixed(2)),ceTotal:parseFloat(ceT.toFixed(2)),ceSavings:parseFloat((ceT-dc).toFixed(2))};
+    const dc=parseFloat((hrs*dRate).toFixed(2));
+    const ceT=parseFloat(ord.reduce((s,st)=>s+st.ce,0).toFixed(2));
+    return{id:idx,stops:ord,hrs:parseFloat(hrs.toFixed(2)),driverCost:dc,ceTotal:ceT,ceSavings:parseFloat((ceT-dc).toFixed(2))};
   })};
 }
 
@@ -583,17 +583,20 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
     setOptimising(true);
     setTimeout(()=>{
       const shiftMins=shiftHrs*60;
-      const res=clarkeWright(activeStops,DEPOT,shiftMins,stopMins);
+      const res=clarkeWright(activeStops,DEPOT,shiftMins,stopMins,driverRate);
+      // Sort by savings descending, only take profitable routes
       const sorted=[...res.routes].sort((a,b)=>b.ceSavings-a.ceSavings);
       const profitable=sorted.filter(r=>r.ceSavings>0);
       let dA=[],dB=[],cx=[...activeStops];
       if(numDrivers>=1&&profitable[0]){
-        const ann=annotateRoute(twoOpt(nearestNeighbour(profitable[0].stops,DEPOT),DEPOT),DEPOT,startTime,stopMins,driverRate);
+        const route=profitable[0];
+        const ann=annotateRoute(route.stops,DEPOT,startTime,stopMins,driverRate);
         dA=ann;
         const dAIds=new Set(ann.map(s=>s.orderNumber));
         cx=activeStops.filter(s=>!dAIds.has(s.orderNumber));
         if(numDrivers>=2&&profitable[1]){
-          const ann2=annotateRoute(twoOpt(nearestNeighbour(profitable[1].stops,DEPOT),DEPOT),DEPOT,startTime,stopMins,driverRate);
+          const route2=profitable[1];
+          const ann2=annotateRoute(route2.stops,DEPOT,startTime,stopMins,driverRate);
           dB=ann2;
           const dBIds=new Set(ann2.map(s=>s.orderNumber));
           cx=cx.filter(s=>!dBIds.has(s.orderNumber));
@@ -693,7 +696,7 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
         {meta&&<span style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:accentColor,background:`${accentColor}18`,padding:'1px 7px',borderRadius:10}}>{meta}</span>}
         <span style={{marginLeft:'auto',fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:600,color:'#94A3B8'}}>{stops.length} stop{stops.length!==1?'s':''}</span>
       </div>
-      <div style={{flex:1,overflowY:'auto',maxHeight:300}}>
+      <div style={{flex:1,overflowY:'auto',maxHeight:500}}>
         {stops.length===0
           ?<div style={{padding:'16px 12px',textAlign:'center',color:'#94A3B8',fontSize:11,fontFamily:"'Montserrat',sans-serif"}}>Drop stops here</div>
           :stops.map(s=><StopCard key={s.orderNumber} stop={s} panel={panel}/>)}
@@ -780,15 +783,15 @@ function DeliveryOptimiserModal({csvRows,existingAllocation,onConfirm,onSkip,onC
             </div>
           </div>
 
-          {/* Panels */}
+          {/* Panels - CX left, Driver(s) right, Another Day below */}
           <div style={{flex:1,padding:16,display:'flex',flexDirection:'column',gap:12,overflowY:'auto',background:'#F8FAFC'}}>
-            <div style={{display:'grid',gridTemplateColumns:numDrivers>=2?'1fr 1fr 1fr':'1fr 1fr',gap:12}}>
+            <div style={{display:'grid',gridTemplateColumns:numDrivers>=2?'1fr 1fr 1fr':'1fr 1fr',gap:12,flex:1}}>
+              <Panel title="Cold Xpress" icon="❄️" stops={cxStops} panel="cx" accentColor="#2563EB"
+                meta={cxStops.length?'$'+cxStops.reduce((s,st)=>s+st.ce,0).toFixed(2):''}/>
               <Panel title="Driver A" icon="🚐" stops={driverAStops} panel="driverA" accentColor="#059669"
                 meta={driverAStops.length?driverHrsA+'h | $'+driverCostA:''}/>
               {numDrivers>=2&&<Panel title="Driver B" icon="🚐" stops={driverBStops} panel="driverB" accentColor="#4338CA"
                 meta={driverBStops.length?driverHrsB+'h | $'+driverCostB:''}/>}
-              <Panel title="Cold Xpress" icon="❄️" stops={cxStops} panel="cx" accentColor="#2563EB"
-                meta={cxStops.length?'$'+cxStops.reduce((s,st)=>s+st.ce,0).toFixed(2):''}/>
             </div>
             {suspenseStops.length>0&&(
               <Panel title="Another Day" icon="🗓" stops={suspenseStops} panel="suspense" accentColor="#6D28D9"
