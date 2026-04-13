@@ -1348,7 +1348,7 @@ print(json.dumps(result))
 
 function validateCSV(rows) {
   const issues = [];
-  const VALID_COURIERS = ['COLDXPRESS','DKDISTRIBUTION','COOLCOURIERS'];
+  const VALID_COURIERS = ['COLDXPRESS','DKDISTRIBUTION','COOLCOURIERS','WSDRIVER'];
   const VALID_PRODUCTS = ['350','TEA','1L'];
   const TEA_SKUS = new Set(['LTEA350','PTEA350','RTEA350']);
   rows.forEach((r, i) => {
@@ -1363,7 +1363,7 @@ function validateCSV(rows) {
     if (!r.OrderNumber) issues.push(`${line}: Missing Order Number`);
     if (!r.Customer)    issues.push(`${line}: Missing Customer name`);
     if (!r.Courier || !VALID_COURIERS.includes((r.Courier || '').trim().toUpperCase()))
-      issues.push(`${line}: Courier "${r.Courier || ''}" not recognised — must be COLDXPRESS, DKDISTRIBUTION, or COOLCOURIERS`);
+      issues.push(`${line}: Courier "${r.Courier || ''}" not recognised — must be COLDXPRESS, DKDISTRIBUTION, COOLCOURIERS, or WSDRIVER`);
     if (!r.Name) issues.push(`${line}: Missing product Name`);
     const qty = parseFloat(r.Quantity);
     if (isNaN(qty) || qty <= 0) issues.push(`${line}: Quantity "${r.Quantity}" is not valid`);
