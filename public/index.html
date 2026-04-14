@@ -615,14 +615,20 @@ function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd,lock
 function genWsDriver(rows,alloc,date){
   var am={};(alloc||[]).forEach(function(a){am[a.orderNumber]=a;});
   var nf=rows.filter(function(r){return r.SKU!=="FREIGHT"&&r.Product&&(r.Courier==="WSDRIVER"||am[r.OrderNumber]);});
-  if(!nf.length)return[{name:"Run Sheet",rows:[[Cv("No stops")]]}];
+  if(!nf.length)return[{name:"Manifest",rows:[[Cv("No WSDRIVER orders")]]}];
   var om={};nf.forEach(function(r){if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r);});
-  var sr=[[{v:"WHOLESALE STATE DELIVERY RUN",bold:true,bg:"FF1A3C5E"}],[E],["Stop","ETA","Order","Customer","Address","Suburb","PC","Ctns"].map(function(h){return H(h,true,"FFB8D4E8","center");})];
+  var sr=[];
+  sr.push([{v:"WS DRIVER DELIVERY RUN",bold:true,bg:"FF1A3C5E",align:"left"}]);
+  sr.push([{v:"Wholesale State Cold Pressed Juices",bold:true}]);
+  sr.push([{v:"Run Date:",bold:true},{v:date||new Date().toLocaleDateString("en-AU")}]);
+  sr.push([E]);
+  sr.push(["Stop","ETA","Order No.","Customer Name","Address","Suburb","State","Postcode","Special Instructions","Items","Total Cartons","Delivery Date"].map(function(h){return H(h,true,"FFD6E4F0","center");}));
   Object.entries(om).sort(function(a,b){return ((am[a[0]]&&am[a[0]].stopNum)||99)-((am[b[0]]&&am[b[0]].stopNum)||99);}).forEach(function(entry,i){
     var on=entry[0],or_=entry[1],r=or_[0],a=am[on]||{};
-    sr.push([N(i+1),Cv(a.etaStr||""),Cv(on),Cv(r.Customer),Cv(r.CustomerAddress1||""),Cv(r.CustomerSuburb||""),N(parseInt(r.Postcode)),N(totalC(or_))]);
+    var items=or_.filter(function(x){return x.SKU!=="FREIGHT"&&x.Product;}).map(function(x){return x.Name+" x"+x.Quantity;}).join(", ");
+    sr.push([N(i+1),Cv(a.etaStr||""),Cv(on),Cv(r.Customer),Cv(r.CustomerAddress1+(r.CustomerAddress2?", "+r.CustomerAddress2:"")),Cv(r.CustomerSuburb),Cv(r.CustomerState),N(parseInt(r.Postcode)),Cv(r.Notes||""),Cv(items),N(totalC(or_)),Cv(r.DeliveryDate||r.DueDate||"")]);
   });
-  return[{name:"Run Sheet",rows:sr,colWidths:[6,10,14,28,30,18,8,8]}];
+  return[{name:"Manifest",rows:sr,colWidths:[6,10,14,28,30,18,8,10,24,50,14,14]}];
 }
 function VicTile({csvRows,driverAllocation,onOpen,T}){
   var vn=[...new Set(csvRows.filter(function(r){return r.SKU!=="FREIGHT"&&r.Product&&(r.CustomerState||"").toUpperCase()==="VIC"&&!isPallet(r);}).map(function(r){return r.OrderNumber;}))].length;
@@ -1722,7 +1728,10 @@ function App(){
   const[quickAdd,setQuickAdd]=useState({});
   const[snapGen,setSnapGen]=useState({});
   const[driverAllocation,setDriverAllocation]=useState(null);
-  const[showOptimiser,setShowOptimiser]=useState(false); // {sku: delta string} for quick +/- inputs
+  const[showOptimiser,setShowOptimiser]=useState(false);
+  const[csvHistory,setCsvHistory]=useState(()=>{try{return JSON.parse(localStorage.getItem('ws-csv-history')||'[]');}catch(e){return[];}});
+  const[renamingId,setRenamingId]=useState(null);
+  const[renameVal,setRenameVal]=useState(''); // {sku: delta string} for quick +/- inputs
   const fileRef=useRef();
   const rowsRef=useRef([]);  // always holds latest parsed rows, safe for async doGen
 
@@ -1757,6 +1766,9 @@ function App(){
       const rows=parseCSV(e.target.result);
       rowsRef.current=rows;
       setCsvRows(rows);setCsvName(file.name);setDone({});
+      // Save to CSV history (last 4, deduped by name)
+      const histEntry={id:file.name+'-'+Date.now(),name:file.name,displayName:file.name.replace(/\.csv$/i,''),rows:rows,loadedAt:new Date().toISOString()};
+      setCsvHistory(prev=>{const filtered=prev.filter(h=>h.name!==file.name);const updated=[histEntry,...filtered].slice(0,10);localStorage.setItem('ws-csv-history',JSON.stringify(updated));return updated;});
       const om={};
       rows.filter(r=>r.SKU!=="FREIGHT").forEach(r=>{
         if(!om[r.OrderNumber])om[r.OrderNumber]={orderNumber:r.OrderNumber,customer:r.Customer,courier:r.Courier,dueDate:r.DueDate,deliveryDate:r.DeliveryDate,state:r.CustomerState,suburb:r.CustomerSuburb,postcode:r.Postcode,address:r.CustomerAddress1,address2:r.CustomerAddress2,invoiceNumber:r.InvoiceNumber,orderDate:r.ExcelisedOrderDate,accountManager:r.AccountManager,customerGroup:r.Customergroup,customerId:r.CustomerId,paymentMethod:r.PaymentMethod||"",paidAt:r.PaidAt,status:"In Production",items:[],isPallet:false};
@@ -1993,6 +2005,7 @@ function App(){
           {sheets:genColdXpress(rows,d),     name:`${d}_COLDXPRESS.xlsx`},
           {sheets:genDK(rows),               name:`${d}_DK_DISTRIBUTIONS.xlsx`},
           {sheets:genCoolCouriers(rows),     name:`${d}_COOLCOURIERS.xlsx`},
+          ...(driverAllocation&&driverAllocation.length>0?[{sheets:genWsDriver(rows,driverAllocation,d),name:`${d}_WS_Delivery_Run.xlsx`}]:[]),
           {sheets:f350,                      name:`${d}_350ml_Fronts.xlsx`},
           {sheets:b350,                      name:`${d}_350ml_Backs.xlsx`},
           {sheets:fT,                        name:`${d}_Tea_Fronts.xlsx`},
@@ -2188,6 +2201,55 @@ function App(){
                     </div>
                   )}
                 </div>
+
+                {/* CSV History tiles — shown below stats */}
+                {csvHistory.length>0&&(
+                  <div style={{marginTop:16}}>
+                    <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:2,marginBottom:10}}>RECENT CSVs</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                      {csvHistory.map(function(h){
+                        var isActive=csvName===h.name;
+                        return(
+                        <div key={h.id} style={{background:isActive?T.sageL:T.white,border:"1.5px solid "+(isActive?T.sageD+"55":T.border),borderRadius:12,padding:"12px 14px",position:"relative",transition:"all .15s",cursor:"pointer"}}
+                          onMouseEnter={function(e){if(!isActive){e.currentTarget.style.borderColor=T.accent+"55";e.currentTarget.style.boxShadow="0 2px 10px "+T.accent+"14";}}}
+                          onMouseLeave={function(e){if(!isActive){e.currentTarget.style.borderColor=T.border;e.currentTarget.style.boxShadow="none";}}}>
+                          {renamingId===h.id?(
+                            <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                              <input autoFocus value={renameVal} onChange={function(e){setRenameVal(e.target.value);}}
+                                onKeyDown={function(e){
+                                  if(e.key==="Enter"){setCsvHistory(function(prev){var up=prev.map(function(x){return x.id===h.id?Object.assign({},x,{displayName:renameVal}):x;});localStorage.setItem('ws-csv-history',JSON.stringify(up));return up;});setRenamingId(null);}
+                                  if(e.key==="Escape")setRenamingId(null);
+                                }}
+                                style={{flex:1,padding:"4px 8px",borderRadius:6,border:"1.5px solid "+T.accent,fontSize:11,fontFamily:"'Montserrat',sans-serif",outline:"none"}}/>
+                              <button onClick={function(){setCsvHistory(function(prev){var up=prev.map(function(x){return x.id===h.id?Object.assign({},x,{displayName:renameVal}):x;});localStorage.setItem('ws-csv-history',JSON.stringify(up));return up;});setRenamingId(null);}} style={{padding:"4px 8px",borderRadius:5,border:"none",background:T.accent,color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>✓</button>
+                              <button onClick={function(){setRenamingId(null);}} style={{padding:"4px 7px",borderRadius:5,border:"1px solid "+T.border,background:"none",fontSize:11,color:T.inkL,cursor:"pointer"}}>✕</button>
+                            </div>
+                          ):(
+                            <div>
+                              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:4,marginBottom:3}}>
+                                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:isActive?T.sageD:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>
+                                  {isActive?"✅":""} {h.displayName||h.name.replace(/\.csv$/i,"")}
+                                </div>
+                                <button onClick={function(e){e.stopPropagation();setCsvHistory(function(prev){var up=prev.filter(function(x){return x.id!==h.id;});localStorage.setItem('ws-csv-history',JSON.stringify(up));return up;});}} style={{flexShrink:0,width:18,height:18,borderRadius:4,border:"none",background:"none",color:T.inkL,fontSize:15,cursor:"pointer",padding:0,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+                              </div>
+                              <div style={{fontSize:10,color:T.inkL,marginBottom:8}}>{new Date(h.loadedAt).toLocaleDateString("en-AU",{day:"numeric",month:"short"})} · {h.rows.length} rows</div>
+                              <div style={{display:"flex",gap:6}}>
+                                <button onClick={function(){rowsRef.current=h.rows;setCsvRows(h.rows);setCsvName(h.name);setDone({});setDriverAllocation(null);}}
+                                  style={{flex:1,padding:"5px 0",borderRadius:6,border:"none",background:isActive?T.sageD:T.accent,color:"#fff",fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,cursor:"pointer"}}>
+                                  {isActive?"↺ Reload":"↺ Load"}
+                                </button>
+                                <button onClick={function(e){e.stopPropagation();setRenamingId(h.id);setRenameVal(h.displayName||h.name.replace(/\.csv$/i,""));}}
+                                  style={{padding:"5px 10px",borderRadius:6,border:"1px solid "+T.border,background:"none",fontSize:11,color:T.inkL,cursor:"pointer",fontWeight:600}} title="Rename">
+                                  ✎
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );})}
+                    </div>
+                  </div>
+                )}
 
                 {/* RIGHT — Generate buttons */}
                 <div style={{display:"flex",flexDirection:"column",gap:11}}>
