@@ -555,16 +555,23 @@ function ZoneBadge({zone}){
   var c={metro:{bg:"#DBEAFE",col:"#1D4ED8",l:"METRO"},cou1:{bg:"#FEF3C7",col:"#B45309",l:"COU1"},cou2:{bg:"#FFEDD5",col:"#C2410C",l:"COU2"},cou4:{bg:"#FCE7F3",col:"#9D174D",l:"COU4"}}[zone]||{bg:"#F1F5F9",col:"#64748B",l:zone||"?"};
   return <span style={{display:"inline-block",padding:"1px 6px",borderRadius:3,background:c.bg,color:c.col,fontSize:8,fontWeight:700}}>{c.l}</span>;
 }
-function StopCard({stop,panel,onMove,nd}){
+function StopCard({stop,panel,onMove,nd,locked,onToggleLock}){
   return(
     <div draggable onDragStart={function(e){e.dataTransfer.setData("text/plain",JSON.stringify({on:stop.orderNumber,p:panel}));}}
-      style={{padding:"9px 12px",borderBottom:"1px solid #F1F5F9",display:"flex",gap:8,cursor:"grab"}}
-      onMouseEnter={function(e){e.currentTarget.style.background="#F8FAFC";}}
-      onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+      style={{padding:"9px 12px",borderBottom:"1px solid #F1F5F9",display:"flex",gap:8,cursor:"grab",background:locked?"#FFFBEB":"transparent"}}
+      onMouseEnter={function(e){e.currentTarget.style.background=locked?"#FFF8D6":"#F8FAFC";}}
+      onMouseLeave={function(e){e.currentTarget.style.background=locked?"#FFFBEB":"transparent";}}>
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flexShrink:0}}>
+        <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:"#CBD5E1",minWidth:14,textAlign:"right",paddingTop:1}}>{stop.stopNum||""}</div>
+        {panel!=="cx"&&panel!=="suspense"&&<button onClick={function(){onToggleLock(stop.orderNumber);}} title={locked?"Unlock position":"Lock as stop 1"} style={{fontSize:9,padding:"1px 4px",borderRadius:3,border:"1px solid "+(locked?"#F59E0B":"#E2E8F0"),background:locked?"#FEF3C7":"transparent",color:locked?"#D97706":"#CBD5E1",cursor:"pointer",fontWeight:700,lineHeight:1}}>
+          {locked?"🔒":"🔓"}
+        </button>}
+      </div>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:3}}>
           <span style={{fontSize:11,fontWeight:700,color:"#1E3A5F"}}>{stop.name}</span>
           <ZoneBadge zone={stop.zone}/>
+          {locked&&<span style={{fontSize:8,fontWeight:700,color:"#D97706",background:"#FEF3C7",padding:"1px 5px",borderRadius:3}}>FIRST</span>}
         </div>
         <div style={{fontSize:10,color:"#64748B",display:"flex",gap:5,flexWrap:"wrap"}}>
           <span>{stop.suburb}</span>
@@ -585,7 +592,7 @@ function StopCard({stop,panel,onMove,nd}){
     </div>
   );
 }
-function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd}){
+function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd,lockedStops,onToggleLock,mapsUrl}){
   return(
     <div onDragOver={function(e){e.preventDefault();}} onDrop={function(e){e.preventDefault();try{var d=JSON.parse(e.dataTransfer.getData("text/plain"));onDrop(d.on,d.p,panel);}catch(err){}}}
       style={{background:dov?"#f0fdf4":"#fff",border:"1.5px solid "+(dov?color:color+"33"),borderRadius:12,overflow:"hidden",display:"flex",flexDirection:"column"}}>
@@ -594,11 +601,12 @@ function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd}){
         <span style={{fontSize:11,fontWeight:800,color:"#1E3A5F"}}>{title}</span>
         {meta&&<span style={{fontSize:10,fontWeight:700,color:color,padding:"1px 8px",borderRadius:10}}>{meta}</span>}
         <span style={{marginLeft:"auto",fontSize:10,color:"#94A3B8"}}>{stops.length} stop{stops.length!==1?"s":""}</span>
+        {mapsUrl&&stops.length>0&&<a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{fontSize:9,padding:"3px 8px",borderRadius:5,border:"1px solid "+color+"55",background:color+"15",color:color,textDecoration:"none",fontWeight:700,whiteSpace:"nowrap"}}>Maps ↗</a>}
       </div>
       <div style={{flex:1,overflowY:"auto",maxHeight:460}}>
         {stops.length===0
           ?<div style={{padding:"24px",textAlign:"center",color:"#CBD5E1",fontSize:11}}>Drop stops here</div>
-          :stops.map(function(s){return <StopCard key={s.orderNumber} stop={s} panel={panel} onMove={onMove} nd={nd}/>;})
+          :stops.map(function(s){return <StopCard key={s.orderNumber} stop={s} panel={panel} onMove={onMove} nd={nd} locked={!!(lockedStops&&lockedStops[s.orderNumber])} onToggleLock={onToggleLock||function(){}}/>;})
         }
       </div>
     </div>
@@ -640,6 +648,8 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
   var sh=React.useState(shiftHrs), setShiftHrs=sh[1]; shiftHrs=sh[0];
   var sm=React.useState(stopMins), setStopMins=sm[1]; stopMins=sm[0];
   var dr=React.useState(driverRate), setDriverRate=dr[1]; driverRate=dr[0];
+  var fc_=React.useState(parseFloat(localStorage.getItem("ws_opt_fuel")||"100")), setFuelCost=fc_[1]; var fuelCost=fc_[0];
+  var mp_=React.useState(localStorage.getItem("ws_opt_metro_pref")!=="false"), setMetroPref=mp_[1]; var metroPref=mp_[0];
   var nd=React.useState(numDrivers), setNumDrivers=nd[1]; numDrivers=nd[0];
   var st=React.useState(startTime), setStartTime=st[1]; startTime=st[0];
   var ph=React.useState("idle"), setPhase=ph[1]; var phase=ph[0];
@@ -654,6 +664,8 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
   React.useEffect(function(){localStorage.setItem("ws_opt_shift",shiftHrs);},[shiftHrs]);
   React.useEffect(function(){localStorage.setItem("ws_opt_stop",stopMins);},[stopMins]);
   React.useEffect(function(){localStorage.setItem("ws_opt_rate",driverRate);},[driverRate]);
+  React.useEffect(function(){localStorage.setItem("ws_opt_fuel",fuelCost);},[fuelCost]);
+  React.useEffect(function(){localStorage.setItem("ws_opt_metro_pref",metroPref);},[metroPref]);
   React.useEffect(function(){localStorage.setItem("ws_opt_drivers",numDrivers);},[numDrivers]);
   React.useEffect(function(){localStorage.setItem("ws_opt_start",startTime);},[startTime]);
 
@@ -741,31 +753,78 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
     return out;
   }
 
-  function clarkeWright(stops,mat,shiftMins,sm,dRate,startMins){
+  function clarkeWright(stops,mat,shiftMins,sm,dRate,startMins,fuelCost){
     if(startMins===undefined)startMins=6*60;
+    if(fuelCost===undefined)fuelCost=0;
     var n=stops.length;
     if(!n)return[];
+
+    // Bearing from depot to each stop
+    var DLAT=-38.0024,DLON=145.1587;
+    function bearing(s){
+      if(!s.lat||!s.lon)return 0;
+      var dLon=(s.lon-DLON)*Math.PI/180,lat1=DLAT*Math.PI/180,lat2=s.lat*Math.PI/180;
+      var y=Math.sin(dLon)*Math.cos(lat2),x=Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
+      return (Math.atan2(y,x)*180/Math.PI+360)%360;
+    }
+    function bearingDiff(a,b){var d=Math.abs(a-b)%360;return d>180?360-d:d;}
+    var bearings=stops.map(bearing);
+
+    // Initial savings matrix (used to seed merges)
     var savings=[];
     for(var i=0;i<n;i++){for(var j=i+1;j<n;j++){
-      savings.push({i:i,j:j,sv:mat[0][i+1]+mat[0][j+1]-mat[i+1][j+1]});
+      var baseSv=mat[0][i+1]+mat[0][j+1]-mat[i+1][j+1];
+      var corridorBonus=(stops[i].cx_run&&stops[j].cx_run&&stops[i].cx_run===stops[j].cx_run)?60:0;
+      // Metro preference: boost inner/metro stop pairs so they cluster first
+      var metroBonus=0;
+      if(metroPref){
+        var iMet=(stops[i].zone==="metro"||pcZone(stops[i].postcode)==="inner"||pcZone(stops[i].postcode)==="middle");
+        var jMet=(stops[j].zone==="metro"||pcZone(stops[j].postcode)==="inner"||pcZone(stops[j].postcode)==="middle");
+        if(iMet&&jMet)metroBonus=50;
+      }
+      var bd=bearingDiff(bearings[i],bearings[j]);
+      var dirPen=bd>120?120:bd>90?60:bd>60?30:0;
+      savings.push({i:i,j:j,sv:baseSv+corridorBonus+metroBonus-dirPen});
     }}
     savings.sort(function(a,b){return b.sv-a.sv;});
+
     var routes=stops.map(function(_,i){return {idxs:[i+1]};});
     var routeOf=stops.map(function(_,i){return i;});
+
     for(var k=0;k<savings.length;k++){
       var sv=savings[k],ri=routeOf[sv.i],rj=routeOf[sv.j];
       if(ri===rj||!routes[ri]||!routes[rj])continue;
-      var merged=routes[ri].idxs.concat(routes[rj].idxs);
-      if(simRoute(nnSort(merged,mat),mat,stops,startMins)>shiftMins)continue;
-      routes[ri].idxs=merged;
+
+      // Cheapest insertion: find the best position to insert rj's stops into ri's route
+      // This prevents the Lara problem where a stop gets appended causing huge backtracking
+      var baseIdxs=routes[ri].idxs;
+      var insertIdxs=routes[rj].idxs;
+      var bestTime=Infinity,bestMerged=null;
+
+      // Try inserting the entire rj route at every position in ri
+      for(var pos=0;pos<=baseIdxs.length;pos++){
+        var candidate=baseIdxs.slice(0,pos).concat(insertIdxs).concat(baseIdxs.slice(pos));
+        var t=simRoute(nnSort(candidate,mat),mat,stops,startMins);
+        if(t<bestTime){bestTime=t;bestMerged=candidate;}
+        // Also try reversed insertion order
+        var candidateRev=baseIdxs.slice(0,pos).concat(insertIdxs.slice().reverse()).concat(baseIdxs.slice(pos));
+        var tRev=simRoute(nnSort(candidateRev,mat),mat,stops,startMins);
+        if(tRev<bestTime){bestTime=tRev;bestMerged=candidateRev;}
+      }
+
+      if(bestTime>shiftMins)continue;
+
+      routes[ri].idxs=bestMerged;
       for(var m=0;m<n;m++)if(routeOf[m]===rj)routeOf[m]=ri;
       routes[rj]=null;
     }
+
     return routes.filter(Boolean).map(function(r){
       var ord=nnSort(r.idxs,mat),ordStops=ord.map(function(mi){return stops[mi-1];});
       var hrs=routeTime(ord,mat,sm)/60,cost=parseFloat((hrs*dRate).toFixed(2));
       var ceT=parseFloat(ordStops.reduce(function(s,st){return s+st.ce;},0).toFixed(2));
-      return{stops:ordStops,matIdxs:ord,hrs:hrs,driverCost:cost,ceTotal:ceT,ceSavings:parseFloat((ceT-cost).toFixed(2))};
+      var totalCost=parseFloat((cost+(fuelCost||0)).toFixed(2));
+      return{stops:ordStops,matIdxs:ord,hrs:hrs,driverCost:cost,ceTotal:ceT,ceSavings:parseFloat((ceT-totalCost).toFixed(2)),fuelCost:(fuelCost||0)};
     }).sort(function(a,b){return b.ceSavings-a.ceSavings;});
   }
 
@@ -860,7 +919,7 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
 
     function runOptimise(matrix){
       var startMins=parseFloat(startTime.split(":")[0])*60+parseFloat(startTime.split(":")[1]);
-      var routes=clarkeWright(routable,matrix,shiftHrs*60,stopMins,driverRate,startMins);
+      var routes=clarkeWright(routable,matrix,shiftHrs*60,stopMins,driverRate,startMins,fuelCost);
       var profitable=routes.filter(function(r){return r.ceSavings>0;});
       var dA=[],dB=[],used={};
       if(numDrivers>=1&&profitable[0]){dA=annotate(profitable[0].stops,profitable[0].matIdxs,matrix,stopMins,driverRate,startTime);dA.forEach(function(s){used[s.orderNumber]=true;});}
@@ -880,16 +939,70 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
 
   React.useEffect(function(){runFull();},[]);
 
+  // Locked stops: orderNumbers that must stay at position 1
+  var locked_=React.useState({}),lockedStops=locked_[0],setLockedStops=locked_[1];
+  function toggleLock(orderNumber){
+    setLockedStops(function(prev){var n=Object.assign({},prev);if(n[orderNumber])delete n[orderNumber];else n[orderNumber]=true;return n;});
+  }
+
+  // Re-sort a driver run using nearest-neighbour, respecting locked stops at front
+  function reorder(stops,matData){
+    if(stops.length<=1)return stops;
+    // Locked stops go first (in their existing order), rest get NN sorted
+    var locked=stops.filter(function(s){return lockedStops[s.orderNumber];});
+    var free=stops.filter(function(s){return !lockedStops[s.orderNumber];});
+    if(!free.length)return stops;
+    // NN sort on free stops using their lat/lon
+    function hv2(a,b){
+      if(!a.lat||!b.lat)return 999;
+      var R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180;
+      var x=Math.pow(Math.sin(dLat/2),2)+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.pow(Math.sin(dLon/2),2);
+      return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+    }
+    var depot={lat:-38.0024,lon:145.1587};
+    var lastStop=locked.length?locked[locked.length-1]:depot;
+    var rem=free.slice(),sorted=[];
+    while(rem.length){
+      var bi=0,bd2=Infinity;
+      for(var i=0;i<rem.length;i++){var d=hv2(lastStop,rem[i]);if(d<bd2){bd2=d;bi=i;}}
+      sorted.push(rem[bi]);lastStop=rem[bi];rem.splice(bi,1);
+    }
+    return locked.concat(sorted);
+  }
+
   function recalc(stops){
     var parts=startTime.split(":"),h0=parseInt(parts[0]),m0=parseInt(parts[1]),cum=h0*60+m0;
-    return stops.map(function(s,i){
-      var dm=s.driveMins||0;cum+=dm;
+    var depot={lat:-38.0024,lon:145.1587};
+    var sorted=reorder(stops,null);
+    return sorted.map(function(s,i){
+      var prev=i===0?depot:sorted[i-1];
+      var dm=0;
+      if(s.lat&&prev.lat){
+        var R=6371,dLat=(s.lat-prev.lat)*Math.PI/180,dLon=(s.lon-prev.lon)*Math.PI/180;
+        var x=Math.pow(Math.sin(dLat/2),2)+Math.cos(prev.lat*Math.PI/180)*Math.cos(s.lat*Math.PI/180)*Math.pow(Math.sin(dLon/2),2);
+        var havKm=R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+        var fz=pcZone(i===0?"3173":sorted[i-1].postcode||"3173");
+        var tz=pcZone(s.postcode||"3173");
+        var k=fz+","+tz,e=SPEED_TBL[k]||[1.25,55];
+        dm=havKm*e[0]/e[1]*60;
+      } else {
+        dm=s.driveMins||0;
+      }
+      cum+=dm;
       var H=Math.floor(cum/60)%24,M=Math.round(cum%60);
       var eta=(H<10?"0":"")+H+":"+(M<10?"0":"")+M;
-      var mc=parseFloat(((dm+stopMins)/60*driverRate).toFixed(2));
-      cum+=stopMins;
-      return Object.assign({},s,{etaStr:eta,marginalCost:mc,saving:parseFloat((s.ce-mc).toFixed(2)),stopNum:i+1});
+      var stm=stopTimeMins(s.postcode||"3173");
+      var mc=parseFloat(((dm+stm)/60*driverRate).toFixed(2));
+      cum+=stm;
+      return Object.assign({},s,{driveMins:parseFloat(dm.toFixed(1)),etaStr:eta,marginalCost:mc,saving:parseFloat((s.ce-mc).toFixed(2)),stopNum:i+1});
     });
+  }
+
+  function mapsUrl(stops){
+    if(!stops.length)return null;
+    var base="https://www.google.com/maps/dir/17+Kirkham+Rd+W+Keysborough+VIC+3173";
+    var waypoints=stops.map(function(s){return encodeURIComponent((s.address||"")+", "+(s.suburb||"")+" VIC "+(s.postcode||""));});
+    return base+"/"+waypoints.join("/")+"/17+Kirkham+Rd+W+Keysborough+VIC+3173";
   }
 
   function move(stop,from,to){
@@ -899,6 +1012,7 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
     else if(from==="suspense"){var u=rm(suspenseStops);setSuspenseStops(u);saveSusp(u);}
     if(to==="driverA")nA=rm(nA).concat([stop]);else if(to==="driverB")nB=rm(nB).concat([stop]);else if(to==="cx")nC=rm(nC).concat([stop]);
     else if(to==="suspense"){var u2=rm(suspenseStops).concat([stop]);setSuspenseStops(u2);saveSusp(u2);}
+    // Re-sort driver runs after every move
     setDriverAStops(recalc(nA));setDriverBStops(recalc(nB));setCxStops(nC);
   }
 
@@ -911,8 +1025,10 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
 
   var dA_hrs=driverAStops.length?(driverAStops.reduce(function(s,st){return s+(st.driveMins||0);},0)+driverAStops.length*stopMins)/60:0;
   var dB_hrs=driverBStops.length?(driverBStops.reduce(function(s,st){return s+(st.driveMins||0);},0)+driverBStops.length*stopMins)/60:0;
-  var dA_cost=parseFloat((dA_hrs*driverRate).toFixed(2));
-  var dB_cost=parseFloat((dB_hrs*driverRate).toFixed(2));
+  var dA_wage=parseFloat((dA_hrs*driverRate).toFixed(2));
+  var dB_wage=parseFloat((dB_hrs*driverRate).toFixed(2));
+  var dA_cost=parseFloat((dA_wage+(driverAStops.length>0?fuelCost:0)).toFixed(2));
+  var dB_cost=parseFloat((dB_wage+(driverBStops.length>0?fuelCost:0)).toFixed(2));
   var ceAll=[].concat(driverAStops,driverBStops,cxStops).reduce(function(s,st){return s+(st.ce||0);},0);
   var saved=[].concat(driverAStops,driverBStops).reduce(function(s,st){return s+st.ce;},0)-(dA_cost+dB_cost);
   var placed=driverAStops.length+driverBStops.length+cxStops.length;
@@ -945,12 +1061,13 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
         <div style={{flex:1,display:"flex",overflow:"hidden"}}>
           <div style={{width:200,background:"#fff",borderRight:"1px solid #E2E8F0",padding:16,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",flexShrink:0}}>
             <div style={{fontSize:9,fontWeight:700,color:"#94A3B8",letterSpacing:2}}>SETTINGS</div>
-            {[["Shift hours",shiftHrs,setShiftHrs,6,14,0.5],["Stop time (min)",stopMins,setStopMins,5,30,5],["Rate ($/hr)",driverRate,setDriverRate,20,80,5]].map(function(item){
+            {[["Shift hours",shiftHrs,setShiftHrs,6,14,0.5],["Stop time (min)",stopMins,setStopMins,5,30,5],["Rate ($/hr)",driverRate,setDriverRate,20,80,5],["Fuel ($/day)",fuelCost,setFuelCost,0,200,10]].map(function(item){
               var l=item[0],v=item[1],s=item[2],mn=item[3],mx=item[4],step=item[5];
               return(<div key={l}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,color:"#64748B"}}>{l}</span><span style={{fontSize:11,fontWeight:700,color:"#1E3A5F"}}>{v}</span></div><input type="range" min={mn} max={mx} step={step} value={v} onChange={function(e){s(parseFloat(e.target.value));}} style={{width:"100%",accentColor:"#2563EB"}}/></div>);
             })}
             <div>
-              <div style={{fontSize:10,color:"#64748B",marginBottom:6}}>Drivers</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}><span style={{fontSize:10,color:"#64748B"}}>Metro priority</span><button onClick={function(){setMetroPref(function(p){return !p;});}} style={{fontSize:9,padding:"2px 8px",borderRadius:5,border:"1px solid "+(metroPref?"#2563EB":"#E2E8F0"),background:metroPref?"#EFF6FF":"#fff",color:metroPref?"#2563EB":"#94A3B8",cursor:"pointer",fontWeight:700}}>{metroPref?"ON":"OFF"}</button></div>
+            <div style={{fontSize:10,color:"#64748B",marginBottom:6}}>Drivers</div>
               <div style={{display:"flex",gap:6}}>
                 {[1,2].map(function(n){return(<button key={n} onClick={function(){setNumDrivers(n);}} style={{flex:1,padding:"6px 0",borderRadius:6,border:"1.5px solid "+(numDrivers===n?"#2563EB":"#E2E8F0"),background:numDrivers===n?"#EFF6FF":"#fff",color:numDrivers===n?"#2563EB":"#94A3B8",fontSize:12,fontWeight:700,cursor:"pointer"}}>{n}</button>);})}
               </div>
@@ -964,8 +1081,8 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
           <div style={{flex:1,padding:16,display:"flex",flexDirection:"column",gap:12,overflowY:"auto",background:"#F8FAFC"}}>
             <div style={{display:"grid",gridTemplateColumns:numDrivers>=2?"1fr 1fr 1fr":"1fr 1fr",gap:12,flex:1}}>
               <DelivPanel title="Cold Xpress" icon="❄️" stops={cxStops} panel="cx" color="#2563EB" onMove={move} onDrop={handleDrop} dov={dragOver==="cx"} nd={numDrivers} meta={cxStops.length?"$"+cxStops.reduce(function(s,st){return s+st.ce;},0).toFixed(2):""}/>
-              <DelivPanel title="Driver A" icon="🚐" stops={driverAStops} panel="driverA" color="#059669" onMove={move} onDrop={handleDrop} dov={dragOver==="driverA"} nd={numDrivers} meta={driverAStops.length?dA_hrs.toFixed(1)+"h | $"+dA_cost:""}/>
-              {numDrivers>=2&&<DelivPanel title="Driver B" icon="🚐" stops={driverBStops} panel="driverB" color="#4338CA" onMove={move} onDrop={handleDrop} dov={dragOver==="driverB"} nd={numDrivers} meta={driverBStops.length?dB_hrs.toFixed(1)+"h | $"+dB_cost:""}/>}
+              <DelivPanel title="Driver A" icon="🚐" stops={driverAStops} panel="driverA" color="#059669" onMove={move} onDrop={handleDrop} dov={dragOver==="driverA"} nd={numDrivers} meta={driverAStops.length?dA_hrs.toFixed(1)+"h | $"+dA_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(driverAStops)}/>
+              {numDrivers>=2&&<DelivPanel title="Driver B" icon="🚐" stops={driverBStops} panel="driverB" color="#4338CA" onMove={move} onDrop={handleDrop} dov={dragOver==="driverB"} nd={numDrivers} meta={driverBStops.length?dB_hrs.toFixed(1)+"h | $"+dB_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(driverBStops)}/>}
             </div>
             <DelivPanel title="Another Day" icon="🗓" stops={suspenseStops} panel="suspense" color="#6D28D9" onMove={move} onDrop={handleDrop} dov={dragOver==="suspense"} nd={numDrivers} meta={suspenseStops.length?suspenseStops.length+" held":""}/>
           </div>
