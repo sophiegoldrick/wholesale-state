@@ -1457,6 +1457,41 @@ app.get('/api/templates', auth, async (req, res) => {
   } catch(e) { res.json({ files: [] }); }
 });
 
+// ── Distance Matrix proxy (avoids CORS) ─────────────────────────
+app.post('/api/distance-matrix', auth, async (req, res) => {
+  try {
+    const { origins, destinations, departure_time } = req.body;
+    if (!origins || !destinations) return res.status(400).json({ error: 'Missing origins or destinations' });
+
+    const GMAPS_KEY = 'AIzaSyDdtmO12PIicsFNhbRGt-gJ_32MZHVl0Rk';
+    const orig = origins.map(o => `${o.lat},${o.lon}`).join('|');
+    const dest = destinations.map(d => `${d.lat},${d.lon}`).join('|');
+
+    let url = `https://maps.googleapis.com/maps/api/distancematrix/json`
+      + `?origins=${encodeURIComponent(orig)}`
+      + `&destinations=${encodeURIComponent(dest)}`
+      + `&mode=driving`
+      + `&units=metric`
+      + `&key=${GMAPS_KEY}`;
+
+    // Add traffic-aware departure time if provided (seconds since epoch)
+    if (departure_time) url += `&departure_time=${departure_time}&traffic_model=best_guess`;
+
+    const fetch2 = fetch;
+    const r = await fetch2(url);
+    const data = await r.json();
+
+    if (data.status !== 'OK') {
+      return res.status(500).json({ error: data.status, detail: data.error_message });
+    }
+
+    res.json(data);
+  } catch(e) {
+    console.error('Distance matrix error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Serve frontend ──────────────────────────────────────────────
 app.use(express.static(join(__dirname, 'public')));
 
