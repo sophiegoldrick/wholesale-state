@@ -1523,35 +1523,28 @@ function App(){
 
   // Show login screen when deployed and not authenticated
   if(IS_DEPLOYED && !token) return(
-    <div style={{minHeight:'100vh',background:currentT.cream,display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style={{background:currentT.white,borderRadius:20,padding:'40px 36px',width:360,boxShadow:'0 4px 32px rgba(0,0,0,.08)',border:`1px solid ${currentT.border}`}}>
-        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:28}}>
-          <div style={{width:40,height:40,borderRadius:11,background:`linear-gradient(135deg,${currentT.accent},${currentT.accentD})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>🧃</div>
-          <div>
-            <div style={{fontFamily:currentT.font,fontWeight:800,fontSize:16,color:currentT.ink}}>WHOLESALE STATE</div>
-            <div style={{fontSize:11,color:currentT.inkL,letterSpacing:.5}}>ORDER MANAGEMENT</div>
-          </div>
-        </div>
+    <div style={{minHeight:'100vh',background:'#F5F0E8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24}}>
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',marginBottom:32}}>
+        <div style={{width:64,height:64,borderRadius:18,background:`linear-gradient(135deg,${currentT.accent},${currentT.accentD})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:30,marginBottom:16,boxShadow:`0 4px 20px ${currentT.accent}44`}}>🧃</div>
+        <div style={{fontFamily:currentT.font,fontWeight:800,fontSize:22,color:'#2D1B14',letterSpacing:.5}}>Wholesale State</div>
+        <div style={{fontSize:12,color:'#A07A6E',letterSpacing:1,marginTop:4,fontWeight:500}}>ORDER MANAGEMENT</div>
+      </div>
+      <div style={{background:'#FFFDF9',borderRadius:16,padding:'32px 28px',width:'100%',maxWidth:380,boxShadow:'0 2px 24px rgba(80,40,20,.08)',border:'1px solid #EDE0D0'}}>
         <form onSubmit={handleLogin}>
-          <div style={{marginBottom:12}}>
-            <div style={{fontSize:12,fontWeight:600,color:currentT.inkM,marginBottom:6,fontFamily:currentT.font}}>Email</div>
-            <input type="email" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)}
-              className="inp" style={{width:'100%',fontSize:14}} placeholder="your@email.com" autoFocus/>
-          </div>
-          <div style={{marginBottom:14}}>
-            <div style={{fontSize:12,fontWeight:600,color:currentT.inkM,marginBottom:6,fontFamily:currentT.font}}>Password</div>
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:11,fontWeight:700,color:'#A07A6E',letterSpacing:1,marginBottom:8,fontFamily:currentT.font}}>PASSWORD</div>
             <input type="password" value={loginPw} onChange={e=>setLoginPw(e.target.value)}
-              className="inp" style={{width:'100%',fontSize:14}} placeholder="Enter your password"/>
+              className="inp" style={{width:'100%',fontSize:15,padding:'12px 14px',borderRadius:10,border:'1.5px solid #EDE0D0',outline:'none',boxSizing:'border-box',background:'#FBF7F2'}}
+              placeholder="Enter your password" autoFocus/>
           </div>
-          {loginErr&&<div style={{fontSize:12,color:currentT.red,marginBottom:10}}>⚠ {loginErr}</div>}
-          <button type="submit" className="btn-t" style={{width:'100%',justifyContent:'center'}} disabled={loginLoading}>
-            {loginLoading?'Signing in…':'Sign In'}
+          {loginErr&&<div style={{fontSize:12,color:currentT.red,marginBottom:12,padding:'8px 12px',background:'#fff0f0',borderRadius:8}}>⚠ {loginErr}</div>}
+          <button type="submit" disabled={loginLoading}
+            style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:`linear-gradient(135deg,${currentT.accent},${currentT.accentD})`,color:'#fff',fontFamily:currentT.font,fontWeight:700,fontSize:14,cursor:'pointer',letterSpacing:.3,boxShadow:`0 4px 14px ${currentT.accent}44`,marginTop:4}}>
+            {loginLoading?'Signing in…':'Sign in'}
           </button>
         </form>
-        <div style={{marginTop:16,paddingTop:14,borderTop:`1px solid ${currentT.border}`,textAlign:'center',fontSize:11,color:currentT.inkL}}>
-          Having trouble? Contact your admin for a new invite link.
-        </div>
       </div>
+      <div style={{marginTop:20,fontSize:11,color:'#C4A882'}}>Wholesale State — Internal use only</div>
     </div>
   );
 
@@ -2079,29 +2072,44 @@ function App(){
                   )}
                 </div>
 
-                {csvName&&<VicTile csvRows={csvRows} driverAllocation={driverAllocation} onOpen={function(){setShowOptimiser(true);}} T={T}/>}
                 {/* RIGHT — Generate buttons */}
                 <div style={{display:"flex",flexDirection:"column",gap:11}}>
                   {/* Template upload status */}
                   
                   <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:2,marginBottom:2,marginTop:8}}>GENERATE FILES</div>
-                  {BTNS.map(btn=>(
-                    <button key={btn.id} className={`gen-card${done[btn.id]?" done":""}`}
-                      onClick={()=>triggerGen(btn.id,btn.label)}
-                      disabled={!!gen||!csvName}
-                      style={{opacity:csvName?1:0.8}}>
-                      <div style={{width:42,height:42,borderRadius:11,background:done[btn.id]?T.sageL:T.creamDD,border:`1px solid ${done[btn.id]?T.sageD+"55":T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,flexShrink:0}}>
-                        {gen===btn.id?<span className="spin" style={{fontSize:15,color:T.inkL}}>⟳</span>:done[btn.id]?"✅":btn.icon}
-                      </div>
-                      <div style={{flex:1}}>
-                        <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:13,color:T.ink}}>{btn.label}</div>
-                        <div style={{fontSize:11,color:T.inkL,marginTop:3}}>{btn.sub}</div>
-                      </div>
-                      {done[btn.id]
-                        ?<span style={{fontSize:11,color:T.sage,fontWeight:600,fontFamily:"'Montserrat',sans-serif",whiteSpace:"nowrap"}}>Downloaded ✓</span>
-                        :<span style={{fontSize:16,color:T.sand,fontWeight:300}}>↓</span>}
-                    </button>
-                  ))}
+                  {BTNS.map(btn=>{
+                    const isCX = btn.id==="coldxpress";
+                    const hasVic = isCX && csvName && csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(r.CustomerState||"").toUpperCase()==="VIC"&&!isPallet(r)).length>0;
+                    const hasAlloc = driverAllocation&&driverAllocation.length>0;
+                    const skipped = driverAllocation!==null&&driverAllocation!==undefined&&driverAllocation.length===0;
+                    return(
+                    <div key={btn.id} style={{position:"relative"}}>
+                      <button className={`gen-card${done[btn.id]?" done":""}`}
+                        onClick={()=>triggerGen(btn.id,btn.label)}
+                        disabled={!!gen||!csvName}
+                        style={{opacity:csvName?1:0.8,width:"100%",border:isCX&&hasAlloc?`1.5px solid ${T.blue}`:undefined,background:isCX&&hasAlloc?T.blueL:undefined}}>
+                        <div style={{width:42,height:42,borderRadius:11,background:done[btn.id]?T.sageL:isCX&&hasAlloc?T.blueL:T.creamDD,border:`1px solid ${done[btn.id]?T.sageD+"55":isCX&&hasAlloc?T.blue+"55":T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,flexShrink:0}}>
+                          {gen===btn.id?<span className="spin" style={{fontSize:15,color:T.inkL}}>⟳</span>:done[btn.id]?"✅":btn.icon}
+                        </div>
+                        <div style={{flex:1}}>
+                          <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:700,fontSize:13,color:T.ink}}>{btn.label}</div>
+                          <div style={{fontSize:11,color:T.inkL,marginTop:3}}>
+                            {isCX&&hasAlloc?"Driver run sorted — "+driverAllocation.length+" stops to WSDRIVER":isCX&&skipped?"All VIC to Cold Xpress":btn.sub}
+                          </div>
+                        </div>
+                        {done[btn.id]
+                          ?<span style={{fontSize:11,color:T.sage,fontWeight:600,fontFamily:"'Montserrat',sans-serif",whiteSpace:"nowrap"}}>Downloaded ✓</span>
+                          :<span style={{fontSize:16,color:T.sand,fontWeight:300}}>↓</span>}
+                      </button>
+                      {isCX&&hasVic&&!skipped&&(
+                        <button onClick={function(e){e.stopPropagation();setShowOptimiser(true);}}
+                          style={{position:"absolute",top:6,right:38,padding:"3px 8px",borderRadius:6,border:"1px solid "+(hasAlloc?T.blue:T.border),background:hasAlloc?T.blue:"rgba(255,255,255,0.9)",color:hasAlloc?"#fff":T.blue,fontSize:9,fontWeight:700,fontFamily:"'Montserrat',sans-serif",cursor:"pointer",letterSpacing:.5,whiteSpace:"nowrap"}}>
+                          {hasAlloc?"✓ VIC run sorted":"⚡ sort VIC deliveries"}
+                        </button>
+                      )}
+                    </div>
+                    );
+                  })}
                   <button className="btn-full" onClick={()=>triggerGen("all","All Files")} disabled={!!gen||!csvName}
                     style={{marginTop:4,opacity:csvName?1:0.7}}>
                     {gen==="all"?<><span className="spin">⟳</span>Generating…</>:<>⚡ GENERATE ALL FILES — 9 downloads</>}
