@@ -2201,7 +2201,6 @@ function App(){
                       ))}
                     </div>
                   )}
-                </div>
 
                 {/* CSV History — below label check */}
                 {csvHistory.length>0&&(
@@ -2250,11 +2249,10 @@ function App(){
                     </div>
                   </div>
                 )}
+                </div>{/* END LEFT COLUMN */}
 
-                {/* RIGHT — Generate buttons */}
+                {/* RIGHT — Generate buttons — always pinned in right column */}
                 <div style={{display:"flex",flexDirection:"column",gap:11}}>
-                  {/* Template upload status */}
-                  
                   <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:2,marginBottom:2,marginTop:8}}>GENERATE FILES</div>
                   {BTNS.map(btn=>{
                     const isCX = btn.id==="coldxpress";
