@@ -1766,9 +1766,7 @@ function App(){
       const rows=parseCSV(e.target.result);
       rowsRef.current=rows;
       setCsvRows(rows);setCsvName(file.name);setDone({});
-      // Save to CSV history (last 4, deduped by name)
-      const histEntry={id:file.name+'-'+Date.now(),name:file.name,displayName:file.name.replace(/\.csv$/i,''),rows:rows,loadedAt:new Date().toISOString()};
-      setCsvHistory(prev=>{const filtered=prev.filter(h=>h.name!==file.name);const updated=[histEntry,...filtered].slice(0,10);localStorage.setItem('ws-csv-history',JSON.stringify(updated));return updated;});
+      // Save to CSV history (last 10, deduped by name) — updated after orderDateLabel is parsed below
       const om={};
       rows.filter(r=>r.SKU!=="FREIGHT").forEach(r=>{
         if(!om[r.OrderNumber])om[r.OrderNumber]={orderNumber:r.OrderNumber,customer:r.Customer,courier:r.Courier,dueDate:r.DueDate,deliveryDate:r.DeliveryDate,state:r.CustomerState,suburb:r.CustomerSuburb,postcode:r.Postcode,address:r.CustomerAddress1,address2:r.CustomerAddress2,invoiceNumber:r.InvoiceNumber,orderDate:r.ExcelisedOrderDate,accountManager:r.AccountManager,customerGroup:r.Customergroup,customerId:r.CustomerId,paymentMethod:r.PaymentMethod||"",paidAt:r.PaidAt,status:"In Production",items:[],isPallet:false};
@@ -1888,6 +1886,9 @@ function App(){
       const allOrderNums=[...new Set(rows.filter(r=>r.SKU!=="FREIGHT"&&r.OrderNumber&&!isPallet(r)).map(r=>r.OrderNumber))];
       const specialOrderNums=[...new Set(rows.filter(r=>r.SKU!=="FREIGHT"&&r.OrderNumber&&isPallet(r)).map(r=>r.OrderNumber))];
       setCsvOrderDate(orderDateLabel||file.name);
+      // Save to CSV history now that we have the date label
+      const histEntry={id:file.name+'-'+Date.now(),name:file.name,displayName:orderDateLabel||file.name.replace(/\.csv$/i,''),rows:rows,loadedAt:new Date().toISOString()};
+      setCsvHistory(prev=>{const filtered=prev.filter(h=>h.name!==file.name);const updated=[histEntry,...filtered].slice(0,10);localStorage.setItem('ws-csv-history',JSON.stringify(updated));return updated;});
       const dk=new Date().toLocaleDateString("en-AU");
       const byCourier={};
       rows.filter(r=>r.SKU!=="FREIGHT"&&r.Courier&&r.OrderNumber&&!isPallet(r)).forEach(r=>{
@@ -2202,9 +2203,9 @@ function App(){
                   )}
                 </div>
 
-                {/* CSV History tiles — shown below stats */}
+                {/* CSV History — below label check */}
                 {csvHistory.length>0&&(
-                  <div style={{marginTop:16}}>
+                  <div style={{marginTop:14}}>
                     <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:2,marginBottom:10}}>RECENT CSVs</div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                       {csvHistory.map(function(h){
@@ -2226,27 +2227,26 @@ function App(){
                             </div>
                           ):(
                             <div>
-                              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:4,marginBottom:3}}>
-                                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:isActive?T.sageD:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>
-                                  {isActive?"✅":""} {h.displayName||h.name.replace(/\.csv$/i,"")}
+                              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:4,marginBottom:4}}>
+                                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,color:isActive?T.sageD:T.ink,lineHeight:1.3,flex:1}}>
+                                  {isActive?"✅ ":""}{h.displayName||h.name.replace(/\.csv$/i,"")}
                                 </div>
                                 <button onClick={function(e){e.stopPropagation();setCsvHistory(function(prev){var up=prev.filter(function(x){return x.id!==h.id;});localStorage.setItem('ws-csv-history',JSON.stringify(up));return up;});}} style={{flexShrink:0,width:18,height:18,borderRadius:4,border:"none",background:"none",color:T.inkL,fontSize:15,cursor:"pointer",padding:0,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
                               </div>
-                              <div style={{fontSize:10,color:T.inkL,marginBottom:8}}>{new Date(h.loadedAt).toLocaleDateString("en-AU",{day:"numeric",month:"short"})} · {h.rows.length} rows</div>
+                              <div style={{fontSize:10,color:T.inkL,marginBottom:8}}>{h.rows?h.rows.length+" rows":""}</div>
                               <div style={{display:"flex",gap:6}}>
                                 <button onClick={function(){rowsRef.current=h.rows;setCsvRows(h.rows);setCsvName(h.name);setDone({});setDriverAllocation(null);}}
                                   style={{flex:1,padding:"5px 0",borderRadius:6,border:"none",background:isActive?T.sageD:T.accent,color:"#fff",fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,cursor:"pointer"}}>
                                   {isActive?"↺ Reload":"↺ Load"}
                                 </button>
                                 <button onClick={function(e){e.stopPropagation();setRenamingId(h.id);setRenameVal(h.displayName||h.name.replace(/\.csv$/i,""));}}
-                                  style={{padding:"5px 10px",borderRadius:6,border:"1px solid "+T.border,background:"none",fontSize:11,color:T.inkL,cursor:"pointer",fontWeight:600}} title="Rename">
-                                  ✎
-                                </button>
+                                  style={{padding:"5px 10px",borderRadius:6,border:"1px solid "+T.border,background:"none",fontSize:11,color:T.inkL,cursor:"pointer",fontWeight:600}} title="Rename">✎</button>
                               </div>
                             </div>
                           )}
                         </div>
-                      );})}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
