@@ -755,6 +755,114 @@ app.post('/api/drive/check-labels', auth, async (req, res) => {
   }
 });
 
+// ── Google Sheets — upload production sheet as new tab ──────────
+async function getGoogleToken(scope) {
+  const credsRaw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (!credsRaw) throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON not configured');
+  const creds = JSON.parse(credsRaw);
+  const now = Math.floor(Date.now() / 1000);
+  const { createSign } = await import('crypto');
+  const header  = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ iss: creds.client_email, scope, aud: 'https://oauth2.googleapis.com/token', exp: now + 3600, iat: now })).toString('base64url');
+  const sign = createSign('RSA-SHA256');
+  sign.update(`${header}.${payload}`);
+  const sig = sign.sign(creds.private_key, 'base64url');
+  const jwt = `${header}.${payload}.${sig}`;
+  const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt })
+  });
+  const tokenData = await tokenResp.json();
+  if (!tokenData.access_token) throw new Error('Failed to get Google token: ' + JSON.stringify(tokenData));
+  return tokenData.access_token;
+}
+
+app.post('/api/sheets/upload-production', auth, async (req, res) => {
+  try {
+    const { sheetId, tabName, rows } = req.body;
+    // rows: array of arrays (the production sheet data as values)
+    const SPREADSHEET_ID = sheetId || process.env.PRODUCTION_SHEET_ID;
+    if (!SPREADSHEET_ID) return res.status(400).json({ error: 'No spreadsheet ID configured. Set PRODUCTION_SHEET_ID env var or pass sheetId.' });
+    if (!rows || !rows.length) return res.status(400).json({ error: 'No rows provided' });
+
+    const token = await getGoogleToken('https://www.googleapis.com/auth/spreadsheets');
+
+    // 1. Add a new sheet tab with the given name
+    const addSheetResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requests: [{
+          addSheet: {
+            properties: {
+              title: tabName,
+              gridProperties: { rowCount: Math.max(rows.length + 10, 100), columnCount: Math.max(30, (rows[0]||[]).length + 5) }
+            }
+          }
+        }]
+      })
+    });
+    const addSheetData = await addSheetResp.json();
+    if (addSheetData.error) {
+      // Tab may already exist — try to clear it instead
+      if (addSheetData.error.message && addSheetData.error.message.includes('already exists')) {
+        // Find the sheetId for existing tab and clear it
+        const metaResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const meta = await metaResp.json();
+        const existing = (meta.sheets||[]).find(s => s.properties.title === tabName);
+        if (existing) {
+          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requests: [{ updateSheetProperties: { properties: { sheetId: existing.properties.sheetId, title: tabName }, fields: 'title' } }] })
+          });
+        }
+      } else {
+        throw new Error('Failed to add sheet: ' + addSheetData.error.message);
+      }
+    }
+
+    // 2. Write data to the new tab
+    const writeResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(tabName)}!A1?valueInputOption=USER_ENTERED`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: rows })
+    });
+    const writeData = await writeResp.json();
+    if (writeData.error) throw new Error('Failed to write data: ' + writeData.error.message);
+
+    // 3. Move the new tab to the front (position 0) — after HACCP/Roster/Daily Ops but before older dates
+    // Get current sheet list to find the new sheet's ID
+    const metaResp2 = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const meta2 = await metaResp2.json();
+    const newSheet = (meta2.sheets||[]).find(s => s.properties.title === tabName);
+
+    // Find the first non-template tab (after HACCP Templates, Roster, Daily Ops Sheet)
+    const FIXED_TABS = ['HACCP Templates', 'Roster', 'Daily Ops Sheet'];
+    const insertIndex = FIXED_TABS.length; // position 3 (0-indexed)
+
+    if (newSheet) {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requests: [{ moveSheet: { sheetId: newSheet.properties.sheetId, newIndex: insertIndex } }]
+        })
+      });
+    }
+
+    res.json({ success: true, tabName, rowsWritten: writeData.updatedRows || rows.length });
+  } catch(e) {
+    console.error('Sheets upload error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Request Labels — send email via Graph ───────────────────────
 app.post('/api/request-labels', auth, async (req, res) => {
   try {
@@ -1348,7 +1456,7 @@ print(json.dumps(result))
 
 function validateCSV(rows) {
   const issues = [];
-  const VALID_COURIERS = ['COLDXPRESS','DKDISTRIBUTION','COOLCOURIERS','WSDRIVER'];
+  const VALID_COURIERS = ['COLDXPRESS','DKDISTRIBUTION','COOLCOURIERS','WSDRIVER','RUN1','RUN2','RUN3'];
   const VALID_PRODUCTS = ['350','TEA','1L'];
   const TEA_SKUS = new Set(['LTEA350','PTEA350','RTEA350']);
   rows.forEach((r, i) => {

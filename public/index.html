@@ -563,7 +563,7 @@ function StopCard({stop,panel,onMove,nd,locked,onToggleLock}){
       onMouseLeave={function(e){e.currentTarget.style.background=locked?"#FFFBEB":"transparent";}}>
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flexShrink:0}}>
         <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:"#CBD5E1",minWidth:14,textAlign:"right",paddingTop:1}}>{stop.stopNum||""}</div>
-        {panel!=="cx"&&panel!=="suspense"&&<button onClick={function(){onToggleLock(stop.orderNumber);}} title={locked?"Unlock position":"Lock as stop 1"} style={{fontSize:9,padding:"1px 4px",borderRadius:3,border:"1px solid "+(locked?"#F59E0B":"#E2E8F0"),background:locked?"#FEF3C7":"transparent",color:locked?"#D97706":"#CBD5E1",cursor:"pointer",fontWeight:700,lineHeight:1}}>
+        {(panel==="run1"||panel==="run2"||panel==="run3")&&<button onClick={function(){onToggleLock(stop.orderNumber);}} title={locked?"Unlock position":"Lock as first stop"} style={{fontSize:9,padding:"1px 4px",borderRadius:3,border:"1px solid "+(locked?"#F59E0B":"#E2E8F0"),background:locked?"#FEF3C7":"transparent",color:locked?"#D97706":"#CBD5E1",cursor:"pointer",fontWeight:700,lineHeight:1}}>
           {locked?"🔒":"🔓"}
         </button>}
       </div>
@@ -585,40 +585,58 @@ function StopCard({stop,panel,onMove,nd,locked,onToggleLock}){
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:2,flexShrink:0}}>
         {panel!=="cx"&&<button onClick={function(){onMove(stop,panel,"cx");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #BFDBFE",background:"#EFF6FF",color:"#2563EB",cursor:"pointer",fontWeight:700}}>CX</button>}
-        {panel!=="driverA"&&<button onClick={function(){onMove(stop,panel,"driverA");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #BBF7D0",background:"#DCFCE7",color:"#15803D",cursor:"pointer",fontWeight:700}}>A</button>}
-        {panel!=="driverB"&&nd>=2&&<button onClick={function(){onMove(stop,panel,"driverB");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #C7D2FE",background:"#E0E7FF",color:"#4338CA",cursor:"pointer",fontWeight:700}}>B</button>}
-        {panel!=="suspense"&&<button onClick={function(){onMove(stop,panel,"suspense");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #DDD6FE",background:"#EDE9FE",color:"#6D28D9",cursor:"pointer",fontWeight:700}}>Later</button>}
+        {panel!=="run1"&&<button onClick={function(){onMove(stop,panel,"run1");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #BBF7D0",background:"#DCFCE7",color:"#15803D",cursor:"pointer",fontWeight:700}}>R1</button>}
+        {panel!=="run2"&&<button onClick={function(){onMove(stop,panel,"run2");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #C7D2FE",background:"#E0E7FF",color:"#4338CA",cursor:"pointer",fontWeight:700}}>R2</button>}
+        {panel!=="run3"&&<button onClick={function(){onMove(stop,panel,"run3");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #FED7AA",background:"#FFF7ED",color:"#C2410C",cursor:"pointer",fontWeight:700}}>R3</button>}
       </div>
     </div>
   );
 }
-function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd,lockedStops,onToggleLock,mapsUrl}){
+function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd,lockedStops,onToggleLock,mapsUrl,runName,onRename,onClear,onExport}){
+  var isRun=panel==="run1"||panel==="run2"||panel==="run3";
+  var editing_=React.useState(false),setEditing=editing_[1],editing=editing_[0];
+  var nameVal_=React.useState(runName||""),setNameVal=nameVal_[1],nameVal=nameVal_[0];
+  React.useEffect(function(){setNameVal(runName||"");},[runName]);
   return(
     <div onDragOver={function(e){e.preventDefault();}} onDrop={function(e){e.preventDefault();try{var d=JSON.parse(e.dataTransfer.getData("text/plain"));onDrop(d.on,d.p,panel);}catch(err){}}}
       style={{background:dov?"#f0fdf4":"#fff",border:"1.5px solid "+(dov?color:color+"33"),borderRadius:12,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-      <div style={{padding:"10px 14px",background:color+"12",borderBottom:"1px solid "+color+"22",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-        <span style={{fontSize:14}}>{icon}</span>
-        <span style={{fontSize:11,fontWeight:800,color:"#1E3A5F"}}>{title}</span>
-        {meta&&<span style={{fontSize:10,fontWeight:700,color:color,padding:"1px 8px",borderRadius:10}}>{meta}</span>}
-        <span style={{marginLeft:"auto",fontSize:10,color:"#94A3B8"}}>{stops.length} stop{stops.length!==1?"s":""}</span>
-        {mapsUrl&&stops.length>0&&<a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{fontSize:9,padding:"3px 8px",borderRadius:5,border:"1px solid "+color+"55",background:color+"15",color:color,textDecoration:"none",fontWeight:700,whiteSpace:"nowrap"}}>Maps ↗</a>}
+      <div style={{padding:"8px 12px",background:color+"12",borderBottom:"1px solid "+color+"22",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+        <span style={{fontSize:13}}>{icon}</span>
+        {isRun&&editing?(
+          <input autoFocus value={nameVal} onChange={function(e){setNameVal(e.target.value);}}
+            onBlur={function(){onRename(nameVal);setEditing(false);}}
+            onKeyDown={function(e){if(e.key==="Enter"||e.key==="Escape"){onRename(nameVal);setEditing(false);}}}
+            style={{flex:1,fontSize:11,fontWeight:800,color:"#1E3A5F",border:"1px solid "+color,borderRadius:4,padding:"1px 6px",outline:"none",minWidth:0}}/>
+        ):(
+          <span style={{fontSize:11,fontWeight:800,color:"#1E3A5F",cursor:isRun?"pointer":"default",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
+            onClick={isRun?function(){setEditing(true);}:undefined}
+            title={isRun?"Click to rename":undefined}>
+            {title}
+            {isRun&&<span style={{fontSize:8,color:color,marginLeft:4,opacity:.7}}>✎</span>}
+          </span>
+        )}
+        {meta&&<span style={{fontSize:9,fontWeight:700,color:color,padding:"1px 6px",borderRadius:10,flexShrink:0}}>{meta}</span>}
+        {mapsUrl&&stops.length>0&&<a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid "+color+"55",background:color+"15",color:color,textDecoration:"none",fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>Maps ↗</a>}
+        {isRun&&stops.length>0&&onExport&&<button onClick={onExport} style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid "+color+"55",background:color+"15",color:color,cursor:"pointer",fontWeight:700,flexShrink:0}}>XLS ↓</button>}
+        {isRun&&stops.length>0&&onClear&&<button onClick={function(){if(window.confirm("Clear all stops from this run?"))onClear();}} style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid #FECACA",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontWeight:700,flexShrink:0}} title="Clear run">✕</button>}
+        <span style={{fontSize:9,color:"#94A3B8",flexShrink:0}}>{stops.length}</span>
       </div>
       <div style={{flex:1,overflowY:"auto",maxHeight:460}}>
         {stops.length===0
-          ?<div style={{padding:"24px",textAlign:"center",color:"#CBD5E1",fontSize:11}}>Drop stops here</div>
+          ?<div style={{padding:"24px",textAlign:"center",color:"#CBD5E1",fontSize:11}}>{isRun?"Stops persist until cleared":"Drop stops here"}</div>
           :stops.map(function(s){return <StopCard key={s.orderNumber} stop={s} panel={panel} onMove={onMove} nd={nd} locked={!!(lockedStops&&lockedStops[s.orderNumber])} onToggleLock={onToggleLock||function(){}}/>;})
         }
       </div>
     </div>
   );
 }
-function genWsDriver(rows,alloc,date){
-  var am={};(alloc||[]).forEach(function(a){am[a.orderNumber]=a;});
-  var nf=rows.filter(function(r){return r.SKU!=="FREIGHT"&&r.Product&&(r.Courier==="WSDRIVER"||am[r.OrderNumber]);});
-  if(!nf.length)return[{name:"Manifest",rows:[[Cv("No WSDRIVER orders")]]}];
+function genRunManifest(rows,alloc,runKey,runLabel,date){
+  var am={};(alloc||[]).filter(function(a){return a.run===runKey;}).forEach(function(a){am[a.orderNumber]=a;});
+  var nf=rows.filter(function(r){return r.SKU!=="FREIGHT"&&r.Product&&am[r.OrderNumber];});
+  if(!nf.length)return[{name:"Manifest",rows:[[Cv("No orders for "+runLabel)]]}];
   var om={};nf.forEach(function(r){if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r);});
   var sr=[];
-  sr.push([{v:"WS DRIVER DELIVERY RUN",bold:true,bg:"FF1A3C5E",align:"left"}]);
+  sr.push([{v:runLabel.toUpperCase()+" DELIVERY RUN",bold:true,bg:"FF1A3C5E",align:"left"}]);
   sr.push([{v:"Wholesale State Cold Pressed Juices",bold:true}]);
   sr.push([{v:"Run Date:",bold:true},{v:date||new Date().toLocaleDateString("en-AU")}]);
   sr.push([E]);
@@ -630,6 +648,18 @@ function genWsDriver(rows,alloc,date){
   });
   return[{name:"Manifest",rows:sr,colWidths:[6,10,14,28,30,18,8,10,24,50,14,14]}];
 }
+function genRunExport(stops,runLabel,date){
+  // Simple format: name | location — matches WS-Run1 template
+  var sr=[];
+  sr.push([H("name",true,"FFD6E4F0","left"),H("location",true,"FFD6E4F0","left")]);
+  stops.forEach(function(s){
+    var addr=[s.address,s.suburb,"VIC",s.postcode].filter(Boolean).join(" ");
+    sr.push([Cv(s.name),Cv(addr)]);
+  });
+  return[{name:"Sheet1",rows:sr,colWidths:[30,50]}];
+}
+// Keep genWsDriver as alias for backwards compat
+function genWsDriver(rows,alloc,date){return genRunManifest(rows,alloc,"RUN1","Run 1",date);}
 function VicTile({csvRows,driverAllocation,onOpen,T}){
   var vn=[...new Set(csvRows.filter(function(r){return r.SKU!=="FREIGHT"&&r.Product&&(r.CustomerState||"").toUpperCase()==="VIC"&&!isPallet(r);}).map(function(r){return r.OrderNumber;}))].length;
   if(!vn)return null;
@@ -661,10 +691,13 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
   var ph=React.useState("idle"), setPhase=ph[1]; var phase=ph[0];
   var gp=React.useState(0), setGeoProgress=gp[1]; var geoProgress=gp[0];
   var gt=React.useState(0), setGeoTotal=gt[1]; var geoTotal=gt[0];
-  var dA_=React.useState([]), setDriverAStops=dA_[1]; var driverAStops=dA_[0];
-  var dB_=React.useState([]), setDriverBStops=dB_[1]; var driverBStops=dB_[0];
   var cx_=React.useState([]), setCxStops=cx_[1]; var cxStops=cx_[0];
-  var susp_=React.useState(function(){try{return JSON.parse(localStorage.getItem("ws_driver_suspense")||"[]");}catch(e){return[];}}), setSuspenseStops=susp_[1]; var suspenseStops=susp_[0];
+  var r1_=React.useState(function(){try{return JSON.parse(localStorage.getItem("ws_run1_stops")||"[]");}catch(e){return[];}}), setRun1Stops=r1_[1]; var run1Stops=r1_[0];
+  var r2_=React.useState(function(){try{return JSON.parse(localStorage.getItem("ws_run2_stops")||"[]");}catch(e){return[];}}), setRun2Stops=r2_[1]; var run2Stops=r2_[0];
+  var r3_=React.useState(function(){try{return JSON.parse(localStorage.getItem("ws_run3_stops")||"[]");}catch(e){return[];}}), setRun3Stops=r3_[1]; var run3Stops=r3_[0];
+  var rn1_=React.useState(localStorage.getItem("ws_run1_name")||""), setRun1Name=rn1_[1]; var run1Name=rn1_[0];
+  var rn2_=React.useState(localStorage.getItem("ws_run2_name")||""), setRun2Name=rn2_[1]; var run2Name=rn2_[0];
+  var rn3_=React.useState(localStorage.getItem("ws_run3_name")||""), setRun3Name=rn3_[1]; var run3Name=rn3_[0];
   var dov_=React.useState(null), setDragOver=dov_[1]; var dragOver=dov_[0];
 
   React.useEffect(function(){localStorage.setItem("ws_opt_shift",shiftHrs);},[shiftHrs]);
@@ -675,9 +708,14 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
   React.useEffect(function(){localStorage.setItem("ws_opt_drivers",numDrivers);},[numDrivers]);
   React.useEffect(function(){localStorage.setItem("ws_opt_start",startTime);},[startTime]);
 
-  var suspIds=React.useMemo(function(){return new Set(suspenseStops.map(function(s){return s.orderNumber;}));}, [suspenseStops]);
+  function saveRun(n,s){try{localStorage.setItem("ws_run"+n+"_stops",JSON.stringify(s));}catch(e){}}
+  function saveRunName(n,v){try{localStorage.setItem("ws_run"+n+"_name",v);}catch(e){}}
 
-  function saveSusp(s){try{localStorage.setItem("ws_driver_suspense",JSON.stringify(s));}catch(e){}}
+  // For compatibility - no suspense IDs needed, runs persist independently
+  var suspIds=React.useMemo(function(){
+    var all=run1Stops.concat(run2Stops).concat(run3Stops);
+    return new Set(all.map(function(s){return s.orderNumber;}));
+  },[run1Stops,run2Stops,run3Stops]);
 
   var PC_COORDS={"3000":[-37.814,144.963],"3001":[-37.814,144.963],"3006":[-37.823,144.953],"3008":[-37.820,144.940],"3011":[-37.800,144.889],"3012":[-37.793,144.876],"3013":[-37.783,144.876],"3015":[-37.832,144.913],"3016":[-37.851,144.906],"3018":[-37.874,144.865],"3019":[-37.863,144.856],"3020":[-37.763,144.828],"3021":[-37.751,144.831],"3022":[-37.778,144.817],"3023":[-37.769,144.802],"3024":[-37.860,144.764],"3026":[-37.860,144.773],"3027":[-37.854,144.747],"3028":[-37.878,144.784],"3029":[-37.892,144.765],"3030":[-37.889,144.736],"3031":[-37.783,144.929],"3032":[-37.774,144.916],"3033":[-37.790,144.840],"3034":[-37.801,144.836],"3036":[-37.769,144.836],"3037":[-37.735,144.811],"3038":[-37.731,144.798],"3039":[-37.758,144.923],"3040":[-37.755,144.920],"3041":[-37.746,144.930],"3042":[-37.740,144.879],"3043":[-37.730,144.938],"3044":[-37.713,144.955],"3046":[-37.708,144.960],"3047":[-37.698,144.957],"3048":[-37.685,144.957],"3049":[-37.724,144.907],"3051":[-37.797,144.947],"3052":[-37.790,144.958],"3053":[-37.804,144.970],"3054":[-37.791,144.964],"3055":[-37.774,144.958],"3056":[-37.764,144.975],"3057":[-37.754,144.978],"3058":[-37.744,144.983],"3059":[-37.692,144.944],"3060":[-37.730,144.972],"3061":[-37.684,144.963],"3062":[-37.671,144.973],"3063":[-37.677,144.989],"3064":[-37.667,144.984],"3065":[-37.807,144.980],"3066":[-37.808,144.987],"3068":[-37.804,145.000],"3070":[-37.767,145.003],"3071":[-37.757,145.005],"3072":[-37.746,145.007],"3073":[-37.735,145.007],"3074":[-37.721,145.006],"3075":[-37.713,145.010],"3076":[-37.644,145.018],"3078":[-37.789,145.015],"3079":[-37.779,145.029],"3081":[-37.766,145.036],"3082":[-37.702,145.020],"3083":[-37.753,145.017],"3084":[-37.756,145.046],"3085":[-37.744,145.041],"3087":[-37.763,145.057],"3088":[-37.750,145.059],"3089":[-37.693,145.039],"3090":[-37.731,145.043],"3091":[-37.678,145.039],"3093":[-37.771,145.076],"3094":[-37.758,145.073],"3095":[-37.743,145.068],"3099":[-37.660,145.060],"3101":[-37.808,145.030],"3102":[-37.817,145.039],"3103":[-37.824,145.047],"3104":[-37.808,145.051],"3105":[-37.797,145.054],"3106":[-37.803,145.118],"3107":[-37.759,145.152],"3108":[-37.812,145.125],"3109":[-37.818,145.143],"3111":[-37.822,145.153],"3113":[-37.831,145.167],"3114":[-37.839,145.179],"3115":[-37.847,145.185],"3116":[-37.826,145.225],"3121":[-37.820,145.018],"3122":[-37.847,145.062],"3123":[-37.836,145.059],"3124":[-37.843,145.073],"3125":[-37.843,145.100],"3126":[-37.831,145.084],"3127":[-37.819,145.089],"3128":[-37.817,145.099],"3129":[-37.824,145.107],"3130":[-37.835,145.125],"3131":[-37.825,145.127],"3132":[-37.813,145.139],"3133":[-37.817,145.153],"3134":[-37.823,145.167],"3135":[-37.829,145.187],"3136":[-37.840,145.221],"3137":[-37.848,145.208],"3138":[-37.825,145.238],"3139":[-37.867,145.311],"3140":[-37.839,145.252],"3141":[-37.849,144.999],"3142":[-37.861,145.014],"3143":[-37.882,145.032],"3144":[-37.875,145.051],"3145":[-37.893,145.045],"3146":[-37.867,145.065],"3147":[-37.889,145.070],"3148":[-37.896,145.083],"3149":[-37.878,145.087],"3150":[-37.890,145.108],"3151":[-37.850,145.195],"3152":[-37.856,145.222],"3153":[-37.848,145.243],"3154":[-37.843,145.267],"3155":[-37.859,145.271],"3156":[-37.873,145.246],"3158":[-37.922,145.280],"3160":[-37.941,145.327],"3161":[-37.870,145.058],"3162":[-37.899,145.048],"3163":[-37.908,145.054],"3165":[-37.906,145.072],"3166":[-37.886,145.082],"3167":[-37.900,145.081],"3168":[-37.908,145.094],"3169":[-37.919,145.101],"3170":[-37.927,145.106],"3171":[-37.941,145.116],"3172":[-37.950,145.131],"3173":[-38.002,145.159],"3174":[-37.959,145.147],"3175":[-37.965,145.195],"3177":[-37.990,145.215],"3178":[-37.972,145.222],"3179":[-37.860,145.241],"3180":[-37.874,145.233],"3181":[-37.851,144.999],"3182":[-37.868,144.983],"3183":[-37.874,144.993],"3184":[-37.879,144.984],"3185":[-37.887,145.001],"3186":[-37.894,145.011],"3187":[-37.902,145.018],"3188":[-37.911,145.027],"3189":[-37.921,145.034],"3190":[-37.930,145.043],"3191":[-37.913,145.044],"3192":[-37.941,145.057],"3193":[-37.952,145.063],"3194":[-37.940,145.056],"3195":[-37.959,145.066],"3196":[-37.967,145.069],"3197":[-37.975,145.071],"3198":[-37.984,145.073],"3199":[-37.994,145.080],"3200":[-38.001,145.086],"3201":[-37.963,145.079],"3202":[-37.921,145.079],"3204":[-37.901,145.062],"3205":[-37.844,144.947],"3206":[-37.840,144.928],"3207":[-37.848,144.939],"3212":[-38.070,144.318],"3214":[-38.090,144.340],"3215":[-38.109,144.359],"3216":[-38.130,144.380],"3218":[-38.149,144.349],"3219":[-38.139,144.389],"3220":[-38.148,144.362],"3335":[-37.590,144.710],"3337":[-37.630,144.630],"3338":[-37.580,144.640],"3340":[-37.700,144.620],"3341":[-37.600,144.570],"3342":[-37.670,144.600],"3350":[-37.562,143.862],"3380":[-37.279,143.132],"3381":[-37.310,143.200],"3427":[-37.580,144.820],"3429":[-37.570,144.820],"3431":[-37.350,144.600],"3434":[-37.320,144.590],"3435":[-37.300,144.580],"3440":[-37.402,144.539],"3442":[-37.358,144.527],"3444":[-37.139,144.462],"3450":[-37.173,144.247],"3451":[-37.217,144.290],"3453":[-36.854,144.287],"3458":[-37.180,144.020],"3460":[-37.280,144.060],"3461":[-37.350,144.120],"3462":[-37.420,144.140],"3463":[-37.480,144.190],"3500":[-34.185,142.158],"3550":[-36.762,144.282],"3551":[-36.680,144.447],"3555":[-36.697,144.292],"3556":[-36.630,144.230],"3607":[-36.380,145.400],"3608":[-36.583,145.207],"3610":[-36.438,145.392],"3612":[-36.250,145.600],"3616":[-36.136,145.459],"3620":[-36.063,145.073],"3621":[-36.109,145.079],"3630":[-36.383,145.400],"3631":[-36.357,145.455],"3635":[-36.382,145.399],"3636":[-36.059,145.484],"3638":[-36.116,145.486],"3644":[-35.887,145.569],"3658":[-37.101,145.019],"3659":[-37.050,144.998],"3660":[-36.782,145.401],"3662":[-36.735,145.458],"3664":[-36.784,145.433],"3666":[-36.684,145.357],"3669":[-36.640,145.420],"3672":[-36.573,145.538],"3675":[-36.456,145.596],"3677":[-36.386,145.869],"3678":[-36.680,146.880],"3683":[-36.059,146.459],"3685":[-36.059,146.459],"3687":[-36.060,146.920],"3688":[-36.121,146.878],"3690":[-36.120,146.888],"3691":[-36.120,146.888],"3697":[-36.780,147.100],"3698":[-36.700,147.150],"3699":[-36.650,147.190],"3700":[-36.100,147.350],"3701":[-36.200,147.450],"3707":[-36.050,147.550],"3711":[-37.370,145.660],"3712":[-37.300,145.620],"3713":[-37.220,145.670],"3715":[-37.180,145.610],"3717":[-37.090,145.700],"3719":[-37.010,145.700],"3720":[-36.890,145.780],"3722":[-36.760,145.900],"3730":[-36.010,146.400],"3737":[-36.620,147.250],"3738":[-36.540,147.280],"3741":[-36.724,147.073],"3747":[-36.360,146.680],"3749":[-36.380,146.720],"3750":[-37.691,145.078],"3752":[-37.643,145.110],"3753":[-37.600,145.110],"3754":[-37.607,145.146],"3756":[-37.280,145.040],"3757":[-37.590,145.030],"3758":[-37.310,145.000],"3763":[-37.560,145.060],"3764":[-37.310,144.980],"3765":[-37.852,145.291],"3766":[-37.830,145.380],"3770":[-37.560,145.680],"3775":[-37.450,145.730],"3777":[-37.453,145.766],"3779":[-37.380,145.810],"3781":[-37.935,145.440],"3782":[-37.960,145.460],"3783":[-37.942,145.539],"3785":[-37.730,145.430],"3787":[-37.700,145.450],"3788":[-37.680,145.470],"3791":[-37.786,145.501],"3793":[-37.792,145.557],"3797":[-37.855,145.665],"3799":[-37.880,145.700],"3802":[-38.009,145.236],"3803":[-38.030,145.252],"3804":[-38.051,145.278],"3805":[-38.063,145.303],"3806":[-38.074,145.316],"3807":[-38.093,145.337],"3808":[-38.093,145.337],"3809":[-38.077,145.491],"3810":[-38.081,145.494],"3812":[-38.100,145.560],"3813":[-38.119,145.648],"3814":[-38.144,145.691],"3815":[-38.169,145.790],"3816":[-38.180,145.890],"3818":[-38.180,145.990],"3820":[-38.169,145.934],"3823":[-38.220,146.140],"3824":[-38.240,146.290],"3825":[-38.264,146.348],"3831":[-38.259,146.500],"3840":[-38.235,146.548],"3842":[-38.294,146.617],"3844":[-38.322,146.699],"3847":[-38.102,147.057],"3850":[-38.110,147.065],"3851":[-38.073,147.209],"3854":[-38.044,147.168],"3857":[-38.098,147.261],"3858":[-38.153,147.345],"3860":[-38.207,146.890],"3862":[-37.953,146.895],"3865":[-37.780,147.220],"3869":[-38.350,146.780],"3871":[-38.580,146.250],"3874":[-38.614,146.329],"3875":[-37.830,147.570],"3880":[-37.785,148.009],"3882":[-37.510,148.080],"3885":[-37.440,148.280],"3888":[-37.312,148.403],"3890":[-37.300,148.500],"3892":[-37.780,148.600],"3896":[-37.160,148.420],"3898":[-36.850,148.180],"3903":[-38.205,146.395],"3904":[-38.260,146.438],"3909":[-38.413,146.534],"3910":[-38.007,145.091],"3911":[-38.381,145.198],"3912":[-38.337,145.166],"3913":[-38.296,145.170],"3915":[-38.362,145.260],"3916":[-38.411,145.278],"3918":[-38.437,145.321],"3919":[-38.465,145.363],"3922":[-38.488,145.893],"3925":[-38.508,146.023],"3926":[-38.483,145.454],"3929":[-38.497,145.482],"3930":[-38.492,145.492],"3931":[-38.502,145.506],"3934":[-38.503,145.543],"3936":[-38.329,145.051],"3937":[-38.506,145.563],"3939":[-38.490,145.593],"3941":[-38.479,145.621],"3942":[-38.453,145.648],"3943":[-38.438,145.691],"3944":[-38.407,145.718],"3945":[-38.611,146.143],"3950":[-38.609,146.239],"3953":[-38.620,146.333],"3956":[-38.641,146.458],"3959":[-38.679,146.577],"3960":[-38.692,146.631],"3962":[-38.730,146.693],"3965":[-38.763,146.735],"3966":[-38.809,146.795],"3971":[-38.831,146.881],"3975":[-38.022,145.286],"3976":[-37.996,145.253],"3977":[-38.039,145.315],"3980":[-38.400,145.720],"3981":[-38.431,145.716],"3984":[-38.470,145.754],"3988":[-38.521,145.842],"3995":[-38.575,146.042],"3996":[-38.572,146.043]};
 
@@ -695,7 +733,7 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
     });
   }
 
-  var totalVic=React.useMemo(function(){return buildRawStops().filter(function(s){return !suspIds.has(s.orderNumber);}).length;},[csvRows,suspIds]);
+  var totalVic=React.useMemo(function(){return buildRawStops().length;},[csvRows]);
 
   var INNER_PCS=new Set(["3000","3001","3002","3003","3004","3005","3006","3008","3011","3012","3013","3051","3052","3053","3054","3055","3056","3057","3065","3066","3067","3068","3070","3071","3078","3079","3101","3102","3103","3121","3122","3123","3141","3142","3143","3181","3182","3183","3184","3185","3186","3187","3188","3189","3204","3205","3206","3207"]);
   var MIDDLE_PCS=new Set(["3018","3019","3020","3021","3022","3023","3024","3026","3027","3028","3029","3030","3031","3032","3033","3034","3036","3037","3038","3039","3040","3041","3042","3043","3044","3046","3047","3048","3049","3058","3059","3060","3061","3062","3063","3064","3072","3073","3074","3075","3076","3081","3082","3083","3084","3085","3087","3088","3104","3105","3106","3107","3108","3109","3111","3113","3114","3115","3124","3125","3126","3127","3128","3129","3130","3131","3132","3133","3134","3135","3144","3145","3146","3147","3148","3149","3150","3156","3158","3160","3161","3162","3163","3165","3166","3167","3168","3169","3170","3171","3172","3173","3174","3175","3177","3178","3179","3180","3190","3191","3192","3193","3194","3195","3196","3197","3198","3199","3200"]);
@@ -927,11 +965,36 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
       var startMins=parseFloat(startTime.split(":")[0])*60+parseFloat(startTime.split(":")[1]);
       var routes=clarkeWright(routable,matrix,shiftHrs*60,stopMins,driverRate,startMins,fuelCost);
       var profitable=routes.filter(function(r){return r.ceSavings>0;});
-      var dA=[],dB=[],used={};
-      if(numDrivers>=1&&profitable[0]){dA=annotate(profitable[0].stops,profitable[0].matIdxs,matrix,stopMins,driverRate,startTime);dA.forEach(function(s){used[s.orderNumber]=true;});}
-      if(numDrivers>=2&&profitable[1]){dB=annotate(profitable[1].stops,profitable[1].matIdxs,matrix,stopMins,driverRate,startTime);dB.forEach(function(s){used[s.orderNumber]=true;});}
+      var newR1=[],newR2=[],newR3=[],used={};
+      // Only fill runs that don't already have stops (preserve existing run allocations)
+      var existingR1Ids=new Set(run1Stops.map(function(s){return s.orderNumber;}));
+      var existingR2Ids=new Set(run2Stops.map(function(s){return s.orderNumber;}));
+      var existingR3Ids=new Set(run3Stops.map(function(s){return s.orderNumber;}));
+      // Mark existing run stops as used
+      run1Stops.forEach(function(s){used[s.orderNumber]=true;});
+      run2Stops.forEach(function(s){used[s.orderNumber]=true;});
+      run3Stops.forEach(function(s){used[s.orderNumber]=true;});
+      // Filter profitable routes to only unallocated stops
+      var freshRoutes=profitable.map(function(r){
+        return Object.assign({},r,{stops:r.stops.filter(function(s){return !used[s.orderNumber];})});
+      }).filter(function(r){return r.stops.length>0;});
+      // Allocate fresh stops to empty run slots
+      var slots=[[run1Stops,newR1,1],[run2Stops,newR2,2],[run3Stops,newR3,3]];
+      var slotIdx=0;
+      freshRoutes.forEach(function(route){
+        while(slotIdx<slots.length&&slots[slotIdx][0].length>0)slotIdx++;
+        if(slotIdx>=slots.length)return;
+        var ann=annotate(route.stops,route.matIdxs,matrix,stopMins,driverRate,startTime);
+        ann.forEach(function(s){used[s.orderNumber]=true;});
+        slots[slotIdx][1].push.apply(slots[slotIdx][1],ann);
+        slotIdx++;
+      });
+      // Only update runs that got new stops
+      if(newR1.length){var u=run1Stops.concat(newR1);setRun1Stops(u);saveRun(1,u);}
+      if(newR2.length){var u=run2Stops.concat(newR2);setRun2Stops(u);saveRun(2,u);}
+      if(newR3.length){var u=run3Stops.concat(newR3);setRun3Stops(u);saveRun(3,u);}
       var cx=notRoutable.concat(routable.filter(function(s){return !used[s.orderNumber];}));
-      setDriverAStops(dA);setDriverBStops(dB);setCxStops(cx);setPhase("done");
+      setCxStops(cx);setPhase("done");
     }
 
     Promise.all(promises).then(function(){
@@ -954,9 +1017,8 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
   // Re-sort a driver run using nearest-neighbour, respecting locked stops at front
   function reorder(stops,matData){
     if(stops.length<=1)return stops;
-    // Locked stops go first (in their existing order), rest get NN sorted
-    var locked=stops.filter(function(s){return lockedStops[s.orderNumber];});
-    var free=stops.filter(function(s){return !lockedStops[s.orderNumber];});
+    var locked=stops.filter(function(s){return lockedStops&&lockedStops[s.orderNumber];});
+    var free=stops.filter(function(s){return !lockedStops||!lockedStops[s.orderNumber];});
     if(!free.length)return stops;
     // NN sort on free stops using their lat/lon
     function hv2(a,b){
@@ -1011,33 +1073,48 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
     return base+"/"+waypoints.join("/")+"/17+Kirkham+Rd+W+Keysborough+VIC+3173";
   }
 
+  function setRun(n,stops){
+    if(n===1){setRun1Stops(stops);saveRun(1,stops);}
+    else if(n===2){setRun2Stops(stops);saveRun(2,stops);}
+    else if(n===3){setRun3Stops(stops);saveRun(3,stops);}
+  }
+  function getRun(n){return n===1?run1Stops:n===2?run2Stops:run3Stops;}
+
   function move(stop,from,to){
     var rm=function(lst){return lst.filter(function(s){return s.orderNumber!==stop.orderNumber;});};
-    var nA=driverAStops,nB=driverBStops,nC=cxStops;
-    if(from==="driverA")nA=rm(nA);else if(from==="driverB")nB=rm(nB);else if(from==="cx")nC=rm(nC);
-    else if(from==="suspense"){var u=rm(suspenseStops);setSuspenseStops(u);saveSusp(u);}
-    if(to==="driverA")nA=rm(nA).concat([stop]);else if(to==="driverB")nB=rm(nB).concat([stop]);else if(to==="cx")nC=rm(nC).concat([stop]);
-    else if(to==="suspense"){var u2=rm(suspenseStops).concat([stop]);setSuspenseStops(u2);saveSusp(u2);}
-    // Re-sort driver runs after every move
-    setDriverAStops(recalc(nA));setDriverBStops(recalc(nB));setCxStops(nC);
+    var nC=cxStops;
+    // Remove from source
+    if(from==="cx")nC=rm(nC);
+    else if(from==="run1"||from==="run2"||from==="run3"){
+      var fn=parseInt(from.slice(3));
+      setRun(fn,recalc(rm(getRun(fn))));
+    }
+    // Add to destination
+    if(to==="cx")nC=rm(nC).concat([stop]);
+    else if(to==="run1"||to==="run2"||to==="run3"){
+      var tn=parseInt(to.slice(3));
+      var newList=recalc(rm(getRun(tn)).concat([stop]));
+      setRun(tn,newList);
+    }
+    setCxStops(nC);
   }
 
   function handleDrop(orderNumber,from,to){
-    var find=function(lst){return lst.find(function(s){return s.orderNumber===orderNumber;});};
-    var stop=find(driverAStops)||find(driverBStops)||find(cxStops)||find(suspenseStops);
+    var allStops=run1Stops.concat(run2Stops).concat(run3Stops).concat(cxStops);
+    var stop=allStops.find(function(s){return s.orderNumber===orderNumber;});
     if(stop)move(stop,from,to);
     setDragOver(null);
   }
 
-  var dA_hrs=driverAStops.length?(driverAStops.reduce(function(s,st){return s+(st.driveMins||0);},0)+driverAStops.length*stopMins)/60:0;
-  var dB_hrs=driverBStops.length?(driverBStops.reduce(function(s,st){return s+(st.driveMins||0);},0)+driverBStops.length*stopMins)/60:0;
-  var dA_wage=parseFloat((dA_hrs*driverRate).toFixed(2));
-  var dB_wage=parseFloat((dB_hrs*driverRate).toFixed(2));
-  var dA_cost=parseFloat((dA_wage+(driverAStops.length>0?fuelCost:0)).toFixed(2));
-  var dB_cost=parseFloat((dB_wage+(driverBStops.length>0?fuelCost:0)).toFixed(2));
-  var ceAll=[].concat(driverAStops,driverBStops,cxStops).reduce(function(s,st){return s+(st.ce||0);},0);
-  var saved=[].concat(driverAStops,driverBStops).reduce(function(s,st){return s+st.ce;},0)-(dA_cost+dB_cost);
-  var placed=driverAStops.length+driverBStops.length+cxStops.length;
+  function runHrs(stops){return stops.length?(stops.reduce(function(s,st){return s+(st.driveMins||0);},0)+stops.length*stopMins)/60:0;}
+  var r1_hrs=runHrs(run1Stops), r2_hrs=runHrs(run2Stops), r3_hrs=runHrs(run3Stops);
+  var r1_cost=parseFloat((r1_hrs*driverRate+(run1Stops.length>0?fuelCost:0)).toFixed(2));
+  var r2_cost=parseFloat((r2_hrs*driverRate+(run2Stops.length>0?fuelCost:0)).toFixed(2));
+  var r3_cost=parseFloat((r3_hrs*driverRate+(run3Stops.length>0?fuelCost:0)).toFixed(2));
+  var ceAll=[].concat(run1Stops,run2Stops,run3Stops,cxStops).reduce(function(s,st){return s+(st.ce||0);},0);
+  var allRunStops=[].concat(run1Stops,run2Stops,run3Stops);
+  var saved=allRunStops.reduce(function(s,st){return s+st.ce;},0)-(r1_cost+r2_cost+r3_cost);
+  var placed=run1Stops.length+run2Stops.length+run3Stops.length+cxStops.length;
   var countOk=placed>=totalVic;
   var isLoading=phase==="optimising";
 
@@ -1059,8 +1136,9 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
         </div>
         <div style={{background:"#fff",borderBottom:"1px solid #E2E8F0",padding:"10px 22px",display:"flex",gap:28,alignItems:"center",flexShrink:0}}>
           <div><div style={{fontSize:18,fontWeight:800,color:"#64748B"}}>${ceAll.toFixed(2)}</div><div style={{fontSize:9,color:"#94A3B8"}}>CX IF ALL SENT</div></div>
-          <div><div style={{fontSize:18,fontWeight:800,color:"#059669"}}>${dA_cost.toFixed(2)} | {dA_hrs.toFixed(1)}h</div><div style={{fontSize:9,color:"#94A3B8"}}>DRIVER A</div></div>
-          {numDrivers>=2&&<div><div style={{fontSize:18,fontWeight:800,color:"#4338CA"}}>${dB_cost.toFixed(2)} | {dB_hrs.toFixed(1)}h</div><div style={{fontSize:9,color:"#94A3B8"}}>DRIVER B</div></div>}
+          {run1Stops.length>0&&<div><div style={{fontSize:15,fontWeight:800,color:"#059669"}}>${r1_cost.toFixed(0)} | {r1_hrs.toFixed(1)}h</div><div style={{fontSize:9,color:"#94A3B8"}}>{run1Name||"RUN 1"}</div></div>}
+          {run2Stops.length>0&&<div><div style={{fontSize:15,fontWeight:800,color:"#4338CA"}}>${r2_cost.toFixed(0)} | {r2_hrs.toFixed(1)}h</div><div style={{fontSize:9,color:"#94A3B8"}}>{run2Name||"RUN 2"}</div></div>}
+          {run3Stops.length>0&&<div><div style={{fontSize:15,fontWeight:800,color:"#C2410C"}}>${r3_cost.toFixed(0)} | {r3_hrs.toFixed(1)}h</div><div style={{fontSize:9,color:"#94A3B8"}}>{run3Name||"RUN 3"}</div></div>}
           <div><div style={{fontSize:18,fontWeight:800,color:saved>0?"#059669":"#DC2626"}}>${Math.max(0,saved).toFixed(2)}</div><div style={{fontSize:9,color:"#94A3B8"}}>YOU SAVE</div></div>
           <button onClick={function(){runFull();}} disabled={isLoading} style={{marginLeft:"auto",padding:"7px 16px",borderRadius:8,border:"1.5px solid #BFDBFE",background:"#EFF6FF",color:"#2563EB",fontSize:11,fontWeight:700,cursor:"pointer"}}>Re-optimise</button>
         </div>
@@ -1072,30 +1150,32 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
               return(<div key={l}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,color:"#64748B"}}>{l}</span><span style={{fontSize:11,fontWeight:700,color:"#1E3A5F"}}>{v}</span></div><input type="range" min={mn} max={mx} step={step} value={v} onChange={function(e){s(parseFloat(e.target.value));}} style={{width:"100%",accentColor:"#2563EB"}}/></div>);
             })}
             <div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}><span style={{fontSize:10,color:"#64748B"}}>Metro priority</span><button onClick={function(){setMetroPref(function(p){return !p;});}} style={{fontSize:9,padding:"2px 8px",borderRadius:5,border:"1px solid "+(metroPref?"#2563EB":"#E2E8F0"),background:metroPref?"#EFF6FF":"#fff",color:metroPref?"#2563EB":"#94A3B8",cursor:"pointer",fontWeight:700}}>{metroPref?"ON":"OFF"}</button></div>
-            <div style={{fontSize:10,color:"#64748B",marginBottom:6}}>Drivers</div>
-              <div style={{display:"flex",gap:6}}>
-                {[1,2].map(function(n){return(<button key={n} onClick={function(){setNumDrivers(n);}} style={{flex:1,padding:"6px 0",borderRadius:6,border:"1.5px solid "+(numDrivers===n?"#2563EB":"#E2E8F0"),background:numDrivers===n?"#EFF6FF":"#fff",color:numDrivers===n?"#2563EB":"#94A3B8",fontSize:12,fontWeight:700,cursor:"pointer"}}>{n}</button>);})}
-              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:10,color:"#64748B"}}>Metro priority</span><button onClick={function(){setMetroPref(function(p){return !p;});}} style={{fontSize:9,padding:"2px 8px",borderRadius:5,border:"1px solid "+(metroPref?"#2563EB":"#E2E8F0"),background:metroPref?"#EFF6FF":"#fff",color:metroPref?"#2563EB":"#94A3B8",cursor:"pointer",fontWeight:700}}>{metroPref?"ON":"OFF"}</button></div>
             </div>
             <div>
               <div style={{fontSize:10,color:"#64748B",marginBottom:4}}>Start time</div>
               <input type="time" value={startTime} onChange={function(e){setStartTime(e.target.value);}} style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1.5px solid #E2E8F0",fontSize:12}}/>
             </div>
-            {suspenseStops.length>0&&<button onClick={function(){setSuspenseStops([]);saveSusp([]);}} style={{padding:"6px",borderRadius:6,border:"1px solid #FECACA",background:"#FEF2F2",color:"#DC2626",fontSize:10,fontWeight:700,cursor:"pointer"}}>Clear Another Day ({suspenseStops.length})</button>}
+
           </div>
           <div style={{flex:1,padding:16,display:"flex",flexDirection:"column",gap:12,overflowY:"auto",background:"#F8FAFC"}}>
-            <div style={{display:"grid",gridTemplateColumns:numDrivers>=2?"1fr 1fr 1fr":"1fr 1fr",gap:12,flex:1}}>
-              <DelivPanel title="Cold Xpress" icon="❄️" stops={cxStops} panel="cx" color="#2563EB" onMove={move} onDrop={handleDrop} dov={dragOver==="cx"} nd={numDrivers} meta={cxStops.length?"$"+cxStops.reduce(function(s,st){return s+st.ce;},0).toFixed(2):""}/>
-              <DelivPanel title="Driver A" icon="🚐" stops={driverAStops} panel="driverA" color="#059669" onMove={move} onDrop={handleDrop} dov={dragOver==="driverA"} nd={numDrivers} meta={driverAStops.length?dA_hrs.toFixed(1)+"h | $"+dA_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(driverAStops)}/>
-              {numDrivers>=2&&<DelivPanel title="Driver B" icon="🚐" stops={driverBStops} panel="driverB" color="#4338CA" onMove={move} onDrop={handleDrop} dov={dragOver==="driverB"} nd={numDrivers} meta={driverBStops.length?dB_hrs.toFixed(1)+"h | $"+dB_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(driverBStops)}/>}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12,flex:1}}>
+              <DelivPanel title="Cold Xpress" icon="❄️" stops={cxStops} panel="cx" color="#2563EB" onMove={move} onDrop={handleDrop} dov={dragOver==="cx"} nd={3} meta={cxStops.length?"$"+cxStops.reduce(function(s,st){return s+st.ce;},0).toFixed(2):""}/>
+              <DelivPanel title={run1Name||"Run 1"} icon="🚐" stops={run1Stops} panel="run1" color="#059669" onMove={move} onDrop={handleDrop} dov={dragOver==="run1"} nd={3} meta={run1Stops.length?r1_hrs.toFixed(1)+"h | $"+r1_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(run1Stops)} runName={run1Name} onRename={function(v){setRun1Name(v);saveRunName(1,v);}} onClear={function(){setRun1Stops([]);saveRun(1,[]);}} onExport={function(){var d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");dlXlsx(genRunExport(run1Stops,run1Name||"Run 1",d),"WS-"+(run1Name||"Run1").replace(/\s+/g,"")+"-"+d+".xlsx");}}/>
+              <DelivPanel title={run2Name||"Run 2"} icon="🚐" stops={run2Stops} panel="run2" color="#4338CA" onMove={move} onDrop={handleDrop} dov={dragOver==="run2"} nd={3} meta={run2Stops.length?r2_hrs.toFixed(1)+"h | $"+r2_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(run2Stops)} runName={run2Name} onRename={function(v){setRun2Name(v);saveRunName(2,v);}} onClear={function(){setRun2Stops([]);saveRun(2,[]);}} onExport={function(){var d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");dlXlsx(genRunExport(run2Stops,run2Name||"Run 2",d),"WS-"+(run2Name||"Run2").replace(/\s+/g,"")+"-"+d+".xlsx");}}/>
+              <DelivPanel title={run3Name||"Run 3"} icon="🚐" stops={run3Stops} panel="run3" color="#C2410C" onMove={move} onDrop={handleDrop} dov={dragOver==="run3"} nd={3} meta={run3Stops.length?r3_hrs.toFixed(1)+"h | $"+r3_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(run3Stops)} runName={run3Name} onRename={function(v){setRun3Name(v);saveRunName(3,v);}} onClear={function(){setRun3Stops([]);saveRun(3,[]);}} onExport={function(){var d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");dlXlsx(genRunExport(run3Stops,run3Name||"Run 3",d),"WS-"+(run3Name||"Run3").replace(/\s+/g,"")+"-"+d+".xlsx");}}/>
             </div>
-            <DelivPanel title="Another Day" icon="🗓" stops={suspenseStops} panel="suspense" color="#6D28D9" onMove={move} onDrop={handleDrop} dov={dragOver==="suspense"} nd={numDrivers} meta={suspenseStops.length?suspenseStops.length+" held":""}/>
+
           </div>
         </div>
         <div style={{background:"#fff",borderTop:"1px solid #E2E8F0",padding:"12px 22px",display:"flex",gap:10,justifyContent:"flex-end",flexShrink:0}}>
           <button onClick={onSkip} style={{padding:"9px 20px",borderRadius:8,border:"1.5px solid #E2E8F0",background:"#fff",color:"#64748B",fontSize:12,fontWeight:700,cursor:"pointer"}}>No driver this week</button>
-          <button onClick={function(){onConfirm(driverAStops.map(function(s){return Object.assign({},s,{driver:"A"});}).concat(driverBStops.map(function(s){return Object.assign({},s,{driver:"B"});})));}} disabled={!driverAStops.length&&!driverBStops.length} style={{padding:"9px 24px",borderRadius:8,border:"none",background:driverAStops.length||driverBStops.length?"#059669":"#94A3B8",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer"}}>Confirm Allocation ({driverAStops.length+driverBStops.length} stops)</button>
+          <button onClick={function(){
+            var alloc=run1Stops.map(function(s){return Object.assign({},s,{run:"RUN1",runName:run1Name||"Run 1"});})
+              .concat(run2Stops.map(function(s){return Object.assign({},s,{run:"RUN2",runName:run2Name||"Run 2"});}))
+              .concat(run3Stops.map(function(s){return Object.assign({},s,{run:"RUN3",runName:run3Name||"Run 3"});}));
+            onConfirm(alloc);
+          }} disabled={!run1Stops.length&&!run2Stops.length&&!run3Stops.length} style={{padding:"9px 24px",borderRadius:8,border:"none",background:allRunStops.length?"#059669":"#94A3B8",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer"}}>Confirm Runs ({allRunStops.length} stops)</button>
         </div>
       </div>
     </div>
@@ -1491,7 +1571,11 @@ function GenSuccessModal({modal, onClose, apiFetch, T}){
   const[emailSending,setEmailSending]=useState(false);
   const[emailSent,setEmailSent]=useState(false);
   const[emailErr,setEmailErr]=useState(null);
+  const[sheetsUploading,setSheetsUploading]=useState(false);
+  const[sheetsUploaded,setSheetsUploaded]=useState(false);
+  const[sheetsErr,setSheetsErr]=useState(null);
 
+  const SHEETS_ID="1pXOchOdEVlJ8cQNS90Yus-F1O1fwk9ONMreNt4_L_g0";
   const PRODUCTION_RECIPIENTS=[
     'leopegoli@gmail.com',
     'production@pressedjuices.com.au',
@@ -1507,10 +1591,40 @@ function GenSuccessModal({modal, onClose, apiFetch, T}){
     setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
   }
 
+  async function handleSheetsUpload(){
+    setSheetsUploading(true);setSheetsErr(null);
+    try{
+      // Extract production sheet from the ZIP
+      const zip=await JSZip.loadAsync(modal.zipBlob);
+      // Find the production sheet file
+      const prodFile=Object.keys(zip.files).find(n=>n.toLowerCase().includes("production"));
+      if(!prodFile)throw new Error("Production sheet not found in ZIP");
+
+      const xlsxBuf=await zip.files[prodFile].async("arraybuffer");
+      // Parse the xlsx to get row data
+      const wb=XLSX.read(xlsxBuf,{type:"array"});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+
+      // Build tab name from dateLabel e.g. "13 April 2026" -> "13 April 2026"
+      const tabName=modal.dateLabel||new Date().toLocaleDateString("en-AU",{day:"numeric",month:"long",year:"numeric"});
+
+      const resp=await apiFetch('/api/sheets/upload-production',{
+        method:'POST',
+        body:JSON.stringify({sheetId:SHEETS_ID,tabName,rows}),
+      });
+      const data=await resp.json();
+      if(!resp.ok||data.error)throw new Error(data.error||'Upload failed');
+      setSheetsUploaded(true);
+    }catch(e){
+      setSheetsErr(e.message);
+    }
+    setSheetsUploading(false);
+  }
+
   async function handleEmail(){
     setEmailSending(true);setEmailErr(null);
     try{
-      // Convert blob to base64 for transport
       const buf=await modal.zipBlob.arrayBuffer();
       const bytes=new Uint8Array(buf);
       let b64='';
@@ -1529,7 +1643,7 @@ function GenSuccessModal({modal, onClose, apiFetch, T}){
         }),
       });
       const data=await resp.json();
-      if(!resp.ok||data.error) throw new Error(data.error||'Send failed');
+      if(!resp.ok||data.error)throw new Error(data.error||'Send failed');
       setEmailSent(true);
     }catch(e){
       setEmailErr(e.message);
@@ -1540,7 +1654,6 @@ function GenSuccessModal({modal, onClose, apiFetch, T}){
   return(
     <div className="modal-overlay">
       <div className="modal fu" style={{maxWidth:480}}>
-        {/* Header */}
         <div style={{padding:"22px 26px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"flex-start",gap:14}}>
           <div style={{width:44,height:44,borderRadius:12,background:T.sageL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>✅</div>
           <div style={{flex:1}}>
@@ -1550,44 +1663,45 @@ function GenSuccessModal({modal, onClose, apiFetch, T}){
           <button className="btn-o" onClick={onClose} style={{flexShrink:0,padding:"5px 10px"}}>✕</button>
         </div>
 
-        {/* Body */}
-        <div style={{padding:"20px 26px"}}>
-          <div style={{fontSize:13,color:T.inkM,marginBottom:18,lineHeight:1.6}}>
-            All 9 files have been generated. Choose how to distribute them:
-          </div>
+        <div style={{padding:"20px 26px",display:"flex",flexDirection:"column",gap:14}}>
 
-          {/* Recipients list */}
-          <div style={{background:T.creamD,borderRadius:10,padding:"12px 14px",marginBottom:18}}>
-            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:8}}>EMAIL RECIPIENTS</div>
+          {/* Sheets status */}
+          {sheetsUploaded&&<div style={{background:T.sageL,border:`1px solid ${T.sageD}33`,borderRadius:9,padding:"10px 14px",fontSize:13,color:T.sageD,fontWeight:600}}>
+            ✅ Production sheet uploaded to WS Sheets as "{modal.dateLabel}"
+          </div>}
+          {sheetsErr&&<div style={{background:T.redL,border:`1px solid ${T.redB}`,borderRadius:9,padding:"10px 14px",fontSize:12,color:T.red}}>
+            ⚠️ Sheets upload failed: {sheetsErr}
+          </div>}
+
+          {/* Email status */}
+          {emailSent&&<div style={{background:T.sageL,border:`1px solid ${T.sageD}33`,borderRadius:9,padding:"10px 14px",fontSize:13,color:T.sageD,fontWeight:600}}>
+            ✅ Files emailed to {PRODUCTION_RECIPIENTS.length} recipients
+          </div>}
+          {emailErr&&<div style={{background:T.redL,border:`1px solid ${T.redB}`,borderRadius:9,padding:"10px 14px",fontSize:12,color:T.red}}>
+            ⚠️ Email failed: {emailErr}
+          </div>}
+
+          {/* Recipients */}
+          <div style={{background:T.creamD,borderRadius:10,padding:"10px 14px"}}>
+            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:6}}>EMAIL RECIPIENTS</div>
             {PRODUCTION_RECIPIENTS.map(r=>(
-              <div key={r} style={{fontSize:12,color:T.inkM,padding:"3px 0",display:"flex",alignItems:"center",gap:7}}>
-                <div style={{width:5,height:5,borderRadius:"50%",background:T.sage,flexShrink:0}}/>
+              <div key={r} style={{fontSize:11,color:T.inkM,padding:"2px 0",display:"flex",alignItems:"center",gap:7}}>
+                <div style={{width:4,height:4,borderRadius:"50%",background:T.sage,flexShrink:0}}/>
                 {r}
               </div>
             ))}
           </div>
 
-          {/* Email status */}
-          {emailSent&&(
-            <div style={{background:T.sageL,border:`1px solid ${T.sageD}33`,borderRadius:9,padding:"10px 14px",marginBottom:14,fontSize:13,color:T.sageD,fontWeight:600}}>
-              ✅ Files emailed successfully to {PRODUCTION_RECIPIENTS.length} recipients
-            </div>
-          )}
-          {emailErr&&(
-            <div style={{background:T.redL,border:`1px solid ${T.redB}`,borderRadius:9,padding:"10px 14px",marginBottom:14,fontSize:12,color:T.red}}>
-              ⚠️ Email failed: {emailErr}
-            </div>
-          )}
-
           {/* Action buttons */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <button className="btn-t" onClick={handleEmail} disabled={emailSending||emailSent} style={{justifyContent:"center",fontSize:13}}>
-              {emailSending?<><span className="spin" style={{fontSize:13}}>⟳</span> Sending…</>
-               :emailSent?"✅ Sent"
-               :"📧 Email Files"}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            <button className="btn-t" onClick={handleEmail} disabled={emailSending||emailSent} style={{justifyContent:"center",fontSize:12,padding:"10px 6px"}}>
+              {emailSending?<><span className="spin" style={{fontSize:12}}>⟳</span> Sending…</>:emailSent?"✅ Sent":"📧 Email"}
             </button>
-            <button className="btn-o" onClick={handleDownload} style={{fontSize:13,textAlign:"center",justifyContent:"center",display:"flex",alignItems:"center",gap:6}}>
-              ⬇ Download ZIP
+            <button className="btn-t" onClick={handleSheetsUpload} disabled={sheetsUploading||sheetsUploaded} style={{justifyContent:"center",fontSize:12,padding:"10px 6px",background:sheetsUploaded?T.sage:T.accent}}>
+              {sheetsUploading?<><span className="spin" style={{fontSize:12}}>⟳</span> Uploading…</>:sheetsUploaded?"✅ Uploaded":"📊 WS Sheets"}
+            </button>
+            <button className="btn-o" onClick={handleDownload} style={{fontSize:12,textAlign:"center",justifyContent:"center",display:"flex",alignItems:"center",gap:4,padding:"10px 6px"}}>
+              ⬇ ZIP
             </button>
           </div>
         </div>
@@ -2006,7 +2120,6 @@ function App(){
           {sheets:genColdXpress(rows,d),     name:`${d}_COLDXPRESS.xlsx`},
           {sheets:genDK(rows),               name:`${d}_DK_DISTRIBUTIONS.xlsx`},
           {sheets:genCoolCouriers(rows),     name:`${d}_COOLCOURIERS.xlsx`},
-          ...(driverAllocation&&driverAllocation.length>0?[{sheets:genWsDriver(rows,driverAllocation,d),name:`${d}_WS_Delivery_Run.xlsx`}]:[]),
           {sheets:f350,                      name:`${d}_350ml_Fronts.xlsx`},
           {sheets:b350,                      name:`${d}_350ml_Backs.xlsx`},
           {sheets:fT,                        name:`${d}_Tea_Fronts.xlsx`},
@@ -2074,7 +2187,14 @@ function App(){
   return(
     <>
       <style>{currentCSS}</style>
-      {showOptimiser&&<DeliveryOptimiserModal csvRows={csvRows} onConfirm={function(alloc){var nums=new Set(alloc.map(function(a){return a.orderNumber;}));var mutated=rowsRef.current.map(function(r){return nums.has(r.OrderNumber)?Object.assign({},r,{Courier:"WSDRIVER"}):r;});rowsRef.current=mutated;setCsvRows(mutated);setDriverAllocation(alloc);setDone({});setShowOptimiser(false);}} onSkip={function(){setDriverAllocation([]);setShowOptimiser(false);}} onClose={function(){setShowOptimiser(false);}} T={T}/> }
+      {showOptimiser&&<DeliveryOptimiserModal csvRows={csvRows} onConfirm={function(alloc){
+        var mutated=rowsRef.current.map(function(r){
+          var a=alloc.find(function(a){return a.orderNumber===r.OrderNumber;});
+          if(!a)return r;
+          return Object.assign({},r,{Courier:a.run});
+        });
+        rowsRef.current=mutated;setCsvRows(mutated);setDriverAllocation(alloc);setDone({});setShowOptimiser(false);
+      }} onSkip={function(){setDriverAllocation([]);setShowOptimiser(false);}} onClose={function(){setShowOptimiser(false);}} T={T}/> }
       {valModal&&<ValModal result={valModal.result} label={valModal.label} onProceed={()=>doGen(valModal.type,true)} onCancel={()=>setValModal(null)} labelRequestSent={labelRequestSent} onRequestLabels={async()=>{try{const resp=await apiFetch("/api/request-labels",{method:"POST",body:JSON.stringify({customers:driveWarnings})});if(resp.ok){setLabelRequestSent(true);}else{const e=await resp.json();alert("Failed to send: "+(e.error||"Unknown error"));}}catch(e){alert("Failed to send: "+e.message);}}}/>}
       {genModal&&<GenSuccessModal modal={genModal} onClose={()=>setGenModal(null)} apiFetch={apiFetch} T={T}/>}
       <div style={{minHeight:"100vh",background:T.cream,display:"flex",flexDirection:"column"}}>
