@@ -780,83 +780,157 @@ async function getGoogleToken(scope) {
 
 app.post('/api/sheets/upload-production', auth, async (req, res) => {
   try {
-    const { sheetId, tabName, rows } = req.body;
-    // rows: array of arrays (the production sheet data as values)
+    const { sheetId, tabName, formattedRows, colWidths } = req.body;
+    // formattedRows: array of arrays of cell objects {v, bold, bg, align, t} matching genProduction format
     const SPREADSHEET_ID = sheetId || process.env.PRODUCTION_SHEET_ID;
-    if (!SPREADSHEET_ID) return res.status(400).json({ error: 'No spreadsheet ID configured. Set PRODUCTION_SHEET_ID env var or pass sheetId.' });
-    if (!rows || !rows.length) return res.status(400).json({ error: 'No rows provided' });
+    if (!SPREADSHEET_ID) return res.status(400).json({ error: 'No spreadsheet ID configured.' });
+    if (!formattedRows || !formattedRows.length) return res.status(400).json({ error: 'No rows provided' });
 
     const token = await getGoogleToken('https://www.googleapis.com/auth/spreadsheets');
 
-    // 1. Add a new sheet tab with the given name
-    const addSheetResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
+    // Helper: convert AARRGGBB hex to Sheets API RGB object (0-1 range)
+    function hexToRgb(hex) {
+      if (!hex || hex.length < 6) return null;
+      const h = hex.replace(/^FF/, ''); // strip alpha
+      const r = parseInt(h.substring(0,2),16)/255;
+      const g = parseInt(h.substring(2,4),16)/255;
+      const b = parseInt(h.substring(4,6),16)/255;
+      return { red: r, green: g, blue: b };
+    }
+
+    // ── STEP 1: Get existing sheets metadata ──────────────────────
+    const metaResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const meta = await metaResp.json();
+    const existing = (meta.sheets||[]).find(s => s.properties.title === tabName);
+
+    let newSheetId;
+
+    if (existing) {
+      // Tab already exists — clear it and reuse
+      newSheetId = existing.properties.sheetId;
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: [{ updateCells: { range: { sheetId: newSheetId }, fields: 'userEnteredValue,userEnteredFormat' } }] })
+      });
+    } else {
+      // ── STEP 2: Create new tab ───────────────────────────────────
+      const numCols = Math.max(30, (formattedRows[0]||[]).length + 2);
+      const addResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requests: [{
+            addSheet: {
+              properties: {
+                title: tabName,
+                gridProperties: { rowCount: Math.max(formattedRows.length + 20, 200), columnCount: numCols }
+              }
+            }
+          }]
+        })
+      });
+      const addData = await addResp.json();
+      if (addData.error) throw new Error('Failed to add sheet: ' + addData.error.message);
+      newSheetId = addData.replies[0].addSheet.properties.sheetId;
+    }
+
+    // ── STEP 3: Move tab to position 3 (4th tab, after the 3 fixed tabs) ──
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests: [{ moveSheet: { sheetId: newSheetId, newIndex: 3 } }] })
+    });
+
+    // ── STEP 4: Write formatted cell data ────────────────────────
+    // Build rowData array for the Sheets API
+    const rowData = formattedRows.map(row => ({
+      values: row.map(cell => {
+        if (!cell || cell === null || (typeof cell === 'object' && cell.v === undefined && cell.t === undefined)) {
+          return { userEnteredValue: {}, userEnteredFormat: {} };
+        }
+        const c = typeof cell === 'object' ? cell : { v: cell };
+        const val = c.v;
+
+        // Cell value
+        let userEnteredValue = {};
+        if (val === undefined || val === null || val === '') {
+          userEnteredValue = {};
+        } else if (c.t === 'n' || typeof val === 'number') {
+          userEnteredValue = { numberValue: val };
+        } else if (c.t === 'f') {
+          userEnteredValue = { formulaValue: val };
+        } else {
+          userEnteredValue = { stringValue: String(val) };
+        }
+
+        // Cell format
+        const fmt = {};
+        if (c.bold) fmt.textFormat = { bold: true, fontSize: 10 };
+        if (c.bg) {
+          const rgb = hexToRgb(c.bg);
+          if (rgb) {
+            // Dark backgrounds (navy) get white text
+            const isDark = (rgb.red + rgb.green + rgb.blue) < 1.0;
+            fmt.backgroundColor = rgb;
+            if (isDark) fmt.textFormat = { ...(fmt.textFormat||{}), bold: true, foregroundColor: { red:1, green:1, blue:1 }, fontSize: 10 };
+          }
+        }
+        if (c.align) fmt.horizontalAlignment = c.align.toUpperCase();
+        // Add borders for all cells
+        fmt.borders = {
+          top:    { style:'SOLID', width:1, color:{red:.8,green:.8,blue:.8} },
+          bottom: { style:'SOLID', width:1, color:{red:.8,green:.8,blue:.8} },
+          left:   { style:'SOLID', width:1, color:{red:.8,green:.8,blue:.8} },
+          right:  { style:'SOLID', width:1, color:{red:.8,green:.8,blue:.8} },
+        };
+        if (!fmt.textFormat) fmt.textFormat = { fontSize: 10 };
+
+        return { userEnteredValue, userEnteredFormat: fmt };
+      })
+    }));
+
+    const updateResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         requests: [{
-          addSheet: {
-            properties: {
-              title: tabName,
-              gridProperties: { rowCount: Math.max(rows.length + 10, 100), columnCount: Math.max(30, (rows[0]||[]).length + 5) }
-            }
+          updateCells: {
+            start: { sheetId: newSheetId, rowIndex: 0, columnIndex: 0 },
+            rows: rowData,
+            fields: 'userEnteredValue,userEnteredFormat'
           }
         }]
       })
     });
-    const addSheetData = await addSheetResp.json();
-    if (addSheetData.error) {
-      // Tab may already exist — try to clear it instead
-      if (addSheetData.error.message && addSheetData.error.message.includes('already exists')) {
-        // Find the sheetId for existing tab and clear it
-        const metaResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const meta = await metaResp.json();
-        const existing = (meta.sheets||[]).find(s => s.properties.title === tabName);
-        if (existing) {
-          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ requests: [{ updateSheetProperties: { properties: { sheetId: existing.properties.sheetId, title: tabName }, fields: 'title' } }] })
-          });
-        }
-      } else {
-        throw new Error('Failed to add sheet: ' + addSheetData.error.message);
+    const updateData = await updateResp.json();
+    if (updateData.error) throw new Error('Failed to write formatted data: ' + updateData.error.message);
+
+    // ── STEP 5: Set column widths ────────────────────────────────
+    const widths = colWidths || [18,14,13,28,...Array(20).fill(16),13,10];
+    const colRequests = widths.map((w, i) => ({
+      updateDimensionProperties: {
+        range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: i, endIndex: i+1 },
+        properties: { pixelSize: Math.round(w * 7.5) }, // approx Excel column width to pixels
+        fields: 'pixelSize'
       }
-    }
-
-    // 2. Write data to the new tab
-    const writeResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(tabName)}!A1?valueInputOption=USER_ENTERED`, {
-      method: 'PUT',
+    }));
+    // Freeze first row
+    colRequests.push({
+      updateSheetProperties: {
+        properties: { sheetId: newSheetId, gridProperties: { frozenRowCount: 1 } },
+        fields: 'gridProperties.frozenRowCount'
+      }
+    });
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
+      method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: rows })
+      body: JSON.stringify({ requests: colRequests })
     });
-    const writeData = await writeResp.json();
-    if (writeData.error) throw new Error('Failed to write data: ' + writeData.error.message);
 
-    // 3. Move the new tab to the front (position 0) — after HACCP/Roster/Daily Ops but before older dates
-    // Get current sheet list to find the new sheet's ID
-    const metaResp2 = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const meta2 = await metaResp2.json();
-    const newSheet = (meta2.sheets||[]).find(s => s.properties.title === tabName);
-
-    // Find the first non-template tab (after HACCP Templates, Roster, Daily Ops Sheet)
-    const FIXED_TABS = ['HACCP Templates', 'Roster', 'Daily Ops Sheet'];
-    const insertIndex = FIXED_TABS.length; // position 3 (0-indexed)
-
-    if (newSheet) {
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          requests: [{ moveSheet: { sheetId: newSheet.properties.sheetId, newIndex: insertIndex } }]
-        })
-      });
-    }
-
-    res.json({ success: true, tabName, rowsWritten: writeData.updatedRows || rows.length });
+    res.json({ success: true, tabName, rowsWritten: formattedRows.length });
   } catch(e) {
     console.error('Sheets upload error:', e.message);
     res.status(500).json({ error: e.message });

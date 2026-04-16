@@ -599,27 +599,38 @@ function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd,lock
   React.useEffect(function(){setNameVal(runName||"");},[runName]);
   return(
     <div onDragOver={function(e){e.preventDefault();}} onDrop={function(e){e.preventDefault();try{var d=JSON.parse(e.dataTransfer.getData("text/plain"));onDrop(d.on,d.p,panel);}catch(err){}}}
-      style={{background:dov?"#f0fdf4":"#fff",border:"1.5px solid "+(dov?color:color+"33"),borderRadius:12,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-      <div style={{padding:"8px 12px",background:color+"12",borderBottom:"1px solid "+color+"22",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-        <span style={{fontSize:13}}>{icon}</span>
-        {isRun&&editing?(
-          <input autoFocus value={nameVal} onChange={function(e){setNameVal(e.target.value);}}
-            onBlur={function(){onRename(nameVal);setEditing(false);}}
-            onKeyDown={function(e){if(e.key==="Enter"||e.key==="Escape"){onRename(nameVal);setEditing(false);}}}
-            style={{flex:1,fontSize:11,fontWeight:800,color:"#1E3A5F",border:"1px solid "+color,borderRadius:4,padding:"1px 6px",outline:"none",minWidth:0}}/>
-        ):(
-          <span style={{fontSize:11,fontWeight:800,color:"#1E3A5F",cursor:isRun?"pointer":"default",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
-            onClick={isRun?function(){setEditing(true);}:undefined}
-            title={isRun?"Click to rename":undefined}>
-            {title}
-            {isRun&&<span style={{fontSize:8,color:color,marginLeft:4,opacity:.7}}>✎</span>}
-          </span>
+      style={{background:dov?"#f0fdf4":"#fff",border:"1.5px solid "+(dov?color:color+"33"),borderRadius:12,overflow:"hidden",display:"flex",flexDirection:"column",minWidth:0}}>
+      <div style={{padding:"8px 12px",background:color+"12",borderBottom:"1px solid "+color+"22",flexShrink:0}}>
+        {/* Row 1: icon + title/rename + stop count */}
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:isRun?4:0}}>
+          <span style={{fontSize:13,flexShrink:0}}>{icon}</span>
+          {isRun&&editing?(
+            <input autoFocus value={nameVal} onChange={function(e){setNameVal(e.target.value);}}
+              onBlur={function(){onRename(nameVal);setEditing(false);}}
+              onKeyDown={function(e){if(e.key==="Enter"||e.key==="Escape"){onRename(nameVal);setEditing(false);}}}
+              style={{flex:1,fontSize:12,fontWeight:800,color:"#1E3A5F",border:"1.5px solid "+color,borderRadius:5,padding:"3px 8px",outline:"none",minWidth:0,background:"#fff"}}
+              placeholder="Run name…"/>
+          ):(
+            <span style={{fontSize:12,fontWeight:800,color:"#1E3A5F",cursor:isRun?"pointer":"default",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
+              onClick={isRun?function(){setEditing(true);}:undefined}
+              title={isRun?"Click to rename":undefined}>
+              {title}{isRun&&<span style={{fontSize:8,color:color,marginLeft:4,opacity:.6}}>✎</span>}
+            </span>
+          )}
+          <span style={{fontSize:10,color:"#94A3B8",flexShrink:0,fontWeight:600}}>{stops.length} stop{stops.length!==1?"s":""}</span>
+        </div>
+        {/* Row 2: meta + action buttons (runs only) */}
+        {isRun&&(
+          <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+            {meta&&<span style={{fontSize:9,fontWeight:700,color:color,padding:"1px 6px",borderRadius:8,background:color+"18"}}>{meta}</span>}
+            <div style={{flex:1}}/>
+            {mapsUrl&&stops.length>0&&<a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{fontSize:9,padding:"2px 7px",borderRadius:4,border:"1px solid "+color+"55",background:color+"15",color:color,textDecoration:"none",fontWeight:700}}>Maps ↗</a>}
+            {stops.length>0&&onExport&&<button onClick={onExport} style={{fontSize:9,padding:"2px 7px",borderRadius:4,border:"1px solid "+color+"55",background:color+"15",color:color,cursor:"pointer",fontWeight:700}}>XLS ↓</button>}
+            {stops.length>0&&onClear&&<button onClick={function(){if(window.confirm("Clear all stops from this run?"))onClear();}} style={{fontSize:9,padding:"2px 7px",borderRadius:4,border:"1px solid #FECACA",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontWeight:700}}>Clear</button>}
+          </div>
         )}
-        {meta&&<span style={{fontSize:9,fontWeight:700,color:color,padding:"1px 6px",borderRadius:10,flexShrink:0}}>{meta}</span>}
-        {mapsUrl&&stops.length>0&&<a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid "+color+"55",background:color+"15",color:color,textDecoration:"none",fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>Maps ↗</a>}
-        {isRun&&stops.length>0&&onExport&&<button onClick={onExport} style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid "+color+"55",background:color+"15",color:color,cursor:"pointer",fontWeight:700,flexShrink:0}}>XLS ↓</button>}
-        {isRun&&stops.length>0&&onClear&&<button onClick={function(){if(window.confirm("Clear all stops from this run?"))onClear();}} style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid #FECACA",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontWeight:700,flexShrink:0}} title="Clear run">✕</button>}
-        <span style={{fontSize:9,color:"#94A3B8",flexShrink:0}}>{stops.length}</span>
+        {/* CX panel: just meta inline */}
+        {!isRun&&meta&&<div style={{marginTop:3}}><span style={{fontSize:9,fontWeight:700,color:color}}>{meta}</span></div>}
       </div>
       <div style={{flex:1,overflowY:"auto",maxHeight:460}}>
         {stops.length===0
@@ -1126,7 +1137,7 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
           <div style={{fontSize:20,fontWeight:800,color:"#fff"}}>Optimising Routes...</div>
         </div>
       )}
-      <div style={{width:"min(1160px,98vw)",height:"100vh",background:"#F8FAFC",display:"flex",flexDirection:"column",boxShadow:"-8px 0 40px rgba(0,0,0,0.2)"}}>
+      <div style={{width:"min(1400px,99vw)",height:"100vh",background:"#F8FAFC",display:"flex",flexDirection:"column",boxShadow:"-8px 0 40px rgba(0,0,0,0.2)"}}>
         <div style={{background:"linear-gradient(135deg,#032D60,#0D3A72)",padding:"14px 22px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
           <div style={{flex:1}}>
             <div style={{fontSize:16,fontWeight:800,color:"#fff",letterSpacing:1}}>Victorian Delivery Optimiser</div>
@@ -1143,7 +1154,7 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
           <button onClick={function(){runFull();}} disabled={isLoading} style={{marginLeft:"auto",padding:"7px 16px",borderRadius:8,border:"1.5px solid #BFDBFE",background:"#EFF6FF",color:"#2563EB",fontSize:11,fontWeight:700,cursor:"pointer"}}>Re-optimise</button>
         </div>
         <div style={{flex:1,display:"flex",overflow:"hidden"}}>
-          <div style={{width:200,background:"#fff",borderRight:"1px solid #E2E8F0",padding:16,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",flexShrink:0}}>
+          <div style={{width:175,background:"#fff",borderRight:"1px solid #E2E8F0",padding:14,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",flexShrink:0}}>
             <div style={{fontSize:9,fontWeight:700,color:"#94A3B8",letterSpacing:2}}>SETTINGS</div>
             {[["Shift hours",shiftHrs,setShiftHrs,6,14,0.5],["Stop time (min)",stopMins,setStopMins,5,30,5],["Rate ($/hr)",driverRate,setDriverRate,20,80,5],["Fuel ($/day)",fuelCost,setFuelCost,0,200,10]].map(function(item){
               var l=item[0],v=item[1],s=item[2],mn=item[3],mx=item[4],step=item[5];
@@ -1594,24 +1605,16 @@ function GenSuccessModal({modal, onClose, apiFetch, T}){
   async function handleSheetsUpload(){
     setSheetsUploading(true);setSheetsErr(null);
     try{
-      // Extract production sheet from the ZIP
-      const zip=await JSZip.loadAsync(modal.zipBlob);
-      // Find the production sheet file
-      const prodFile=Object.keys(zip.files).find(n=>n.toLowerCase().includes("production"));
-      if(!prodFile)throw new Error("Production sheet not found in ZIP");
+      // Use the formattedRows passed directly from genProduction — no ZIP parsing needed
+      const formattedRows = modal.formattedRows;
+      const colWidths = modal.colWidths;
+      if(!formattedRows||!formattedRows.length) throw new Error("No production sheet data available. Re-generate files and try again.");
 
-      const xlsxBuf=await zip.files[prodFile].async("arraybuffer");
-      // Parse the xlsx to get row data
-      const wb=XLSX.read(xlsxBuf,{type:"array"});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
-
-      // Build tab name from dateLabel e.g. "13 April 2026" -> "13 April 2026"
-      const tabName=modal.dateLabel||new Date().toLocaleDateString("en-AU",{day:"numeric",month:"long",year:"numeric"});
+      const tabName = modal.dateLabel || new Date().toLocaleDateString("en-AU",{day:"numeric",month:"long",year:"numeric"});
 
       const resp=await apiFetch('/api/sheets/upload-production',{
         method:'POST',
-        body:JSON.stringify({sheetId:SHEETS_ID,tabName,rows}),
+        body:JSON.stringify({sheetId:"1pXOchOdEVlJ8cQNS90Yus-F1O1fwk9ONMreNt4_L_g0",tabName,formattedRows,colWidths}),
       });
       const data=await resp.json();
       if(!resp.ok||data.error)throw new Error(data.error||'Upload failed');
@@ -2084,8 +2087,9 @@ function App(){
         }
         const blob=await resp.blob();
         if(type==="all"){
-          // Show success modal with Email / Download options
-          setGenModal({zipBlob:blob,zipName:d+"_Wholesale_State_Files.zip",dateLabel:d});
+          // Show success modal — also generate production sheet data for Sheets upload
+          const prodSheets=genProduction(rows);
+          setGenModal({zipBlob:blob,zipName:d+"_Wholesale_State_Files.zip",dateLabel:d,formattedRows:prodSheets[0].rows,colWidths:prodSheets[0].colWidths});
           setDone(p=>({...p,[type]:true}));
         } else {
           const url=URL.createObjectURL(blob);
@@ -2115,8 +2119,11 @@ function App(){
       else if(type==="all"){
         const{f350,b350,fT,bT,f1}=genPrints(rows);
         const zipName=`${d}_Wholesale_State_Files.zip`;
+        const prodSheets=genProduction(rows);
+        const prodRows=prodSheets[0].rows;
+        const prodColWidths=prodSheets[0].colWidths;
         buildZipBlob([
-          {sheets:genProduction(rows),       name:`${d}_Production_Sheet.xlsx`},
+          {sheets:prodSheets,                name:`${d}_Production_Sheet.xlsx`},
           {sheets:genColdXpress(rows,d),     name:`${d}_COLDXPRESS.xlsx`},
           {sheets:genDK(rows),               name:`${d}_DK_DISTRIBUTIONS.xlsx`},
           {sheets:genCoolCouriers(rows),     name:`${d}_COOLCOURIERS.xlsx`},
@@ -2126,7 +2133,7 @@ function App(){
           {sheets:bT,                        name:`${d}_Tea_Backs.xlsx`},
           {sheets:f1,                        name:`${d}_1L_Fronts.xlsx`},
         ]).then(blob=>{
-          setGenModal({zipBlob:blob,zipName,dateLabel:d});
+          setGenModal({zipBlob:blob,zipName,dateLabel:d,formattedRows:prodRows,colWidths:prodColWidths});
           setDone(p=>({...p,[type]:true}));
           setGen(null);
         }).catch(err=>{ alert("Error: "+err.message); setGen(null); });
