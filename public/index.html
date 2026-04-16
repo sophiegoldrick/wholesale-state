@@ -378,7 +378,10 @@ function parseCSV(text){
 const packSize=p=>p==="TEA"?18:p==="1L"?12:24;
 const cartons=(qty,p)=>Math.ceil((parseInt(qty)||0)/packSize(p));
 const totalC=rows=>rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product).reduce((s,r)=>s+cartons(r.Quantity,r.Product),0);
-const isPallet=r=>(r.CustomerVisibilityGroup&&r.CustomerVisibilityGroup.toUpperCase()!=="REGULAR"&&r.CustomerVisibilityGroup!=="")||(r.CustomerPriceGroup&&r.CustomerPriceGroup.toUpperCase()!=="REGULAR"&&r.CustomerPriceGroup!=="")||(r.Customergroup&&r.Customergroup.toUpperCase()!=="REGULAR"&&r.Customergroup!=="");
+// SPECIAL customers: Customergroup !== "REGULAR" (and non-empty)
+// Rules: in production sheet (own section), NOT in prints, NOT in manifests
+const isSpecial=r=>(r.CustomerVisibilityGroup&&r.CustomerVisibilityGroup.toUpperCase()!=="REGULAR"&&r.CustomerVisibilityGroup!=="")||(r.CustomerPriceGroup&&r.CustomerPriceGroup.toUpperCase()!=="REGULAR"&&r.CustomerPriceGroup!=="")||(r.Customergroup&&r.Customergroup.toUpperCase()!=="REGULAR"&&r.Customergroup!=="");
+const isPallet=isSpecial; // alias — same customers, kept for compatibility
 
 /* ── ANALYTICS ── */
 function buildAnalytics(rows,prevIds=[]){
@@ -447,14 +450,15 @@ const E=null;
 
 /* ── SHEET GENERATORS ── */
 function genProduction(rows,palletOnly=false){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(palletOnly?isPallet(r):!isPallet(r)));
-  function section(sr,title,lc,prod){
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(palletOnly?isPallet(r):(!isPallet(r)&&!isSpecial(r))));
+  const sf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&isSpecial(r));
+  function section(sr,title,lc,prod,customerGroupLabel){
     if(!sr.length)return[];
     const skus=[...new Set(sr.map(r=>r.Name))].sort();
     const couriers=[...new Set(sr.map(r=>r.Courier))].sort();
     const out=[];
     out.push([{v:title,bold:true,bg:"FF1F4E79",align:"left"},E,E,E,E,E,E,E,E,E,E,E,E,E,{v:"LABELS",bold:true},{v:lc,bold:true}]);
-    out.push([E,E,E,E,E,E,E,E,E,E,E,E,E,E,{v:"CUSTOMERGROUP",bold:true},{v:palletOnly?"PALLET":"REGULAR",bold:true}]);
+    out.push([E,E,E,E,E,E,E,E,E,E,E,E,E,E,{v:"CUSTOMERGROUP",bold:true},{v:customerGroupLabel||"REGULAR",bold:true}]);
     out.push([{v:"Labelling Date:",bold:true},E,E,{v:"Staff Working:",bold:true},E,E,E,E,E,E,E,E,E,E,{v:"PRODUCT",bold:true},{v:prod==="TEA"?"TEAS":prod,bold:true}]);
     out.push([E]);out.push([E,E,E,{v:"Batch Number:",bold:true}]);
     out.push([H("Courier"),H("OrderNumber"),H("CustomerId"),H("Customer"),...skus.map(s=>H(s)),H("Grand Total"),H("Cartons")]);
@@ -477,7 +481,18 @@ function genProduction(rows,palletOnly=false){
     return out;
   }
   const today=new Date().toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
-  return[{name:palletOnly?"Pallet Production":"Production",rows:[[{v:today.toUpperCase(),bold:true,bg:"FF1F4E79",align:"left"}],[E],...section(nf.filter(r=>r.Product==="350"),"350ml Orders","WHITE","350"),...section(nf.filter(r=>r.Product==="TEA"),"Tea Orders","CLEAR","TEA"),...section(nf.filter(r=>r.Product==="1L"),"1L Orders","WHITE","1L")],colWidths:[18,14,13,28,...Array(20).fill(16),13,10]}];
+  const regularSections=[
+    ...section(nf.filter(r=>r.Product==="350"),"350ml Orders","WHITE","350"),
+    ...section(nf.filter(r=>r.Product==="TEA"),"Tea Orders","CLEAR","TEA"),
+    ...section(nf.filter(r=>r.Product==="1L"),"1L Orders","WHITE","1L"),
+  ];
+  // SPECIAL section — only included in main production sheet (not pallet sheet)
+  const specialSections=!palletOnly&&sf.length?[
+    ...section(sf.filter(r=>r.Product==="350"),"350ml Orders — SPECIAL","WHITE","350","SPECIAL"),
+    ...section(sf.filter(r=>r.Product==="TEA"),"Tea Orders — SPECIAL","CLEAR","TEA","SPECIAL"),
+    ...section(sf.filter(r=>r.Product==="1L"),"1L Orders — SPECIAL","WHITE","1L","SPECIAL"),
+  ]:[];
+  return[{name:palletOnly?"Pallet Production":"Production",rows:[[{v:today.toUpperCase(),bold:true,bg:"FF1F4E79",align:"left"}],[E],...regularSections,...specialSections],colWidths:[18,14,13,28,...Array(20).fill(16),13,10]}];
 }
 function genColdXpress(rows,date){
   const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="COLDXPRESS"&&!isPallet(r));
@@ -526,8 +541,37 @@ function buildPrint(rows,isBacks,sheetName,customerIdOverride){
   }
   return[{name:sheetName,rows:[hdrRow,...dr],colWidths:[8,60,18,10,28,14,8,22,8,16,16,12,16]},{name:"File address",rows:[[{v:"Place your file address here",bold:true},Cv("G:\\My Drive\\Print Files")]],colWidths:[30,40]}];
 }
+function genSpecialPrints(rows){
+  // Group SPECIAL rows by customer, generate a fronts+backs pair per customer
+  const sf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&isSpecial(r));
+  if(!sf.length)return[];
+  // Get unique customers
+  const customers=[...new Map(sf.map(r=>[r.CustomerId,{id:r.CustomerId,name:r.Customer}])).values()];
+  const results=[];
+  customers.forEach(function(c){
+    const customerRows=sf.filter(r=>r.CustomerId===c.id);
+    // Only generate for products that exist for this customer
+    const r350=customerRows.filter(r=>r.Product==="350");
+    const rTea=customerRows.filter(r=>r.Product==="TEA");
+    const r1L=customerRows.filter(r=>r.Product==="1L");
+    // Safe customer name for filename: strip special chars
+    const safeName=c.name.replace(/[^a-zA-Z0-9\s]/g,"").replace(/\s+/g,"_").slice(0,30);
+    if(r350.length){
+      results.push({sheets:buildPrint(r350,false,"FRONTS"),name:safeName+"_350ml_Fronts.xlsx"});
+      results.push({sheets:buildPrint(r350,true,"BACKS"),name:safeName+"_350ml_Backs.xlsx"});
+    }
+    if(rTea.length){
+      results.push({sheets:buildPrint(rTea,false,"FRONTS"),name:safeName+"_Tea_Fronts.xlsx"});
+      results.push({sheets:buildPrint(rTea,true,"BACKS"),name:safeName+"_Tea_Backs.xlsx"});
+    }
+    if(r1L.length){
+      results.push({sheets:buildPrint(r1L,false,"FRONTS","1L"),name:safeName+"_1L_Fronts.xlsx"});
+    }
+  });
+  return results;
+}
 function genPrints(rows,palletOnly=false){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(palletOnly?isPallet(r):!isPallet(r)));
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(palletOnly?isPallet(r):(!isPallet(r)&&!isSpecial(r))));
   const sort=pr=>[...pr].sort((a,b)=>{for(const k of['Courier','Customer','OrderNumber','SKU']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
   const r350=sort(nf.filter(r=>r.Product==="350")),rT=sort(nf.filter(r=>r.Product==="TEA")),r1=sort(nf.filter(r=>r.Product==="1L"));
   return{f350:buildPrint(r350,false,"FRONTS"),b350:buildPrint(r350,true,"BACKS"),fT:buildPrint(rT,false,"FRONTS"),bT:buildPrint(rT,true,"BACKS"),f1:buildPrint(r1,false,"FRONTS","1L")};
@@ -1610,7 +1654,7 @@ function GenSuccessModal({modal, onClose, apiFetch, T}){
       const colWidths = modal.colWidths;
       if(!formattedRows||!formattedRows.length) throw new Error("No production sheet data available. Re-generate files and try again.");
 
-      const tabName = modal.dateLabel || new Date().toLocaleDateString("en-AU",{day:"numeric",month:"long",year:"numeric"});
+      const tabName = modal.tabName || modal.dateLabel || new Date().toLocaleDateString("en-AU",{day:"numeric",month:"long",year:"numeric"});
 
       const resp=await apiFetch('/api/sheets/upload-production',{
         method:'POST',
@@ -2089,7 +2133,8 @@ function App(){
         if(type==="all"){
           // Show success modal — also generate production sheet data for Sheets upload
           const prodSheets=genProduction(rows);
-          setGenModal({zipBlob:blob,zipName:d+"_Wholesale_State_Files.zip",dateLabel:d,formattedRows:prodSheets[0].rows,colWidths:prodSheets[0].colWidths});
+          const sheetTabName=(csvOrderDate||"").replace(/^([A-Za-z]{3})[A-Za-z]*\s+/,"$1 ").trim()||d.replace(/-/g," ");
+          setGenModal({zipBlob:blob,zipName:d+"_Wholesale_State_Files.zip",dateLabel:d,tabName:sheetTabName,formattedRows:prodSheets[0].rows,colWidths:prodSheets[0].colWidths});
           setDone(p=>({...p,[type]:true}));
         } else {
           const url=URL.createObjectURL(blob);
@@ -2118,6 +2163,7 @@ function App(){
       else if(type==="pallet-prints"){const{f350,b350,fT,bT,f1}=genPrints(rows,true);dlZip([[f350,`${d}_Pallet_350ml_Fronts.xlsx`],[b350,`${d}_Pallet_350ml_Backs.xlsx`],[fT,`${d}_Pallet_Tea_Fronts.xlsx`],[bT,`${d}_Pallet_Tea_Backs.xlsx`],[f1,`${d}_Pallet_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Pallet_Print_Files.zip`);}
       else if(type==="all"){
         const{f350,b350,fT,bT,f1}=genPrints(rows);
+        const specialFiles=genSpecialPrints(rows);
         const zipName=`${d}_Wholesale_State_Files.zip`;
         const prodSheets=genProduction(rows);
         const prodRows=prodSheets[0].rows;
@@ -2132,8 +2178,10 @@ function App(){
           {sheets:fT,                        name:`${d}_Tea_Fronts.xlsx`},
           {sheets:bT,                        name:`${d}_Tea_Backs.xlsx`},
           {sheets:f1,                        name:`${d}_1L_Fronts.xlsx`},
+          ...specialFiles,
         ]).then(blob=>{
-          setGenModal({zipBlob:blob,zipName,dateLabel:d,formattedRows:prodRows,colWidths:prodColWidths});
+          const sheetTabName2=(csvOrderDate||"").replace(/^([A-Za-z]{3})[A-Za-z]*\s+/,"$1 ").trim()||d.replace(/-/g," ");
+          setGenModal({zipBlob:blob,zipName,dateLabel:d,tabName:sheetTabName2,formattedRows:prodRows,colWidths:prodColWidths});
           setDone(p=>({...p,[type]:true}));
           setGen(null);
         }).catch(err=>{ alert("Error: "+err.message); setGen(null); });
@@ -2416,7 +2464,7 @@ function App(){
                   })}
                   <button className="btn-full" onClick={()=>triggerGen("all","All Files")} disabled={!!gen||!csvName}
                     style={{marginTop:4,opacity:csvName?1:0.7}}>
-                    {gen==="all"?<><span className="spin">⟳</span>Generating…</>:<>⚡ GENERATE ALL FILES — 9 downloads</>}
+                    {gen==="all"?<><span className="spin">⟳</span>Generating…</>:<>⚡ GENERATE ALL FILES{csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&isSpecial(r)).length>0?" + SPECIAL PRINTS":""}</>}
                   </button>
                   {!csvName&&(
                     <div style={{textAlign:"center",padding:"10px 0 2px",fontFamily:"'Montserrat',sans-serif",fontSize:11,color:T.inkL,letterSpacing:.3}}>
