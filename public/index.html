@@ -1125,21 +1125,70 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
     var locked=stops.filter(function(s){return lockedStops&&lockedStops[s.orderNumber];});
     var free=stops.filter(function(s){return !lockedStops||!lockedStops[s.orderNumber];});
     if(!free.length)return stops;
-    // NN sort on free stops using their lat/lon
-    function hv2(a,b){
-      if(!a.lat||!b.lat)return 999;
-      var R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180;
-      var x=Math.pow(Math.sin(dLat/2),2)+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.pow(Math.sin(dLon/2),2);
+
+    // Get best available coordinates for a stop: geocoded lat/lon, then postcode centroid
+    function coords(s){
+      if(s.lat&&s.lon)return[s.lat,s.lon];
+      var pc=String(s.postcode||"").trim();
+      var c=PC_COORDS[pc];
+      if(c)return c;
+      return null;
+    }
+    var depot=[-38.0024,145.1587]; // Keysborough
+
+    // Haversine distance in km
+    function hav(a,b){
+      if(!a||!b)return 999;
+      var R=6371,dLat=(b[0]-a[0])*Math.PI/180,dLon=(b[1]-a[1])*Math.PI/180;
+      var x=Math.pow(Math.sin(dLat/2),2)+Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.pow(Math.sin(dLon/2),2);
       return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
     }
-    var depot={lat:-38.0024,lon:145.1587};
-    var lastStop=locked.length?locked[locked.length-1]:depot;
-    var rem=free.slice(),sorted=[];
-    while(rem.length){
-      var bi=0,bd2=Infinity;
-      for(var i=0;i<rem.length;i++){var d=hv2(lastStop,rem[i]);if(d<bd2){bd2=d;bi=i;}}
-      sorted.push(rem[bi]);lastStop=rem[bi];rem.splice(bi,1);
+
+    // Total route distance: depot → stops → depot
+    function routeDist(arr){
+      var total=hav(depot,coords(arr[0]));
+      for(var i=1;i<arr.length;i++)total+=hav(coords(arr[i-1]),coords(arr[i]));
+      total+=hav(coords(arr[arr.length-1]),depot);
+      return total;
     }
+
+    // Step 1: Nearest-neighbour from depot
+    var rem=free.slice(),sorted=[],last=depot;
+    while(rem.length){
+      var bi=0,bd=Infinity;
+      for(var i=0;i<rem.length;i++){
+        var d=hav(last,coords(rem[i]));
+        if(d<bd){bd=d;bi=i;}
+      }
+      sorted.push(rem[bi]);
+      last=coords(rem[bi])||depot;
+      rem.splice(bi,1);
+    }
+
+    // Step 2: 2-opt improvement — repeatedly reverse segments that reduce total distance
+    var improved=true;
+    var iter=0;
+    while(improved&&iter<200){
+      improved=false;iter++;
+      for(var i=0;i<sorted.length-1;i++){
+        for(var j=i+1;j<sorted.length;j++){
+          // Current edges: (i-1→i) and (j→j+1), reversed: (i-1→j) and (i→j+1)
+          var a=i===0?depot:coords(sorted[i-1]);
+          var b=coords(sorted[i]);
+          var c=coords(sorted[j]);
+          var d2=j===sorted.length-1?depot:coords(sorted[j+1]);
+          var before=hav(a,b)+hav(c,d2);
+          var after=hav(a,c)+hav(b,d2);
+          if(after<before-0.001){
+            // Reverse the segment from i to j
+            var seg=sorted.slice(i,j+1).reverse();
+            sorted=sorted.slice(0,i).concat(seg).concat(sorted.slice(j+1));
+            improved=true;
+          }
+        }
+      }
+    }
+
     return locked.concat(sorted);
   }
 
