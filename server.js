@@ -780,22 +780,12 @@ async function getGoogleToken(scope) {
 
 app.post('/api/sheets/upload-production', auth, async (req, res) => {
   try {
-    const { sheetId, tabName, formattedRows, colWidths } = req.body;
+    const { sheetId, tabName, rows } = req.body;
     const SPREADSHEET_ID = sheetId || process.env.PRODUCTION_SHEET_ID;
     if (!SPREADSHEET_ID) return res.status(400).json({ error: 'No spreadsheet ID configured.' });
-    if (!formattedRows || !formattedRows.length) return res.status(400).json({ error: 'No rows provided' });
+    if (!rows || !rows.length) return res.status(400).json({ error: 'No rows provided' });
 
     const token = await getGoogleToken('https://www.googleapis.com/auth/spreadsheets');
-
-    function hexToRgb(hex) {
-      if (!hex || hex.length < 6) return null;
-      const h = hex.slice(-6); // take last 6 chars (handles AARRGGBB)
-      return {
-        red:   parseInt(h.substring(0,2),16)/255,
-        green: parseInt(h.substring(2,4),16)/255,
-        blue:  parseInt(h.substring(4,6),16)/255,
-      };
-    }
 
     // ── STEP 1: Get metadata, create or clear tab ─────────────────
     const metaResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties`, {
@@ -806,137 +796,112 @@ app.post('/api/sheets/upload-production', auth, async (req, res) => {
 
     const existing = (meta.sheets||[]).find(s => s.properties.title === tabName);
     let newSheetId;
+    const numCols = Math.max(20, (rows[0]||[]).length + 2);
 
     if (existing) {
       newSheetId = existing.properties.sheetId;
-      // Clear existing content
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ requests: [{ updateCells: { range: { sheetId: newSheetId }, fields: 'userEnteredValue,userEnteredFormat' } }] })
       });
     } else {
-      const numCols = Math.max(30, (formattedRows[0]||[]).length + 2);
       const addResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName, gridProperties: { rowCount: Math.max(formattedRows.length + 20, 200), columnCount: numCols } } } }] })
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName, gridProperties: { rowCount: Math.max(rows.length + 20, 200), columnCount: numCols } } } }] })
       });
       const addData = await addResp.json();
       if (addData.error) throw new Error('Failed to add sheet: ' + addData.error.message);
       newSheetId = addData.replies[0].addSheet.properties.sheetId;
     }
 
-    // ── STEP 2: Move tab to position 3 (4th tab) ──────────────────
+    // ── STEP 2: Move tab to position 3 (4th tab, right after the 3 fixed tabs) ──
+    // Re-fetch after creation to get accurate count
+    const metaMove = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties.sheetId`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const metaMoveData = await metaMove.json();
+    const totalSheets = (metaMoveData.sheets||[]).length;
+    const insertAt = Math.min(3, Math.max(0, totalSheets - 1));
     await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requests: [{ moveSheet: { sheetId: newSheetId, newIndex: 3 } }] })
+      body: JSON.stringify({ requests: [{ moveSheet: { sheetId: newSheetId, newIndex: insertAt } }] })
     });
 
-    // ── STEP 3: Write plain values (fast, small payload) ─────────
-    const plainValues = formattedRows.map(row =>
-      row.map(cell => {
-        if (!cell || typeof cell !== 'object' || cell.v === undefined) return '';
-        return cell.v === null ? '' : cell.v;
-      })
-    );
+    // ── STEP 3: Write plain values ────────────────────────────────
+    // rows is a 2D array of plain values (strings/numbers) from SheetJS
+    const cleanValues = rows.map(row => (row||[]).map(cell => {
+      if (cell === null || cell === undefined) return '';
+      return cell;
+    }));
     const writeResp = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(tabName)}!A1?valueInputOption=USER_ENTERED`,
-      { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: plainValues }) }
+      { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: cleanValues }) }
     );
     const writeData = await writeResp.json();
     if (writeData.error) throw new Error('Failed to write values: ' + writeData.error.message);
 
-    // ── STEP 4: Apply formatting — only rows that have bg or bold ─
-    // Collect formatting requests in batches to stay under API limits
-    const fmtRequests = [];
+    // ── STEP 4: Apply bold to rows that have bold content ────────
+    // Bold rows: row 1 (date), any row where col A or col D value is
+    // a section header, "Courier", "Total", "Grand Total", "Labelling Date:",
+    // "Batch Number:", "Discrepancies:" etc.
+    const BOLD_TRIGGERS = new Set(['Courier','Total','Grand Total','Labelling Date:','Batch Number:','Discrepancies:','Discrepancies Sent to Sophie?']);
+    const boldRequests = [];
 
-    formattedRows.forEach((row, rowIdx) => {
-      row.forEach((cell, colIdx) => {
-        if (!cell || typeof cell !== 'object') return;
-        if (!cell.bold && !cell.bg && !cell.align) return; // skip unformatted cells
+    rows.forEach((row, rowIdx) => {
+      const firstCell = String(row[0]||'').trim();
+      const fourthCell = String(row[3]||'').trim();
+      const isBold = rowIdx === 0 ||  // date row
+        BOLD_TRIGGERS.has(firstCell) ||
+        BOLD_TRIGGERS.has(fourthCell) ||
+        (firstCell.toLowerCase().includes('order') && firstCell === firstCell.toUpperCase() && firstCell.length > 0) || // section headers like "350ML ORDERS"
+        (firstCell.toLowerCase().includes('order')) || // "350ML ORDERS", "TEA ORDERS"
+        (row.some(c => String(c||'').trim() === 'LABELS')) || // labels row
+        (row.some(c => String(c||'').trim() === 'CUSTOMERGROUP')) ||
+        (row.some(c => String(c||'').trim() === 'PRODUCT'));
 
-        const fmt = {};
-        const textFmt = {};
-
-        if (cell.bg) {
-          const rgb = hexToRgb(cell.bg);
-          if (rgb) {
-            fmt.backgroundColor = rgb;
-            // Dark backgrounds get white text
-            if ((rgb.red + rgb.green + rgb.blue) < 1.2) {
-              textFmt.foregroundColor = { red:1, green:1, blue:1 };
-            }
-          }
-        }
-        if (cell.bold) textFmt.bold = true;
-        if (Object.keys(textFmt).length) fmt.textFormat = textFmt;
-        if (cell.align) fmt.horizontalAlignment = cell.align.toUpperCase() === 'CENTER' ? 'CENTER' : cell.align.toUpperCase() === 'RIGHT' ? 'RIGHT' : 'LEFT';
-
-        fmtRequests.push({
+      if (isBold) {
+        boldRequests.push({
           repeatCell: {
-            range: { sheetId: newSheetId, startRowIndex: rowIdx, endRowIndex: rowIdx+1, startColumnIndex: colIdx, endColumnIndex: colIdx+1 },
-            cell: { userEnteredFormat: fmt },
-            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
+            range: { sheetId: newSheetId, startRowIndex: rowIdx, endRowIndex: rowIdx+1, startColumnIndex: 0, endColumnIndex: numCols },
+            cell: { userEnteredFormat: { textFormat: { bold: true, fontFamily: 'Calibri', fontSize: 11 } } },
+            fields: 'userEnteredFormat.textFormat'
           }
         });
-      });
+      }
     });
 
-    // Add column widths
-    const widths = colWidths || [18,14,13,28,...Array(20).fill(16),13,10];
-    widths.forEach((w, i) => {
-      fmtRequests.push({
-        updateDimensionProperties: {
-          range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: i, endIndex: i+1 },
-          properties: { pixelSize: Math.round(w * 7) },
-          fields: 'pixelSize'
+    // Default font for whole sheet first, then bold on top
+    const fmtRequests = [
+      {
+        repeatCell: {
+          range: { sheetId: newSheetId },
+          cell: { userEnteredFormat: { textFormat: { fontFamily: 'Calibri', fontSize: 11 } } },
+          fields: 'userEnteredFormat.textFormat'
         }
-      });
-    });
+      },
+      ...boldRequests
+    ];
 
-    // Add thin borders to the entire data range
-    fmtRequests.push({
-      updateBorders: {
-        range: { sheetId: newSheetId, startRowIndex: 0, endRowIndex: formattedRows.length, startColumnIndex: 0, endColumnIndex: (formattedRows[0]||[]).length },
-        innerHorizontal: { style: 'SOLID', width: 1, color: { red:.8, green:.8, blue:.8 } },
-        innerVertical:   { style: 'SOLID', width: 1, color: { red:.8, green:.8, blue:.8 } },
-        top:    { style: 'SOLID', width: 1, color: { red:.8, green:.8, blue:.8 } },
-        bottom: { style: 'SOLID', width: 1, color: { red:.8, green:.8, blue:.8 } },
-        left:   { style: 'SOLID', width: 1, color: { red:.8, green:.8, blue:.8 } },
-        right:  { style: 'SOLID', width: 1, color: { red:.8, green:.8, blue:.8 } },
-      }
-    });
-
-    // Set default font for the whole sheet
-    fmtRequests.push({
-      repeatCell: {
-        range: { sheetId: newSheetId },
-        cell: { userEnteredFormat: { textFormat: { fontFamily: 'Calibri', fontSize: 10 } } },
-        fields: 'userEnteredFormat.textFormat(fontFamily,fontSize)'
-      }
-    });
-
-    // Send formatting in chunks of 500 requests to avoid API limits
-    const CHUNK = 500;
-    for (let i = 0; i < fmtRequests.length; i += CHUNK) {
-      const chunk = fmtRequests.slice(i, i + CHUNK);
+    if (fmtRequests.length) {
       const fmtResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requests: chunk })
+        body: JSON.stringify({ requests: fmtRequests })
       });
       const fmtData = await fmtResp.json();
       if (fmtData.error) throw new Error('Formatting failed: ' + fmtData.error.message);
     }
 
-    res.json({ success: true, tabName, rowsWritten: formattedRows.length });
+    res.json({ success: true, tabName, rowsWritten: writeData.updatedRows || rows.length });
   } catch(e) {
     console.error('Sheets upload error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
+
 
 // ── Request Labels — send email via Graph ───────────────────────
 app.post('/api/request-labels', auth, async (req, res) => {
