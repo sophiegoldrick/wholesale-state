@@ -383,9 +383,10 @@ function parseCSV(text){
     return obj;
   });
 }
-const packSize=p=>p==="TEA"?18:p==="1L"?12:24;
+const prodType=sku=>{const s=(sku||"").toUpperCase();if(!s||s==="FREIGHT")return"";if(s.includes("TEA"))return"TEA";if(s.endsWith("1L"))return"1L";if(s.endsWith("350"))return"350";return"350";};
+const packSize=sku=>sku==="TEA"?18:sku==="1L"?12:24;
 const cartons=(qty,p)=>Math.ceil((parseInt(qty)||0)/packSize(p));
-const totalC=rows=>rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product).reduce((s,r)=>s+cartons(r.Quantity,r.Product),0);
+const totalC=rows=>rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU).reduce((s,r)=>s+cartons(r.Quantity,prodType(r.SKU)),0);
 // SPECIAL customers: Customergroup !== "REGULAR" (and non-empty)
 // Rules: in production sheet (own section), NOT in prints, NOT in manifests
 const isSpecial=r=>(r.CustomerVisibilityGroup&&r.CustomerVisibilityGroup.toUpperCase()!=="REGULAR"&&r.CustomerVisibilityGroup!=="")||(r.CustomerPriceGroup&&r.CustomerPriceGroup.toUpperCase()!=="REGULAR"&&r.CustomerPriceGroup!=="")||(r.Customergroup&&r.Customergroup.toUpperCase()!=="REGULAR"&&r.Customergroup!=="");
@@ -393,7 +394,7 @@ const isPallet=isSpecial; // alias — same customers, kept for compatibility
 
 /* ── ANALYTICS ── */
 function buildAnalytics(rows,prevIds=[]){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Name&&r.Product);
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Name&&r.SKU);
   const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
   const totalRevenue=nf.reduce((s,r)=>s+(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0),0);
   const totalBottles=nf.reduce((s,r)=>s+(parseInt(r.Quantity)||0),0);
@@ -431,7 +432,7 @@ function buildAnalytics(rows,prevIds=[]){
 function validate(rows){
   const issues=[];
   const nf=rows.filter(r=>r.SKU!=="FREIGHT");
-  const pr=nf.filter(r=>r.Product);
+  const pr=nf.filter(r=>r.SKU);
   const allONs=[...new Set(nf.map(r=>r.OrderNumber).filter(Boolean))];
   const withProd=[...new Set(pr.map(r=>r.OrderNumber))];
   allONs.forEach(on=>{if(!withProd.includes(on))issues.push({severity:"error",message:`Order ${on} has no product lines.`,rule:"MISSING_PRODUCTS"})});
@@ -458,8 +459,8 @@ const E=null;
 
 /* ── SHEET GENERATORS ── */
 function genProduction(rows,palletOnly=false){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(palletOnly?isPallet(r):(!isPallet(r)&&!isSpecial(r))));
-  const sf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&isSpecial(r));
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&(palletOnly?isPallet(r):(!isPallet(r)&&!isSpecial(r))));
+  const sf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&isSpecial(r));
   function section(sr,title,lc,prod,customerGroupLabel){
     if(!sr.length)return[];
     const skus=[...new Set(sr.map(r=>r.Name))].sort();
@@ -490,20 +491,20 @@ function genProduction(rows,palletOnly=false){
   }
   const today=new Date().toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   const regularSections=[
-    ...section(nf.filter(r=>r.Product==="350"),"350ml Orders","WHITE","350"),
-    ...section(nf.filter(r=>r.Product==="TEA"),"Tea Orders","CLEAR","TEA"),
-    ...section(nf.filter(r=>r.Product==="1L"),"1L Orders","WHITE","1L"),
+    ...section(nf.filter(r=>prodType(r.SKU)==="350"),"350ml Orders","WHITE","350"),
+    ...section(nf.filter(r=>prodType(r.SKU)==="TEA"),"Tea Orders","CLEAR","TEA"),
+    ...section(nf.filter(r=>prodType(r.SKU)==="1L"),"1L Orders","WHITE","1L"),
   ];
   // SPECIAL section — only included in main production sheet (not pallet sheet)
   const specialSections=!palletOnly&&sf.length?[
-    ...section(sf.filter(r=>r.Product==="350"),"350ml Orders — SPECIAL","WHITE","350","SPECIAL"),
-    ...section(sf.filter(r=>r.Product==="TEA"),"Tea Orders — SPECIAL","CLEAR","TEA","SPECIAL"),
-    ...section(sf.filter(r=>r.Product==="1L"),"1L Orders — SPECIAL","WHITE","1L","SPECIAL"),
+    ...section(sf.filter(r=>prodType(r.SKU)==="350"),"350ml Orders — SPECIAL","WHITE","350","SPECIAL"),
+    ...section(sf.filter(r=>prodType(r.SKU)==="TEA"),"Tea Orders — SPECIAL","CLEAR","TEA","SPECIAL"),
+    ...section(sf.filter(r=>prodType(r.SKU)==="1L"),"1L Orders — SPECIAL","WHITE","1L","SPECIAL"),
   ]:[];
   return[{name:palletOnly?"Pallet Production":"Production",rows:[[{v:today.toUpperCase(),bold:true,bg:"FF1F4E79",align:"left"}],[E],...regularSections,...specialSections],colWidths:[18,14,13,28,...Array(20).fill(16),13,10]}];
 }
 function genColdXpress(rows,date){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="COLDXPRESS"&&!isPallet(r));
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&r.Courier==="COLDXPRESS"&&!isPallet(r));
   if(!nf.length)return[{name:"Sheet1",rows:[[Cv("No COLDXPRESS orders")]]}];
   const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
   const sr=[];
@@ -517,7 +518,7 @@ function genColdXpress(rows,date){
   return[{name:"Sheet1",rows:sr,colWidths:[14,16,10,28,28,18,8,10,10,10,13,12,10,10,20]}];
 }
 function genDK(rows){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="DKDISTRIBUTION"&&!isPallet(r));
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&r.Courier==="DKDISTRIBUTION"&&!isPallet(r));
   if(!nf.length)return[{name:"jobs",rows:[[Cv("No DK orders")]]}];
   const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
   const sr=[["Order ID","Date","Order Type","Notes","Address 1","Address 2","Address 3","Postal Code","City","State","Country","Location","Last Name","Phone","Delivery Instructions","Email","GROUP","Volume"].map(h=>H(h,true,"FFBDD7EE","center"))];
@@ -525,7 +526,7 @@ function genDK(rows){
   return[{name:"jobs",rows:sr,colWidths:[14,12,12,28,28,20,12,12,18,8,10,12,14,14,28,20,8,10]}];
 }
 function genCoolCouriers(rows){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&r.Courier==="COOLCOURIERS"&&!isPallet(r));
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&r.Courier==="COOLCOURIERS"&&!isPallet(r));
   if(!nf.length)return[{name:"Manifest",rows:[[Cv("No COOLCOURIERS orders")]]}];
   const om={};nf.forEach(r=>{if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r)});
   const sr=[];
@@ -533,7 +534,7 @@ function genCoolCouriers(rows){
   sr.push([{v:"Wholesale State Cold Pressed Juices",bold:true}]);
   sr.push([{v:"Manifest Date:",bold:true},{v:new Date().toLocaleDateString("en-AU")}]);sr.push([E]);
   sr.push(["Order No.","Customer Name","Address","Suburb","State","Postcode","Special Instructions","Items","Total Cartons","Delivery Date"].map(h=>H(h,true,"FFD6E4F0","center")));
-  Object.entries(om).forEach(([on,or_])=>{const r=or_[0];const items=or_.filter(x=>x.SKU!=="FREIGHT"&&x.Product).map(x=>`${x.Name} x${x.Quantity}`).join(", ");sr.push([Cv(on),Cv(r.Customer),Cv(r.CustomerAddress1+(r.CustomerAddress2?", "+r.CustomerAddress2:"")),Cv(r.CustomerSuburb),Cv(r.CustomerState),N(parseInt(r.Postcode)),Cv(r.Notes||""),Cv(items),N(totalC(or_)),Cv(r.DeliveryDate||r.DueDate||"")])});
+  Object.entries(om).forEach(([on,or_])=>{const r=or_[0];const items=or_.filter(x=>x.SKU!=="FREIGHT"&&x.SKU).map(x=>`${x.Name} x${x.Quantity}`).join(", ");sr.push([Cv(on),Cv(r.Customer),Cv(r.CustomerAddress1+(r.CustomerAddress2?", "+r.CustomerAddress2:"")),Cv(r.CustomerSuburb),Cv(r.CustomerState),N(parseInt(r.Postcode)),Cv(r.Notes||""),Cv(items),N(totalC(or_)),Cv(r.DeliveryDate||r.DueDate||"")])});
   return[{name:"Manifest",rows:sr,colWidths:[14,28,30,18,8,10,24,50,14,14]}];
 }
 function buildPrint(rows,isBacks,sheetName,customerIdOverride){
@@ -551,7 +552,7 @@ function buildPrint(rows,isBacks,sheetName,customerIdOverride){
 }
 function genSpecialPrints(rows){
   // Group SPECIAL rows by customer, generate a fronts+backs pair per customer
-  const sf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&isSpecial(r));
+  const sf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&isSpecial(r));
   if(!sf.length)return[];
   // Get unique customers
   const customers=[...new Map(sf.map(r=>[r.CustomerId,{id:r.CustomerId,name:r.Customer}])).values()];
@@ -559,9 +560,9 @@ function genSpecialPrints(rows){
   customers.forEach(function(c){
     const customerRows=sf.filter(r=>r.CustomerId===c.id);
     // Only generate for products that exist for this customer
-    const r350=customerRows.filter(r=>r.Product==="350");
-    const rTea=customerRows.filter(r=>r.Product==="TEA");
-    const r1L=customerRows.filter(r=>r.Product==="1L");
+    const r350=customerRows.filter(r=>prodType(r.SKU)==="350");
+    const rTea=customerRows.filter(r=>prodType(r.SKU)==="TEA");
+    const r1L=customerRows.filter(r=>prodType(r.SKU)==="1L");
     // Safe customer name for filename: strip special chars
     const safeName=c.name.replace(/[^a-zA-Z0-9\s]/g,"").replace(/\s+/g,"_").slice(0,30);
     if(r350.length){
@@ -579,9 +580,9 @@ function genSpecialPrints(rows){
   return results;
 }
 function genPrints(rows,palletOnly=false){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(palletOnly?isPallet(r):(!isPallet(r)&&!isSpecial(r))));
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&(palletOnly?isPallet(r):(!isPallet(r)&&!isSpecial(r))));
   const sort=pr=>[...pr].sort((a,b)=>{for(const k of['Courier','Customer','OrderNumber','SKU']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
-  const r350=sort(nf.filter(r=>r.Product==="350")),rT=sort(nf.filter(r=>r.Product==="TEA")),r1=sort(nf.filter(r=>r.Product==="1L"));
+  const r350=sort(nf.filter(r=>prodType(r.SKU)==="350")),rT=sort(nf.filter(r=>prodType(r.SKU)==="TEA")),r1=sort(nf.filter(r=>prodType(r.SKU)==="1L"));
   return{f350:buildPrint(r350,false,"FRONTS"),b350:buildPrint(r350,true,"BACKS"),fT:buildPrint(rT,false,"FRONTS"),bT:buildPrint(rT,true,"BACKS"),f1:buildPrint(r1,false,"FRONTS","1L")};
 }
 
@@ -695,7 +696,7 @@ function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd,lock
 }
 function genRunManifest(rows,alloc,runKey,runLabel,date){
   var am={};(alloc||[]).filter(function(a){return a.run===runKey;}).forEach(function(a){am[a.orderNumber]=a;});
-  var nf=rows.filter(function(r){return r.SKU!=="FREIGHT"&&r.Product&&am[r.OrderNumber];});
+  var nf=rows.filter(function(r){return r.SKU!=="FREIGHT"&&r.SKU&&am[r.OrderNumber];});
   if(!nf.length)return[{name:"Manifest",rows:[[Cv("No orders for "+runLabel)]]}];
   var om={};nf.forEach(function(r){if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r);});
   var sr=[];
@@ -706,7 +707,7 @@ function genRunManifest(rows,alloc,runKey,runLabel,date){
   sr.push(["Stop","ETA","Order No.","Customer Name","Address","Suburb","State","Postcode","Special Instructions","Items","Total Cartons","Delivery Date"].map(function(h){return H(h,true,"FFD6E4F0","center");}));
   Object.entries(om).sort(function(a,b){return ((am[a[0]]&&am[a[0]].stopNum)||99)-((am[b[0]]&&am[b[0]].stopNum)||99);}).forEach(function(entry,i){
     var on=entry[0],or_=entry[1],r=or_[0],a=am[on]||{};
-    var items=or_.filter(function(x){return x.SKU!=="FREIGHT"&&x.Product;}).map(function(x){return x.Name+" x"+x.Quantity;}).join(", ");
+    var items=or_.filter(function(x){return x.SKU!=="FREIGHT"&&x.SKU;}).map(function(x){return x.Name+" x"+x.Quantity;}).join(", ");
     sr.push([N(i+1),Cv(a.etaStr||""),Cv(on),Cv(r.Customer),Cv(r.CustomerAddress1+(r.CustomerAddress2?", "+r.CustomerAddress2:"")),Cv(r.CustomerSuburb),Cv(r.CustomerState),N(parseInt(r.Postcode)),Cv(r.Notes||""),Cv(items),N(totalC(or_)),Cv(r.DeliveryDate||r.DueDate||"")]);
   });
   return[{name:"Manifest",rows:sr,colWidths:[6,10,14,28,30,18,8,10,24,50,14,14]}];
@@ -724,7 +725,7 @@ function genRunExport(stops,runLabel,date){
 // Keep genWsDriver as alias for backwards compat
 function genWsDriver(rows,alloc,date){return genRunManifest(rows,alloc,"RUN1","Run 1",date);}
 function VicTile({csvRows,driverAllocation,onOpen,T}){
-  var vn=[...new Set(csvRows.filter(function(r){return r.SKU!=="FREIGHT"&&r.Product&&(r.CustomerState||"").toUpperCase()==="VIC"&&!isPallet(r);}).map(function(r){return r.OrderNumber;}))].length;
+  var vn=[...new Set(csvRows.filter(function(r){return r.SKU!=="FREIGHT"&&r.SKU&&(r.CustomerState||"").toUpperCase()==="VIC"&&!isPallet(r);}).map(function(r){return r.OrderNumber;}))].length;
   if(!vn)return null;
   var has=driverAllocation&&driverAllocation.length>0;
   var skipped=driverAllocation!==null&&driverAllocation!==undefined&&driverAllocation.length===0;
@@ -784,7 +785,7 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
 
   function buildRawStops(){
     var om={};
-    csvRows.filter(function(r){return r.SKU!=="FREIGHT"&&r.Product&&(r.CustomerState||"").toUpperCase()==="VIC"&&!isPallet(r);})
+    csvRows.filter(function(r){return r.SKU!=="FREIGHT"&&r.SKU&&(r.CustomerState||"").toUpperCase()==="VIC"&&!isPallet(r);})
       .forEach(function(r){if(!om[r.OrderNumber])om[r.OrderNumber]=[];om[r.OrderNumber].push(r);});
     return Object.entries(om).map(function(entry,idx){
       var on=entry[0],or_=entry[1],r=or_[0];
@@ -1657,16 +1658,12 @@ function GenSuccessModal({modal, onClose, apiFetch, T}){
   async function handleSheetsUpload(){
     setSheetsUploading(true);setSheetsErr(null);
     try{
-      // Use the formattedRows passed directly from genProduction — no ZIP parsing needed
-      const formattedRows = modal.formattedRows;
-      const colWidths = modal.colWidths;
-      if(!formattedRows||!formattedRows.length) throw new Error("No production sheet data available. Re-generate files and try again.");
-
-      const tabName = modal.tabName || modal.dateLabel || new Date().toLocaleDateString("en-AU",{day:"numeric",month:"long",year:"numeric"});
-
+      const rows=modal.sheetRows;
+      if(!rows||!rows.length) throw new Error("No production sheet data. Re-generate files and try again.");
+      const tabName=modal.tabName||modal.dateLabel||new Date().toLocaleDateString("en-AU",{day:"numeric",month:"long",year:"numeric"});
       const resp=await apiFetch('/api/sheets/upload-production',{
         method:'POST',
-        body:JSON.stringify({sheetId:"1pXOchOdEVlJ8cQNS90Yus-F1O1fwk9ONMreNt4_L_g0",tabName,formattedRows,colWidths}),
+        body:JSON.stringify({sheetId:"1pXOchOdEVlJ8cQNS90Yus-F1O1fwk9ONMreNt4_L_g0",tabName,rows}),
       });
       const data=await resp.json();
       if(!resp.ok||data.error)throw new Error(data.error||'Upload failed');
@@ -2001,7 +1998,7 @@ function App(){
       // Build SKU totals for drawdown queue
       (async()=>{
         const skuTotals={};
-        rows.filter(r=>r.SKU!=="FREIGHT"&&r.Product).forEach(r=>{
+        rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU).forEach(r=>{
           const qty=parseInt(r.Quantity)||0;
           if(qty>0) skuTotals[r.Name]=(skuTotals[r.Name]||0)+qty;
         });
@@ -2037,9 +2034,9 @@ function App(){
           if(!r0||!db[r0.CustomerId])return;
           const c=db[r0.CustomerId];
           c.totalOrders=(c.totalOrders||0)+1;
-          const rev=rows.filter(r=>r.OrderNumber===o.orderNumber&&r.SKU!=="FREIGHT"&&r.Product).reduce((s,r)=>s+(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0),0);
+          const rev=rows.filter(r=>r.OrderNumber===o.orderNumber&&r.SKU!=="FREIGHT"&&r.SKU).reduce((s,r)=>s+(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0),0);
           c.totalRevenue=(c.totalRevenue||0)+rev;
-          const btl=rows.filter(r=>r.OrderNumber===o.orderNumber&&r.SKU!=="FREIGHT"&&r.Product).reduce((s,r)=>s+(parseInt(r.Quantity)||0),0);
+          const btl=rows.filter(r=>r.OrderNumber===o.orderNumber&&r.SKU!=="FREIGHT"&&r.SKU).reduce((s,r)=>s+(parseInt(r.Quantity)||0),0);
           c.totalBottles=(c.totalBottles||0)+btl;
           c.lastOrderDate=new Date().toLocaleDateString("en-AU");
           c.lastOrderNum=o.orderNumber;
@@ -2139,10 +2136,20 @@ function App(){
         }
         const blob=await resp.blob();
         if(type==="all"){
-          // Show success modal — also generate production sheet data for Sheets upload
-          const prodSheets=genProduction(rows);
+          // Extract the actual production sheet from the ZIP for Sheets upload
+          let sheetRows=null;
+          try{
+            const zipData=await JSZip.loadAsync(blob);
+            const prodKey=Object.keys(zipData.files).find(n=>n.toLowerCase().includes('production'));
+            if(prodKey){
+              const xlBuf=await zipData.files[prodKey].async('arraybuffer');
+              const wb2=XLSX.read(xlBuf,{type:'array',raw:true});
+              const ws2=wb2.Sheets[wb2.SheetNames[0]];
+              sheetRows=XLSX.utils.sheet_to_json(ws2,{header:1,defval:'',raw:true});
+            }
+          }catch(e){console.warn('ZIP extract failed:',e.message);}
           const sheetTabName=(csvOrderDate||"").replace(/^([A-Za-z]{3})[A-Za-z]*\s+/,"$1 ").trim()||d.replace(/-/g," ");
-          setGenModal({zipBlob:blob,zipName:d+"_Wholesale_State_Files.zip",dateLabel:d,tabName:sheetTabName,formattedRows:prodSheets[0].rows,colWidths:prodSheets[0].colWidths});
+          setGenModal({zipBlob:blob,zipName:d+"_Wholesale_State_Files.zip",dateLabel:d,tabName:sheetTabName,sheetRows});
           setDone(p=>({...p,[type]:true}));
         } else {
           const url=URL.createObjectURL(blob);
@@ -2174,8 +2181,6 @@ function App(){
         const specialFiles=genSpecialPrints(rows);
         const zipName=`${d}_Wholesale_State_Files.zip`;
         const prodSheets=genProduction(rows);
-        const prodRows=prodSheets[0].rows;
-        const prodColWidths=prodSheets[0].colWidths;
         buildZipBlob([
           {sheets:prodSheets,                name:`${d}_Production_Sheet.xlsx`},
           {sheets:genColdXpress(rows,d),     name:`${d}_COLDXPRESS.xlsx`},
@@ -2187,9 +2192,21 @@ function App(){
           {sheets:bT,                        name:`${d}_Tea_Backs.xlsx`},
           {sheets:f1,                        name:`${d}_1L_Fronts.xlsx`},
           ...specialFiles,
-        ]).then(blob=>{
+        ]).then(async function(blob){
           const sheetTabName2=(csvOrderDate||"").replace(/^([A-Za-z]{3})[A-Za-z]*\s+/,"$1 ").trim()||d.replace(/-/g," ");
-          setGenModal({zipBlob:blob,zipName,dateLabel:d,tabName:sheetTabName2,formattedRows:prodRows,colWidths:prodColWidths});
+          // Extract the just-built production sheet from the ZIP for Sheets upload
+          let sheetRows2=null;
+          try{
+            const zipData=await JSZip.loadAsync(blob);
+            const prodKey=Object.keys(zipData.files).find(n=>n.toLowerCase().includes('production'));
+            if(prodKey){
+              const xlBuf=await zipData.files[prodKey].async('arraybuffer');
+              const wb2=XLSX.read(xlBuf,{type:'array',raw:true});
+              const ws2=wb2.Sheets[wb2.SheetNames[0]];
+              sheetRows2=XLSX.utils.sheet_to_json(ws2,{header:1,defval:'',raw:true});
+            }
+          }catch(e){console.warn('ZIP extract failed:',e.message);}
+          setGenModal({zipBlob:blob,zipName,dateLabel:d,tabName:sheetTabName2,sheetRows:sheetRows2});
           setDone(p=>({...p,[type]:true}));
           setGen(null);
         }).catch(err=>{ alert("Error: "+err.message); setGen(null); });
@@ -2224,7 +2241,7 @@ function App(){
   };
 
   const vStats=csvRows.length?(()=>{
-    const nf=csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.Product);
+    const nf=csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU);
     const v=validate(csvRows);
     return{orders:[...new Set(nf.map(r=>r.OrderNumber))].length,bottles:nf.reduce((s,r)=>s+(parseInt(r.Quantity)||0),0),revenue:nf.reduce((s,r)=>s+(parseFloat(r.UnitPrice)||0)*(parseInt(r.Quantity)||0),0),pallets:new Set(nf.filter(r=>isPallet(r)).map(r=>r.OrderNumber)).size,errors:v.errors.length,warnings:v.warnings.length+driveWarnings.length};
   })():null;
@@ -2439,7 +2456,7 @@ function App(){
                   <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:2,marginBottom:2,marginTop:8}}>GENERATE FILES</div>
                   {BTNS.map(btn=>{
                     const isCX = btn.id==="coldxpress";
-                    const hasVic = isCX && csvName && csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&(r.CustomerState||"").toUpperCase()==="VIC"&&!isPallet(r)).length>0;
+                    const hasVic = isCX && csvName && csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&(r.CustomerState||"").toUpperCase()==="VIC"&&!isPallet(r)).length>0;
                     const hasAlloc = driverAllocation&&driverAllocation.length>0;
                     const skipped = driverAllocation!==null&&driverAllocation!==undefined&&driverAllocation.length===0;
                     return(
@@ -2472,7 +2489,7 @@ function App(){
                   })}
                   <button className="btn-full" onClick={()=>triggerGen("all","All Files")} disabled={!!gen||!csvName}
                     style={{marginTop:4,opacity:csvName?1:0.7}}>
-                    {gen==="all"?<><span className="spin">⟳</span>Generating…</>:<>⚡ GENERATE ALL FILES{csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.Product&&isSpecial(r)).length>0?" + SPECIAL PRINTS":""}</>}
+                    {gen==="all"?<><span className="spin">⟳</span>Generating…</>:<>⚡ GENERATE ALL FILES{csvRows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&isSpecial(r)).length>0?" + SPECIAL PRINTS":""}</>}
                   </button>
                   {!csvName&&(
                     <div style={{textAlign:"center",padding:"10px 0 2px",fontFamily:"'Montserrat',sans-serif",fontSize:11,color:T.inkL,letterSpacing:.3}}>
