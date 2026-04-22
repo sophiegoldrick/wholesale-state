@@ -1482,6 +1482,32 @@ if GEN_TYPE in ('prints','all'):
     if rtea: make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
     if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
 
+    # ── SPECIAL customers: one fronts+backs pair per customer ──────
+    import re as _re
+    sr_special = [r for r in sr if (r.get('Customergroup','') or '').strip().upper() == 'SPECIAL']
+    if sr_special:
+        special_by_cid = {}
+        for r in sr_special:
+            cid = r.get('CustomerId','unknown')
+            if cid not in special_by_cid:
+                special_by_cid[cid] = {'name': r.get('Customer','Unknown'), 'rows': []}
+            special_by_cid[cid]['rows'].append(r)
+        for cid, cd in special_by_cid.items():
+            safe = _re.sub(r'[^a-zA-Z0-9 ]', '', cd['name']).strip().replace(' ', '_')[:30]
+            crows = cd['rows']
+            c350 = [r for r in crows if r.get('Product') == '350']
+            ctea = [r for r in crows if r.get('Product') == 'TEA']
+            c1l  = [r for r in crows if r.get('Product') == '1L']
+            if c350:
+                make_print_file('FRONTS', False, c350, f'{OUT_DIR}/{safe}_350ml_Fronts.xlsx')
+                make_print_file('BACKS',  True,  c350, f'{OUT_DIR}/{safe}_350ml_Backs.xlsx')
+            if ctea:
+                make_print_file('FRONTS', False, ctea, f'{OUT_DIR}/{safe}_Tea_Fronts.xlsx')
+                make_print_file('BACKS',  True,  ctea, f'{OUT_DIR}/{safe}_Tea_Backs.xlsx')
+            if c1l:
+                make_print_file('FRONTS', False, c1l,  f'{OUT_DIR}/{safe}_1L_Fronts.xlsx', folder_override='1L')
+        print(f'✅ SPECIAL prints — {len(special_by_cid)} customer(s)', file=sys.stderr)
+
 # ══ ZIP all generated files ══
 zip_path = f'{OUT_DIR}/{DATE_STR}_Wholesale_State_Files.zip'
 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
