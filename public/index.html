@@ -220,10 +220,7 @@ function buildXlsx(sheets){
   const ss=[],sm={};const si=s=>{const k=String(s??'');if(sm[k]==null){sm[k]=ss.length;ss.push(k)}return sm[k]};
   const st=[],stm={};const gs=(b,bg,a,w)=>{const k=`${b}|${bg}|${a}|${w}`;if(stm[k]==null){stm[k]=st.length;st.push({b,bg,a,w})}return stm[k]};
   const sxml=sheets.map(sheet=>{
-    // cols MUST come before sheetData in OOXML spec
-    let cols='';
-    if(sheet.colWidths){cols=`<cols>`;sheet.colWidths.forEach((w,i)=>{if(w)cols+=`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`});cols+=`</cols>`;}
-    let x=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${cols}<sheetData>`;
+    let x=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetData>`;
     (sheet.rows||[]).forEach((row,ri)=>{
       if(!row?.length)return;x+=`<row r="${ri+1}">`;
       row.forEach((cell,ci)=>{
@@ -234,7 +231,9 @@ function buildXlsx(sheets){
         else x+=`<c r="${addr}" s="${s}" t="s"><v>${si(cell.v)}</v></c>`;
       });x+=`</row>`;
     });
-    x+=`</sheetData></worksheet>`;return x;
+    x+=`</sheetData>`;
+    if(sheet.colWidths){x+=`<cols>`;sheet.colWidths.forEach((w,i)=>{if(w)x+=`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`});x+=`</cols>`}
+    x+=`</worksheet>`;return x;
   });
   const sty=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="${st.length+1}"><font><sz val="11"/><name val="Arial"/></font>${st.map(s=>`<font>${s.b?'<b/>':''}<sz val="11"/><name val="Arial"/></font>`).join('')}</fonts><fills count="${st.length+2}"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>${st.map(s=>s.bg?`<fill><patternFill patternType="solid"><fgColor rgb="${s.bg}"/></patternFill></fill>`:`<fill><patternFill patternType="none"/></fill>`).join('')}</fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellXfs count="${st.length+1}"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>${st.map((s,i)=>{const aa=(s.a||s.w)?`<alignment horizontal="${s.a||'general'}" wrapText="${s.w?'1':'0'}"/>`:'';return`<xf numFmtId="0" fontId="${i+1}" fillId="${i+2}" borderId="0" applyFont="1" applyFill="1"${(s.a||s.w)?' applyAlignment="1"':''}>${aa}</xf>`}).join('')}</cellXfs></styleSheet>`;
   const ssX=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${ss.length}" uniqueCount="${ss.length}">${ss.map(s=>`<si><t xml:space="preserve">${ex(s)}</t></si>`).join('')}</sst>`;
@@ -502,7 +501,7 @@ function genProduction(rows,palletOnly=false){
     ...section(sf.filter(r=>prodType(r.SKU)==="TEA"),"Tea Orders — SPECIAL","CLEAR","TEA","SPECIAL"),
     ...section(sf.filter(r=>prodType(r.SKU)==="1L"),"1L Orders — SPECIAL","WHITE","1L","SPECIAL"),
   ]:[];
-  return[{name:palletOnly?"Pallet Production":"Production",rows:[[{v:today.toUpperCase(),bold:true,bg:"FF1F4E79",align:"left"}],[E],...regularSections,...specialSections],colWidths:[18,14,13,28,...Array(20).fill(16),13,10]}];
+  return[{name:palletOnly?"Pallet Production":"Production",rows:[[{v:today.toUpperCase(),bold:true,bg:"FF1F4E79",align:"left"}],[E],...specialSections,...regularSections],colWidths:[18,14,13,28,...Array(20).fill(16),13,10]}];
 }
 function genColdXpress(rows,date){
   const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&r.Courier==="COLDXPRESS"&&!isPallet(r));
@@ -714,54 +713,14 @@ function genRunManifest(rows,alloc,runKey,runLabel,date){
   return[{name:"Manifest",rows:sr,colWidths:[6,10,14,28,30,18,8,10,24,50,14,14]}];
 }
 function genRunExport(stops,runLabel,date){
+  // Simple format: name | location — matches WS-Run1 template
   var sr=[];
-  sr.push([
-    H("Stop#",true,"FF1F4E79","center"),
-    H("ETA",true,"FF1F4E79","center"),
-    H("Customer",true,"FF1F4E79","left"),
-    H("Address",true,"FF1F4E79","left"),
-    H("Suburb",true,"FF1F4E79","left"),
-    H("Postcode",true,"FF1F4E79","center"),
-    H("Cartons",true,"FF1F4E79","center"),
-    H("CX Price",true,"FF1F4E79","center"),
-    H("Driver Cost",true,"FF1F4E79","center"),
-    H("Order #",true,"FF1F4E79","left"),
-  ]);
-  stops.forEach(function(s,i){
-    var ctns=s.cartons||0;
-    var cx=s.ce||0;
-    var driver=s.marginalCost||0;
-    sr.push([
-      {v:s.stopNum||i+1,t:"n"},
-      Cv(s.etaStr||""),
-      Cv(s.name||""),
-      Cv((s.address||"").trim()),
-      Cv((s.suburb||"").trim()),
-      Cv((s.postcode||"").trim()),
-      {v:ctns,t:"n",bg:ctns>0?"FFFFF2CC":""},
-      {v:cx,t:"n",bg:"FFE2EFDA"},
-      {v:driver,t:"n",bg:"FFFCE4D6"},
-      Cv(s.orderNumber||""),
-    ]);
+  sr.push([H("name",true,"FFD6E4F0","left"),H("location",true,"FFD6E4F0","left")]);
+  stops.forEach(function(s){
+    var addr=[s.address,s.suburb,"VIC",s.postcode].filter(Boolean).join(" ");
+    sr.push([Cv(s.name),Cv(addr)]);
   });
-  if(stops.length>0){
-    var totalCtns=stops.reduce(function(sum,s){return sum+(s.cartons||0);},0);
-    var totalCx=parseFloat(stops.reduce(function(sum,s){return sum+(s.ce||0);},0).toFixed(2));
-    var totalDriver=parseFloat(stops.reduce(function(sum,s){return sum+(s.marginalCost||0);},0).toFixed(2));
-    sr.push([
-      {v:"",bold:true,bg:"FFBDD7EE"},
-      {v:"TOTAL",bold:true,bg:"FFBDD7EE"},
-      {v:"",bold:true,bg:"FFBDD7EE"},
-      {v:"",bold:true,bg:"FFBDD7EE"},
-      {v:"",bold:true,bg:"FFBDD7EE"},
-      {v:"",bold:true,bg:"FFBDD7EE"},
-      {v:totalCtns,t:"n",bold:true,bg:"FFBDD7EE"},
-      {v:totalCx,t:"n",bold:true,bg:"FFBDD7EE"},
-      {v:totalDriver,t:"n",bold:true,bg:"FFBDD7EE"},
-      {v:"",bold:true,bg:"FFBDD7EE"},
-    ]);
-  }
-  return[{name:"Run Sheet",rows:sr,colWidths:[7,9,28,36,18,10,9,11,11,14]}];
+  return[{name:"Sheet1",rows:sr,colWidths:[30,50]}];
 }
 // Keep genWsDriver as alias for backwards compat
 function genWsDriver(rows,alloc,date){return genRunManifest(rows,alloc,"RUN1","Run 1",date);}
@@ -1125,70 +1084,21 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
     var locked=stops.filter(function(s){return lockedStops&&lockedStops[s.orderNumber];});
     var free=stops.filter(function(s){return !lockedStops||!lockedStops[s.orderNumber];});
     if(!free.length)return stops;
-
-    // Get best available coordinates for a stop: geocoded lat/lon, then postcode centroid
-    function coords(s){
-      if(s.lat&&s.lon)return[s.lat,s.lon];
-      var pc=String(s.postcode||"").trim();
-      var c=PC_COORDS[pc];
-      if(c)return c;
-      return null;
-    }
-    var depot=[-38.0024,145.1587]; // Keysborough
-
-    // Haversine distance in km
-    function hav(a,b){
-      if(!a||!b)return 999;
-      var R=6371,dLat=(b[0]-a[0])*Math.PI/180,dLon=(b[1]-a[1])*Math.PI/180;
-      var x=Math.pow(Math.sin(dLat/2),2)+Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.pow(Math.sin(dLon/2),2);
+    // NN sort on free stops using their lat/lon
+    function hv2(a,b){
+      if(!a.lat||!b.lat)return 999;
+      var R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180;
+      var x=Math.pow(Math.sin(dLat/2),2)+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.pow(Math.sin(dLon/2),2);
       return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
     }
-
-    // Total route distance: depot → stops → depot
-    function routeDist(arr){
-      var total=hav(depot,coords(arr[0]));
-      for(var i=1;i<arr.length;i++)total+=hav(coords(arr[i-1]),coords(arr[i]));
-      total+=hav(coords(arr[arr.length-1]),depot);
-      return total;
-    }
-
-    // Step 1: Nearest-neighbour from depot
-    var rem=free.slice(),sorted=[],last=depot;
+    var depot={lat:-38.0024,lon:145.1587};
+    var lastStop=locked.length?locked[locked.length-1]:depot;
+    var rem=free.slice(),sorted=[];
     while(rem.length){
-      var bi=0,bd=Infinity;
-      for(var i=0;i<rem.length;i++){
-        var d=hav(last,coords(rem[i]));
-        if(d<bd){bd=d;bi=i;}
-      }
-      sorted.push(rem[bi]);
-      last=coords(rem[bi])||depot;
-      rem.splice(bi,1);
+      var bi=0,bd2=Infinity;
+      for(var i=0;i<rem.length;i++){var d=hv2(lastStop,rem[i]);if(d<bd2){bd2=d;bi=i;}}
+      sorted.push(rem[bi]);lastStop=rem[bi];rem.splice(bi,1);
     }
-
-    // Step 2: 2-opt improvement — repeatedly reverse segments that reduce total distance
-    var improved=true;
-    var iter=0;
-    while(improved&&iter<200){
-      improved=false;iter++;
-      for(var i=0;i<sorted.length-1;i++){
-        for(var j=i+1;j<sorted.length;j++){
-          // Current edges: (i-1→i) and (j→j+1), reversed: (i-1→j) and (i→j+1)
-          var a=i===0?depot:coords(sorted[i-1]);
-          var b=coords(sorted[i]);
-          var c=coords(sorted[j]);
-          var d2=j===sorted.length-1?depot:coords(sorted[j+1]);
-          var before=hav(a,b)+hav(c,d2);
-          var after=hav(a,c)+hav(b,d2);
-          if(after<before-0.001){
-            // Reverse the segment from i to j
-            var seg=sorted.slice(i,j+1).reverse();
-            sorted=sorted.slice(0,i).concat(seg).concat(sorted.slice(j+1));
-            improved=true;
-          }
-        }
-      }
-    }
-
     return locked.concat(sorted);
   }
 
