@@ -220,7 +220,8 @@ function buildXlsx(sheets){
   const ss=[],sm={};const si=s=>{const k=String(s??'');if(sm[k]==null){sm[k]=ss.length;ss.push(k)}return sm[k]};
   const st=[],stm={};const gs=(b,bg,a,w)=>{const k=`${b}|${bg}|${a}|${w}`;if(stm[k]==null){stm[k]=st.length;st.push({b,bg,a,w})}return stm[k]};
   const sxml=sheets.map(sheet=>{
-    let x=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetData>`;
+    let cols='';if(sheet.colWidths){cols='<cols>';sheet.colWidths.forEach((w,i)=>{if(w)cols+=`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`;});cols+='</cols>';}
+    let x=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${cols}<sheetData>`;
     (sheet.rows||[]).forEach((row,ri)=>{
       if(!row?.length)return;x+=`<row r="${ri+1}">`;
       row.forEach((cell,ci)=>{
@@ -231,9 +232,7 @@ function buildXlsx(sheets){
         else x+=`<c r="${addr}" s="${s}" t="s"><v>${si(cell.v)}</v></c>`;
       });x+=`</row>`;
     });
-    x+=`</sheetData>`;
-    if(sheet.colWidths){x+=`<cols>`;sheet.colWidths.forEach((w,i)=>{if(w)x+=`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`});x+=`</cols>`}
-    x+=`</worksheet>`;return x;
+    x+=`</sheetData></worksheet>`;return x;
   });
   const sty=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="${st.length+1}"><font><sz val="11"/><name val="Arial"/></font>${st.map(s=>`<font>${s.b?'<b/>':''}<sz val="11"/><name val="Arial"/></font>`).join('')}</fonts><fills count="${st.length+2}"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>${st.map(s=>s.bg?`<fill><patternFill patternType="solid"><fgColor rgb="${s.bg}"/></patternFill></fill>`:`<fill><patternFill patternType="none"/></fill>`).join('')}</fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellXfs count="${st.length+1}"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>${st.map((s,i)=>{const aa=(s.a||s.w)?`<alignment horizontal="${s.a||'general'}" wrapText="${s.w?'1':'0'}"/>`:'';return`<xf numFmtId="0" fontId="${i+1}" fillId="${i+2}" borderId="0" applyFont="1" applyFill="1"${(s.a||s.w)?' applyAlignment="1"':''}>${aa}</xf>`}).join('')}</cellXfs></styleSheet>`;
   const ssX=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${ss.length}" uniqueCount="${ss.length}">${ss.map(s=>`<si><t xml:space="preserve">${ex(s)}</t></si>`).join('')}</sst>`;
@@ -501,7 +500,7 @@ function genProduction(rows,palletOnly=false){
     ...section(sf.filter(r=>prodType(r.SKU)==="TEA"),"Tea Orders — SPECIAL","CLEAR","TEA","SPECIAL"),
     ...section(sf.filter(r=>prodType(r.SKU)==="1L"),"1L Orders — SPECIAL","WHITE","1L","SPECIAL"),
   ]:[];
-  return[{name:palletOnly?"Pallet Production":"Production",rows:[[{v:today.toUpperCase(),bold:true,bg:"FF1F4E79",align:"left"}],[E],...specialSections,...regularSections],colWidths:[18,14,13,28,...Array(20).fill(16),13,10]}];
+  return[{name:palletOnly?"Pallet Production":"Production",rows:[[{v:today.toUpperCase(),bold:true,bg:"FF1F4E79",align:"left"}],[E],...regularSections,...specialSections],colWidths:[18,14,13,28,...Array(20).fill(16),13,10]}];
 }
 function genColdXpress(rows,date){
   const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&r.Courier==="COLDXPRESS"&&!isPallet(r));
