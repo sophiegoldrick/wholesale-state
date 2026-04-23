@@ -712,14 +712,30 @@ function genRunManifest(rows,alloc,runKey,runLabel,date){
   return[{name:"Manifest",rows:sr,colWidths:[6,10,14,28,30,18,8,10,24,50,14,14]}];
 }
 function genRunExport(stops,runLabel,date){
-  // Simple format: name | location — matches WS-Run1 template
   var sr=[];
-  sr.push([H("name",true,"FFD6E4F0","left"),H("location",true,"FFD6E4F0","left")]);
-  stops.forEach(function(s){
-    var addr=[s.address,s.suburb,"VIC",s.postcode].filter(Boolean).join(" ");
-    sr.push([Cv(s.name),Cv(addr)]);
+  // Header: Customer/Address/Suburb/Order# bold, rest plain — matches WS template exactly
+  sr.push([Cv("Stop#"),Cv("ETA"),{v:"Customer",bold:true},{v:"Address",bold:true},{v:"Suburb",bold:true},Cv("Postcode"),Cv("Cartons"),Cv("CX Price"),Cv("Driver Cost"),{v:"Order #",bold:true}]);
+  stops.forEach(function(s,i){
+    sr.push([
+      {v:s.stopNum||i+1,t:"n",bold:true},
+      Cv(s.etaStr||""),
+      Cv(s.name||""),
+      Cv((s.address||"").trim()),
+      Cv((s.suburb||"").trim()),
+      Cv((s.postcode||"").trim()),
+      {v:s.cartons||0,t:"n"},
+      {v:s.ce||0,t:"n"},
+      {v:s.marginalCost||0,t:"n"},
+      Cv(s.orderNumber||""),
+    ]);
   });
-  return[{name:"Sheet1",rows:sr,colWidths:[30,50]}];
+  if(stops.length>0){
+    var tC=stops.reduce(function(a,s){return a+(s.cartons||0);},0);
+    var tX=parseFloat(stops.reduce(function(a,s){return a+(s.ce||0);},0).toFixed(2));
+    var tD=parseFloat(stops.reduce(function(a,s){return a+(s.marginalCost||0);},0).toFixed(2));
+    sr.push([Cv(""),Cv("TOTAL"),Cv(""),Cv(""),Cv(""),Cv(""),{v:tC,t:"n"},{v:tX,t:"n"},{v:tD,t:"n"},Cv("")]);
+  }
+  return[{name:"Run Sheet",rows:sr,colWidths:[7,9,28,36,18,10,9,11,11,14]}];
 }
 // Keep genWsDriver as alias for backwards compat
 function genWsDriver(rows,alloc,date){return genRunManifest(rows,alloc,"RUN1","Run 1",date);}
