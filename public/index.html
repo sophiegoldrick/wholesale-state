@@ -2111,7 +2111,27 @@ function App(){
       // Store raw CSV text separately keyed by dateKey (small, ~100KB each)
       try{await window.storage.set("ws-csv-"+dk, e.target.result);}catch(err){console.warn("CSV store failed:",err);}
       setDriveWarnings([]);setLabelRequestSent(false);
-      if(IS_DEPLOYED){try{const uc=[...new Map(rows.filter(r=>r.SKU!=="FREIGHT"&&r.CustomerId&&(r.Customergroup||'').toUpperCase()!=='SPECIAL').map(r=>[r.CustomerId,{id:r.CustomerId,name:r.Customer,accountManager:r.AccountManager||""}])).values()];const dr=await apiFetch("/api/drive/check-labels",{method:"POST",body:JSON.stringify({customerIds:uc.map(c=>c.id)})});if(dr.ok){const dd=await dr.json();if(!dd.unconfigured&&dd.missing&&dd.missing.length>0)setDriveWarnings(uc.filter(c=>dd.missing.includes(c.id)));}}catch(e){console.warn("Drive check failed:",e.message);}}
+      if(IS_DEPLOYED){try{
+        // Build per-customer SKU list from the loaded rows
+        const custMap={};
+        rows.filter(r=>r.SKU!=="FREIGHT"&&r.CustomerId&&(r.Customergroup||'').toUpperCase()!=='SPECIAL').forEach(r=>{
+          if(!custMap[r.CustomerId])custMap[r.CustomerId]={id:r.CustomerId,name:r.Customer,accountManager:r.AccountManager||"",skus:new Set()};
+          if(r.SKU)custMap[r.CustomerId].skus.add(r.SKU.toUpperCase());
+        });
+        const uc=Object.values(custMap).map(c=>({...c,skus:[...c.skus]}));
+        const dr=await apiFetch("/api/drive/check-labels",{method:"POST",body:JSON.stringify({customers:uc})});
+        if(dr.ok){
+          const dd=await dr.json();
+          if(!dd.unconfigured){
+            const warnings=[];
+            // Missing folder entirely
+            (dd.missing||[]).forEach(id=>{const c=uc.find(u=>u.id===id);if(c)warnings.push({...c,missingFolder:true,missingSKUs:[]});});
+            // Folder exists but SKUs missing inside
+            (dd.skusMissing||[]).forEach(c=>warnings.push({...c,missingFolder:false}));
+            if(warnings.length>0)setDriveWarnings(warnings);
+          }
+        }
+      }catch(e){console.warn("Drive check failed:",e.message);}}
     };
     r.readAsText(file);
   },[snapshots]);
@@ -2120,7 +2140,7 @@ function App(){
 
   const triggerGen=(type,label)=>{
     const result=validate(rowsRef.current);
-    if(driveWarnings.length>0){const dw=driveWarnings.map(c=>({severity:"warning",message:`Missing label folder in Google Drive: ${c.name} (ID: ${c.id})`,rule:"MISSING_LABEL_FOLDER"}));result.warnings=[...result.warnings,...dw];result.issues=[...result.issues,...dw];}
+    if(driveWarnings.length>0){const dw=driveWarnings.map(c=>({severity:"warning",message:c.missingFolder?`Missing label folder in Drive: ${c.name} (ID: ${c.id})`:`Missing label SKUs for ${c.name}: ${c.missingSKUs.join(", ")}`,rule:"MISSING_LABEL_FOLDER"}));result.warnings=[...result.warnings,...dw];result.issues=[...result.issues,...dw];}
     if(result.errors.length||result.warnings.length)setValModal({result,type,label});
     else doGen(type);
   };
@@ -2376,7 +2396,7 @@ function App(){
                       ))}
                       {(()=>{
                         const RULE_LABELS={"NO_COURIER":"Missing Courier","NO_CUSTOMER":"Missing Customer","NO_ADDRESS":"Missing Address","MISSING_PRODUCTS":"Missing Products","BAD_QTY":"Invalid Quantity","DUPE_ORDER":"Duplicate Order","CSV_DATA":"CSV Data Error","MISSING_LABEL_FOLDER":"Missing Customer Labels","NO_SUBURB":"Missing Suburb","NO_POSTCODE":"Missing Postcode"};
-                        const dwIssues=driveWarnings.map(c=>({severity:"warning",message:`Missing label folder: ${c.name} (ID: ${c.id})`,rule:"MISSING_LABEL_FOLDER"}));
+                        const dwIssues=driveWarnings.map(c=>({severity:"warning",message:c.missingFolder?`Missing label folder: ${c.name} (ID: ${c.id})`:`Missing SKUs for ${c.name}: ${(c.missingSKUs||[]).join(", ")}`,rule:"MISSING_LABEL_FOLDER"}));
                         const allIssues=[...validate(rowsRef.current).issues,...dwIssues];
                         const errors=allIssues.filter(i=>i.severity==="error");
                         const warnings=allIssues.filter(i=>i.severity==="warning");

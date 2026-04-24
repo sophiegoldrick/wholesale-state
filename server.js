@@ -720,16 +720,20 @@ app.post('/api/graph/poll', auth, async (req, res) => {
 // ── Google Drive — label folder check ──────────────────────────
 app.post('/api/drive/check-labels', auth, async (req, res) => {
   try {
-    const { customerIds } = req.body;
-    if (!customerIds || !customerIds.length) return res.json({ missing: [] });
+    // Accept either old format {customerIds:[]} or new format {customers:[{id,name,skus:[]}]}
+    const { customerIds, customers } = req.body;
+    const customerList = customers || (customerIds||[]).map(id => ({ id: String(id), name: String(id), skus: [] }));
+    if (!customerList.length) return res.json({ missing: [], skusMissing: [] });
+
     const folderId = process.env.DRIVE_LABELS_FOLDER_ID;
     const credsRaw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-    if (!folderId || !credsRaw) return res.json({ missing: [], unconfigured: true });
+    if (!folderId || !credsRaw) return res.json({ missing: [], skusMissing: [], unconfigured: true });
+
     const creds = JSON.parse(credsRaw);
     const now = Math.floor(Date.now() / 1000);
+    const { createSign } = await import('crypto');
     const header  = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
     const payload = Buffer.from(JSON.stringify({ iss: creds.client_email, scope: 'https://www.googleapis.com/auth/drive.readonly', aud: 'https://oauth2.googleapis.com/token', exp: now + 3600, iat: now })).toString('base64url');
-    const { createSign } = await import('crypto');
     const sign = createSign('RSA-SHA256');
     sign.update(`${header}.${payload}`);
     const sig = sign.sign(creds.private_key, 'base64url');
@@ -737,18 +741,67 @@ app.post('/api/drive/check-labels', auth, async (req, res) => {
     const tokenResp = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt }) });
     const tokenData = await tokenResp.json();
     if (!tokenData.access_token) throw new Error('Failed to get Drive access token');
-    const existingFolders = new Set();
+
+    const token = tokenData.access_token;
+
+    // ── STEP 1: List all customer folders in the root label folder ──
+    const folderMap = {}; // id (folder name) -> Drive folder id
     let pageToken = '';
     do {
       const q = encodeURIComponent(`'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
-      const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=nextPageToken,files(name)&pageSize=1000${pageToken ? `&pageToken=${pageToken}` : ''}`;
-      const driveResp = await fetch(url, { headers: { Authorization: `Bearer ${tokenData.access_token}` } });
+      const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=nextPageToken,files(id,name)&pageSize=1000${pageToken ? `&pageToken=${pageToken}` : ''}`;
+      const driveResp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       const driveData = await driveResp.json();
-      (driveData.files || []).forEach(f => existingFolders.add(f.name.trim()));
+      (driveData.files || []).forEach(f => { folderMap[f.name.trim()] = f.id; });
       pageToken = driveData.nextPageToken || '';
     } while (pageToken);
-    const missing = customerIds.filter(id => !existingFolders.has(String(id).trim()));
-    res.json({ missing, total: existingFolders.size });
+
+    // ── STEP 2: For each customer, check folder existence AND SKUs ──
+    const missingFolders = [];  // customers with no folder at all
+    const skusMissing = [];     // customers with folder but missing specific SKUs
+
+    await Promise.all(customerList.map(async (c) => {
+      const cid = String(c.id).trim();
+      const driveFolderId = folderMap[cid];
+
+      if (!driveFolderId) {
+        // No folder at all
+        missingFolders.push(cid);
+        return;
+      }
+
+      // Folder exists — check if all ordered SKUs are present as files
+      const orderedSkus = (c.skus || []).map(s => s.toUpperCase().trim());
+      if (!orderedSkus.length) return; // no SKU check needed
+
+      // List files inside this customer's folder
+      const filesInFolder = new Set();
+      let fp = '';
+      do {
+        const fq = encodeURIComponent(`'${driveFolderId}' in parents and trashed = false`);
+        const fu = `https://www.googleapis.com/drive/v3/files?q=${fq}&fields=nextPageToken,files(name)&pageSize=1000${fp ? `&pageToken=${fp}` : ''}`;
+        const fr = await fetch(fu, { headers: { Authorization: `Bearer ${token}` } });
+        const fd = await fr.json();
+        (fd.files || []).forEach(f => {
+          // Strip extension for matching — ANTIOX350.PDF -> ANTIOX350
+          const baseName = f.name.trim().toUpperCase().replace(/\.[^.]+$/, '');
+          filesInFolder.add(baseName);
+        });
+        fp = fd.nextPageToken || '';
+      } while (fp);
+
+      // Find which ordered SKUs are missing from the folder
+      const missing = orderedSkus.filter(sku => !filesInFolder.has(sku));
+      if (missing.length) {
+        skusMissing.push({ id: cid, name: c.name, missingSKUs: missing });
+      }
+    }));
+
+    res.json({
+      missing: missingFolders,          // customer IDs with no folder
+      skusMissing,                       // [{id, name, missingSKUs:[]}]
+      total: Object.keys(folderMap).length
+    });
   } catch (e) {
     console.error('Drive check error:', e.message);
     res.status(500).json({ error: e.message });
