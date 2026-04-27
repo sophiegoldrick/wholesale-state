@@ -1095,6 +1095,7 @@ OUT_DIR  = sys.argv[2] if len(sys.argv) > 2 else '/tmp/gen_out'
 DATE_STR = sys.argv[3] if len(sys.argv) > 3 else datetime.date.today().strftime('%d-%m-%Y')
 GEN_TYPE = sys.argv[4] if len(sys.argv) > 4 else 'all'
 TPL_DIR  = sys.argv[5] if len(sys.argv) > 5 else '/mnt/user-data/uploads'
+SPLIT_INPUT = sys.argv[6] if len(sys.argv) > 6 else 'combined'  # 'split' | 'combined'
 
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -1530,10 +1531,23 @@ if GEN_TYPE in ('prints','all'):
     rtea=[r for r in sr_regular if r.get('Product')=='TEA']
     r1l =[r for r in sr_regular if r.get('Product')=='1L']
 
-    # White label 350ml roll
-    make_print_file('FRONTS', False, r350_white, f'{OUT_DIR}/{DATE_STR}_350ml_Fronts.xlsx')
-    make_print_file('BACKS',  True,  r350_white, f'{OUT_DIR}/{DATE_STR}_350ml_Backs.xlsx')
-    # Clear label 350ml roll — separate file
+    # White label 350ml roll — split by VIC vs Interstate if requested and over threshold
+    total_350_units = sum(int(float(r.get('Quantity',0) or 0)) for r in r350_white)
+    if SPLIT_INPUT == 'split' and total_350_units > 3000:
+        VIC_COURIERS = {'COLDXPRESS','RUN1','RUN2','RUN3'}
+        r350_vic  = [r for r in r350_white if (r.get('Courier','') or '').upper() in VIC_COURIERS]
+        r350_intl = [r for r in r350_white if (r.get('Courier','') or '').upper() not in VIC_COURIERS]
+        if r350_vic:
+            make_print_file('FRONTS', False, r350_vic,  f'{OUT_DIR}/{DATE_STR}_350ml_VIC_Fronts.xlsx')
+            make_print_file('BACKS',  True,  r350_vic,  f'{OUT_DIR}/{DATE_STR}_350ml_VIC_Backs.xlsx')
+        if r350_intl:
+            make_print_file('FRONTS', False, r350_intl, f'{OUT_DIR}/{DATE_STR}_350ml_Interstate_Fronts.xlsx')
+            make_print_file('BACKS',  True,  r350_intl, f'{OUT_DIR}/{DATE_STR}_350ml_Interstate_Backs.xlsx')
+        print(f'✅ 350ml SPLIT — VIC:{len(r350_vic)} Interstate:{len(r350_intl)}', file=sys.stderr)
+    else:
+        make_print_file('FRONTS', False, r350_white, f'{OUT_DIR}/{DATE_STR}_350ml_Fronts.xlsx')
+        make_print_file('BACKS',  True,  r350_white, f'{OUT_DIR}/{DATE_STR}_350ml_Backs.xlsx')
+    # Clear label 350ml roll — always its own separate file
     if r350_clear:
         make_print_file('FRONTS', False, r350_clear, f'{OUT_DIR}/{DATE_STR}_350ml_Clear_Fronts.xlsx')
         make_print_file('BACKS',  True,  r350_clear, f'{OUT_DIR}/{DATE_STR}_350ml_Clear_Backs.xlsx')
@@ -1606,7 +1620,7 @@ function validateCSV(rows) {
 
 app.post('/api/generate', auth, async (req, res) => {
   try {
-    const { csvData, type, dateStr, force } = req.body;
+    const { csvData, type, dateStr, force, splitInput } = req.body;
     if (!csvData) return res.status(400).json({ error: 'No CSV data' });
 
     const tmpDir = '/tmp/ws_gen_' + Date.now();
@@ -1645,7 +1659,7 @@ app.post('/api/generate', auth, async (req, res) => {
     await _writeFile(pyPath, GEN_SCRIPT);
 
     const tplDir = existsSync(TPL_DIR) ? TPL_DIR : join(process.cwd(), 'public');
-    const cmd = `python3 "${pyPath}" "${csvPath}" "${outDir}" "${d}" "${type}" "${tplDir}"`;
+    const cmd = `python3 "${pyPath}" "${csvPath}" "${outDir}" "${d}" "${type}" "${tplDir}" "${splitInput||'combined'}"`;
     const { stdout, stderr } = await execAsync(cmd, { timeout: 60000 });
 
     console.log('Generate log:', stderr.slice(0, 500));

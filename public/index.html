@@ -390,6 +390,7 @@ const totalC=rows=>rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU).reduce((s,r)=>s+cart
 // Rules: in production sheet (own section), NOT in prints, NOT in manifests
 const isSpecial=r=>(r.CustomerVisibilityGroup&&r.CustomerVisibilityGroup.toUpperCase()!=="REGULAR"&&r.CustomerVisibilityGroup!=="")||(r.CustomerPriceGroup&&r.CustomerPriceGroup.toUpperCase()!=="REGULAR"&&r.CustomerPriceGroup!=="")||(r.Customergroup&&r.Customergroup.toUpperCase()!=="REGULAR"&&r.Customergroup!=="");
 const isPallet=isSpecial; // alias — same customers, kept for compatibility
+const isClear=r=>(r.Label||"").trim().toUpperCase()==="CLEAR";
 
 /* ── ANALYTICS ── */
 function buildAnalytics(rows,prevIds=[]){
@@ -490,7 +491,8 @@ function genProduction(rows,palletOnly=false){
   }
   const today=new Date().toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   const regularSections=[
-    ...section(nf.filter(r=>prodType(r.SKU)==="350"),"350ml Orders","WHITE","350"),
+    ...section(nf.filter(r=>prodType(r.SKU)==="350"&&!isClear(r)),"350ml Orders","WHITE","350"),
+    ...section(nf.filter(r=>prodType(r.SKU)==="350"&&isClear(r)),"Clear Label Orders","CLEAR","350"),
     ...section(nf.filter(r=>prodType(r.SKU)==="TEA"),"Tea Orders","CLEAR","TEA"),
     ...section(nf.filter(r=>prodType(r.SKU)==="1L"),"1L Orders","WHITE","1L"),
   ];
@@ -635,7 +637,7 @@ function ZoneBadge({zone}){
   var c={metro:{bg:"#DBEAFE",col:"#1D4ED8",l:"METRO"},cou1:{bg:"#FEF3C7",col:"#B45309",l:"COU1"},cou2:{bg:"#FFEDD5",col:"#C2410C",l:"COU2"},cou4:{bg:"#FCE7F3",col:"#9D174D",l:"COU4"}}[zone]||{bg:"#F1F5F9",col:"#64748B",l:zone||"?"};
   return <span style={{display:"inline-block",padding:"1px 6px",borderRadius:3,background:c.bg,color:c.col,fontSize:8,fontWeight:700}}>{c.l}</span>;
 }
-function StopCard({stop,panel,onMove,nd,locked,onToggleLock}){
+function StopCard({stop,panel,onMove,nd,locked,onToggleLock,onDelete}){
   return(
     <div draggable onDragStart={function(e){e.dataTransfer.setData("text/plain",JSON.stringify({on:stop.orderNumber,p:panel}));}}
       style={{padding:"9px 12px",borderBottom:"1px solid #F1F5F9",display:"flex",gap:8,cursor:"grab",background:locked?"#FFFBEB":"transparent"}}
@@ -668,11 +670,12 @@ function StopCard({stop,panel,onMove,nd,locked,onToggleLock}){
         {panel!=="run1"&&<button onClick={function(){onMove(stop,panel,"run1");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #BBF7D0",background:"#DCFCE7",color:"#15803D",cursor:"pointer",fontWeight:700}}>R1</button>}
         {panel!=="run2"&&<button onClick={function(){onMove(stop,panel,"run2");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #C7D2FE",background:"#E0E7FF",color:"#4338CA",cursor:"pointer",fontWeight:700}}>R2</button>}
         {panel!=="run3"&&<button onClick={function(){onMove(stop,panel,"run3");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #FED7AA",background:"#FFF7ED",color:"#C2410C",cursor:"pointer",fontWeight:700}}>R3</button>}
+        <button onClick={function(){onDelete(stop,panel);}} title="Remove stop" style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #FECACA",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontWeight:700,marginTop:2}}>✕</button>
       </div>
     </div>
   );
 }
-function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd,lockedStops,onToggleLock,mapsUrl,runName,onRename,onClear,onExport}){
+function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd,lockedStops,onToggleLock,mapsUrl,runName,onRename,onClear,onExport,onDelete}){
   var isRun=panel==="run1"||panel==="run2"||panel==="run3";
   var editing_=React.useState(false),setEditing=editing_[1],editing=editing_[0];
   var nameVal_=React.useState(runName||""),setNameVal=nameVal_[1],nameVal=nameVal_[0];
@@ -715,7 +718,7 @@ function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd,lock
       <div style={{flex:1,overflowY:"auto",maxHeight:460}}>
         {stops.length===0
           ?<div style={{padding:"24px",textAlign:"center",color:"#CBD5E1",fontSize:11}}>{isRun?"Stops persist until cleared":"Drop stops here"}</div>
-          :stops.map(function(s){return <StopCard key={s.orderNumber} stop={s} panel={panel} onMove={onMove} nd={nd} locked={!!(lockedStops&&lockedStops[s.orderNumber])} onToggleLock={onToggleLock||function(){}}/>;})
+          :stops.map(function(s){return <StopCard key={s.orderNumber} stop={s} panel={panel} onMove={onMove} nd={nd} locked={!!(lockedStops&&lockedStops[s.orderNumber])} onToggleLock={onToggleLock||function(){}} onDelete={onDelete||function(){}}/>;})
         }
       </div>
     </div>
@@ -997,120 +1000,18 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
 
   function runFull(){
     var raw=buildRawStops();
-    var active=raw.filter(function(s){return !suspIds.has(s.orderNumber);});
-    if(!active.length){setPhase("done");return;}
-
-    // Geocode via postcode centroids (instant, no API needed)
-    var geocoded=active.map(function(s){
+    // All stops from this CSV go to CX — user drags to runs manually
+    // Existing run stops (from localStorage) are preserved
+    var allRunIds=new Set(run1Stops.concat(run2Stops).concat(run3Stops).map(function(s){return s.orderNumber;}));
+    var newCx=raw.filter(function(s){return !allRunIds.has(s.orderNumber);});
+    // Enrich with PC_COORDS so 2-opt works when user drags to a run
+    var enriched=newCx.map(function(s){
       var coord=PC_COORDS[s.postcode];
       if(coord)return Object.assign({},s,{lat:coord[0],lon:coord[1],routable:true});
       return Object.assign({},s,{routable:false});
     });
-    var routable=geocoded.filter(function(s){return s.routable;});
-    var notRoutable=geocoded.filter(function(s){return !s.routable;});
-    if(!routable.length){setCxStops(notRoutable);setDriverAStops([]);setDriverBStops([]);setPhase("done");return;}
-
-    setPhase("geocoding");
-    setGeoProgress(routable.length);
-    setGeoTotal(routable.length);
-
-    var depot={lat:-38.0024,lon:145.1587,postcode:"3173"};
-    var allPoints=[depot].concat(routable);
-    var n=allPoints.length;
-
-    // Calculate departure timestamp for traffic-aware routing
-    var tp=startTime.split(":"),th=parseInt(tp[0]),tm=parseInt(tp[1]);
-    var depDate=new Date();depDate.setHours(th,tm,0,0);
-    if(depDate<new Date())depDate.setDate(depDate.getDate()+1);
-    while(depDate.getDay()===0||depDate.getDay()===6)depDate.setDate(depDate.getDate()+1);
-    var depTime=Math.floor(depDate.getTime()/1000);
-
-    setPhase("optimising");
-
-    // Build n×n matrix, fill with 0s
-    var mat=[];
-    for(var i=0;i<n;i++){mat[i]=new Array(n).fill(0);}
-
-    // Fetch one batch of origins vs destinations
-    function fetchBatch(origins,destinations,oStart,dStart){
-      return fetch("/api/distance-matrix",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          origins:origins.map(function(p){return {lat:p.lat,lon:p.lon};}),
-          destinations:destinations.map(function(p){return {lat:p.lat,lon:p.lon};}),
-          departure_time:depTime
-        })
-      }).then(function(r){return r.json();}).then(function(data){
-        if(!data.rows)throw new Error(data.error||"Distance Matrix failed");
-        data.rows.forEach(function(row,ri){
-          row.elements.forEach(function(el,ci){
-            if(el.status==="OK"){
-              var secs=(el.duration_in_traffic||el.duration).value;
-              mat[oStart+ri][dStart+ci]=secs/60;
-            } else {
-              // Fallback for this leg: haversine estimate
-              var a=origins[ri],b=destinations[ci];
-              var R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180;
-              var x=Math.pow(Math.sin(dLat/2),2)+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.pow(Math.sin(dLon/2),2);
-              mat[oStart+ri][dStart+ci]=R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))*1.35/50*60;
-            }
-          });
-        });
-      });
-    }
-
-    // Batch into chunks of 10 (Google: max 100 elements = 10×10 per call)
-    var BATCH=10,promises=[];
-    for(var oi=0;oi<n;oi+=BATCH){
-      for(var di=0;di<n;di+=BATCH){
-        promises.push(fetchBatch(allPoints.slice(oi,Math.min(oi+BATCH,n)),allPoints.slice(di,Math.min(di+BATCH,n)),oi,di));
-      }
-    }
-
-    function runOptimise(matrix){
-      var startMins=parseFloat(startTime.split(":")[0])*60+parseFloat(startTime.split(":")[1]);
-      var routes=clarkeWright(routable,matrix,shiftHrs*60,stopMins,driverRate,startMins,fuelCost);
-      var profitable=routes.filter(function(r){return r.ceSavings>0;});
-      var newR1=[],newR2=[],newR3=[],used={};
-      // Only fill runs that don't already have stops (preserve existing run allocations)
-      var existingR1Ids=new Set(run1Stops.map(function(s){return s.orderNumber;}));
-      var existingR2Ids=new Set(run2Stops.map(function(s){return s.orderNumber;}));
-      var existingR3Ids=new Set(run3Stops.map(function(s){return s.orderNumber;}));
-      // Mark existing run stops as used
-      run1Stops.forEach(function(s){used[s.orderNumber]=true;});
-      run2Stops.forEach(function(s){used[s.orderNumber]=true;});
-      run3Stops.forEach(function(s){used[s.orderNumber]=true;});
-      // Filter profitable routes to only unallocated stops
-      var freshRoutes=profitable.map(function(r){
-        return Object.assign({},r,{stops:r.stops.filter(function(s){return !used[s.orderNumber];})});
-      }).filter(function(r){return r.stops.length>0;});
-      // Allocate fresh stops to empty run slots
-      var slots=[[run1Stops,newR1,1],[run2Stops,newR2,2],[run3Stops,newR3,3]];
-      var slotIdx=0;
-      freshRoutes.forEach(function(route){
-        while(slotIdx<slots.length&&slots[slotIdx][0].length>0)slotIdx++;
-        if(slotIdx>=slots.length)return;
-        var ann=annotate(route.stops,route.matIdxs,matrix,stopMins,driverRate,startTime);
-        ann.forEach(function(s){used[s.orderNumber]=true;});
-        slots[slotIdx][1].push.apply(slots[slotIdx][1],ann);
-        slotIdx++;
-      });
-      // Only update runs that got new stops
-      if(newR1.length){var u=run1Stops.concat(newR1);setRun1Stops(u);saveRun(1,u);}
-      if(newR2.length){var u=run2Stops.concat(newR2);setRun2Stops(u);saveRun(2,u);}
-      if(newR3.length){var u=run3Stops.concat(newR3);setRun3Stops(u);saveRun(3,u);}
-      var cx=notRoutable.concat(routable.filter(function(s){return !used[s.orderNumber];}));
-      setCxStops(cx);setPhase("done");
-    }
-
-    Promise.all(promises).then(function(){
-      for(var i=0;i<n;i++)mat[i][i]=0;
-      runOptimise(mat);
-    }).catch(function(err){
-      console.error("Distance Matrix error, using calibrated haversine fallback:",err);
-      runOptimise(buildMatrix(allPoints));
-    });
+    setCxStops(enriched);
+    setPhase("done");
   }
 
   React.useEffect(function(){runFull();},[]);
@@ -1178,6 +1079,14 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
     var base="https://www.google.com/maps/dir/17+Kirkham+Rd+W+Keysborough+VIC+3173";
     var waypoints=stops.map(function(s){return encodeURIComponent((s.address||"")+", "+(s.suburb||"")+" VIC "+(s.postcode||""));});
     return base+"/"+waypoints.join("/")+"/17+Kirkham+Rd+W+Keysborough+VIC+3173";
+  }
+
+  function deleteStop(stop,from){
+    var rm=function(lst){return lst.filter(function(s){return s.orderNumber!==stop.orderNumber;});};
+    if(from==="cx")setCxStops(rm(cxStops));
+    else if(from==="run1"){var u=rm(run1Stops);setRun1Stops(u);saveRun(1,u);}
+    else if(from==="run2"){var u=rm(run2Stops);setRun2Stops(u);saveRun(2,u);}
+    else if(from==="run3"){var u=rm(run3Stops);setRun3Stops(u);saveRun(3,u);}
   }
 
   function setRun(n,stops){
@@ -1267,10 +1176,10 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
           </div>
           <div style={{flex:1,padding:16,display:"flex",flexDirection:"column",gap:12,overflowY:"auto",background:"#F8FAFC"}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12,flex:1}}>
-              <DelivPanel title="Cold Xpress" icon="❄️" stops={cxStops} panel="cx" color="#2563EB" onMove={move} onDrop={handleDrop} dov={dragOver==="cx"} nd={3} meta={cxStops.length?"$"+cxStops.reduce(function(s,st){return s+st.ce;},0).toFixed(2):""}/>
-              <DelivPanel title={run1Name||"Run 1"} icon="🚐" stops={run1Stops} panel="run1" color="#059669" onMove={move} onDrop={handleDrop} dov={dragOver==="run1"} nd={3} meta={run1Stops.length?r1_hrs.toFixed(1)+"h | $"+r1_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(run1Stops)} runName={run1Name} onRename={function(v){setRun1Name(v);saveRunName(1,v);}} onClear={function(){setRun1Stops([]);saveRun(1,[]);}} onExport={function(){var d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");dlXlsx(genRunExport(run1Stops,run1Name||"Run 1",d),"WS-"+(run1Name||"Run1").replace(/\s+/g,"")+"-"+d+".xlsx");}}/>
-              <DelivPanel title={run2Name||"Run 2"} icon="🚐" stops={run2Stops} panel="run2" color="#4338CA" onMove={move} onDrop={handleDrop} dov={dragOver==="run2"} nd={3} meta={run2Stops.length?r2_hrs.toFixed(1)+"h | $"+r2_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(run2Stops)} runName={run2Name} onRename={function(v){setRun2Name(v);saveRunName(2,v);}} onClear={function(){setRun2Stops([]);saveRun(2,[]);}} onExport={function(){var d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");dlXlsx(genRunExport(run2Stops,run2Name||"Run 2",d),"WS-"+(run2Name||"Run2").replace(/\s+/g,"")+"-"+d+".xlsx");}}/>
-              <DelivPanel title={run3Name||"Run 3"} icon="🚐" stops={run3Stops} panel="run3" color="#C2410C" onMove={move} onDrop={handleDrop} dov={dragOver==="run3"} nd={3} meta={run3Stops.length?r3_hrs.toFixed(1)+"h | $"+r3_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(run3Stops)} runName={run3Name} onRename={function(v){setRun3Name(v);saveRunName(3,v);}} onClear={function(){setRun3Stops([]);saveRun(3,[]);}} onExport={function(){var d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");dlXlsx(genRunExport(run3Stops,run3Name||"Run 3",d),"WS-"+(run3Name||"Run3").replace(/\s+/g,"")+"-"+d+".xlsx");}}/>
+              <DelivPanel title="Cold Xpress" icon="❄️" stops={cxStops} panel="cx" color="#2563EB" onMove={move} onDrop={handleDrop} dov={dragOver==="cx"} nd={3} meta={cxStops.length?"$"+cxStops.reduce(function(s,st){return s+st.ce;},0).toFixed(2):""} onDelete={deleteStop}/>
+              <DelivPanel title={run1Name||"Run 1"} icon="🚐" stops={run1Stops} panel="run1" color="#059669" onMove={move} onDrop={handleDrop} dov={dragOver==="run1"} nd={3} meta={run1Stops.length?r1_hrs.toFixed(1)+"h | $"+r1_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(run1Stops)} runName={run1Name} onRename={function(v){setRun1Name(v);saveRunName(1,v);}} onClear={function(){setRun1Stops([]);saveRun(1,[]);}} onExport={function(){var d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");dlXlsx(genRunExport(run1Stops,run1Name||"Run 1",d),"WS-"+(run1Name||"Run1").replace(/\s+/g,"")+"-"+d+".xlsx");}} onDelete={deleteStop}/>
+              <DelivPanel title={run2Name||"Run 2"} icon="🚐" stops={run2Stops} panel="run2" color="#4338CA" onMove={move} onDrop={handleDrop} dov={dragOver==="run2"} nd={3} meta={run2Stops.length?r2_hrs.toFixed(1)+"h | $"+r2_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(run2Stops)} runName={run2Name} onRename={function(v){setRun2Name(v);saveRunName(2,v);}} onClear={function(){setRun2Stops([]);saveRun(2,[]);}} onExport={function(){var d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");dlXlsx(genRunExport(run2Stops,run2Name||"Run 2",d),"WS-"+(run2Name||"Run2").replace(/\s+/g,"")+"-"+d+".xlsx");}} onDelete={deleteStop}/>
+              <DelivPanel title={run3Name||"Run 3"} icon="🚐" stops={run3Stops} panel="run3" color="#C2410C" onMove={move} onDrop={handleDrop} dov={dragOver==="run3"} nd={3} meta={run3Stops.length?r3_hrs.toFixed(1)+"h | $"+r3_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(run3Stops)} runName={run3Name} onRename={function(v){setRun3Name(v);saveRunName(3,v);}} onClear={function(){setRun3Stops([]);saveRun(3,[]);}} onExport={function(){var d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");dlXlsx(genRunExport(run3Stops,run3Name||"Run 3",d),"WS-"+(run3Name||"Run3").replace(/\s+/g,"")+"-"+d+".xlsx");}} onDelete={deleteStop}/>
             </div>
 
           </div>
@@ -2145,6 +2054,7 @@ function App(){
         // Build per-customer SKU list from the loaded rows
         const custMap={};
         rows.filter(r=>r.SKU!=="FREIGHT"&&r.CustomerId&&(r.Customergroup||'').toUpperCase()!=='SPECIAL').forEach(r=>{
+          if(prodType(r.SKU)==="1L")return; // 1L labels are generic, skip
           if(!custMap[r.CustomerId])custMap[r.CustomerId]={id:r.CustomerId,name:r.Customer,accountManager:r.AccountManager||"",skus:new Set()};
           if(r.SKU)custMap[r.CustomerId].skus.add(r.SKU.toUpperCase());
         });
