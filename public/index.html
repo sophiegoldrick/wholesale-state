@@ -2093,6 +2093,17 @@ function App(){
       if(!rows||rows.length===0){alert("No CSV data loaded. Please drop your CSV file first.");setGen(null);return;}
       const d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
 
+      // ── Check 350ml roll size BEFORE generating — intercepts both server and browser paths ──
+      if(type==="all"&&!genSplitChoice){
+        const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&!isPallet(r)&&!isSpecial(r));
+        const total350=nf.filter(r=>prodType(r.SKU)==="350"&&!isClear(r)).reduce(function(s,r){return s+(parseInt(r.Quantity)||0);},0);
+        if(total350>3000){
+          setSplitPrompt({total350,type,d,rows});
+          setGen(null);
+          return;
+        }
+      }
+
       // Server-side generation via Python + openpyxl
       if(IS_DEPLOYED){
         const csvText=JSON.stringify(rows);
@@ -2275,7 +2286,7 @@ function App(){
           <div style={{padding:"22px 26px 18px",borderBottom:"1px solid "+T.border}}>
             <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:15,color:T.ink,marginBottom:6}}>Large 350ml Roll</div>
             <div style={{fontSize:13,color:T.inkM,lineHeight:1.6}}>
-              Your 350ml white label roll has <strong>{splitPrompt.prints.total350.toLocaleString()} units</strong> — over the 3,000 unit threshold.
+              Your 350ml white label roll has <strong>{(splitPrompt.total350||splitPrompt.prints&&splitPrompt.prints.total350||0).toLocaleString()} units</strong> — over the 3,000 unit threshold.
             </div>
             <div style={{fontSize:12,color:T.inkL,marginTop:10,lineHeight:1.7}}>
               <strong>Split into two rolls?</strong><br/>
