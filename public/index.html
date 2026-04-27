@@ -390,6 +390,7 @@ const totalC=rows=>rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU).reduce((s,r)=>s+cart
 // Rules: in production sheet (own section), NOT in prints, NOT in manifests
 const isSpecial=r=>(r.CustomerVisibilityGroup&&r.CustomerVisibilityGroup.toUpperCase()!=="REGULAR"&&r.CustomerVisibilityGroup!=="")||(r.CustomerPriceGroup&&r.CustomerPriceGroup.toUpperCase()!=="REGULAR"&&r.CustomerPriceGroup!=="")||(r.Customergroup&&r.Customergroup.toUpperCase()!=="REGULAR"&&r.Customergroup!=="");
 const isPallet=isSpecial; // alias — same customers, kept for compatibility
+const isClear=r=>(r.Label||"").trim().toUpperCase()==="CLEAR";
 
 /* ── ANALYTICS ── */
 function buildAnalytics(rows,prevIds=[]){
@@ -490,7 +491,8 @@ function genProduction(rows,palletOnly=false){
   }
   const today=new Date().toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   const regularSections=[
-    ...section(nf.filter(r=>prodType(r.SKU)==="350"),"350ml Orders","WHITE","350"),
+    ...section(nf.filter(r=>prodType(r.SKU)==="350"&&!isClear(r)),"350ml Orders","WHITE","350"),
+    ...section(nf.filter(r=>prodType(r.SKU)==="350"&&isClear(r)),"Clear Label Orders","CLEAR","350"),
     ...section(nf.filter(r=>prodType(r.SKU)==="TEA"),"Tea Orders","CLEAR","TEA"),
     ...section(nf.filter(r=>prodType(r.SKU)==="1L"),"1L Orders","WHITE","1L"),
   ];
@@ -581,8 +583,17 @@ function genSpecialPrints(rows){
 function genPrints(rows,palletOnly=false){
   const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&(palletOnly?isPallet(r):(!isPallet(r)&&!isSpecial(r))));
   const sort=pr=>[...pr].sort((a,b)=>{for(const k of['Courier','Customer','OrderNumber','SKU']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
-  const r350=sort(nf.filter(r=>prodType(r.SKU)==="350")),rT=sort(nf.filter(r=>prodType(r.SKU)==="TEA")),r1=sort(nf.filter(r=>prodType(r.SKU)==="1L"));
-  return{f350:buildPrint(r350,false,"FRONTS"),b350:buildPrint(r350,true,"BACKS"),fT:buildPrint(rT,false,"FRONTS"),bT:buildPrint(rT,true,"BACKS"),f1:buildPrint(r1,false,"FRONTS","1L")};
+  const r350w=sort(nf.filter(r=>prodType(r.SKU)==="350"&&!isClear(r)));
+  const r350c=sort(nf.filter(r=>prodType(r.SKU)==="350"&&isClear(r)));
+  const rT=sort(nf.filter(r=>prodType(r.SKU)==="TEA"));
+  const r1=sort(nf.filter(r=>prodType(r.SKU)==="1L"));
+  return{
+    f350:buildPrint(r350w,false,"FRONTS"),b350:buildPrint(r350w,true,"BACKS"),
+    f350c:r350c.length?buildPrint(r350c,false,"FRONTS"):null,
+    b350c:r350c.length?buildPrint(r350c,true,"BACKS"):null,
+    fT:buildPrint(rT,false,"FRONTS"),bT:buildPrint(rT,true,"BACKS"),
+    f1:buildPrint(r1,false,"FRONTS","1L"),
+  };
 }
 
 /* ── STATUS ── */
@@ -2112,9 +2123,10 @@ function App(){
       try{await window.storage.set("ws-csv-"+dk, e.target.result);}catch(err){console.warn("CSV store failed:",err);}
       setDriveWarnings([]);setLabelRequestSent(false);
       if(IS_DEPLOYED){try{
-        // Build per-customer SKU list from the loaded rows
+        // Build per-customer SKU list — exclude 1L (generic labels, no folder check needed)
         const custMap={};
         rows.filter(r=>r.SKU!=="FREIGHT"&&r.CustomerId&&(r.Customergroup||'').toUpperCase()!=='SPECIAL').forEach(r=>{
+          if(prodType(r.SKU)==="1L")return; // 1L labels are generic, skip
           if(!custMap[r.CustomerId])custMap[r.CustomerId]={id:r.CustomerId,name:r.Customer,accountManager:r.AccountManager||"",skus:new Set()};
           if(r.SKU)custMap[r.CustomerId].skus.add(r.SKU.toUpperCase());
         });
@@ -2212,7 +2224,7 @@ function App(){
       else if(type==="pallet-prod")dlXlsx(genProduction(rows,true),`${d}_Pallet_Production.xlsx`);
       else if(type==="pallet-prints"){const{f350,b350,fT,bT,f1}=genPrints(rows,true);dlZip([[f350,`${d}_Pallet_350ml_Fronts.xlsx`],[b350,`${d}_Pallet_350ml_Backs.xlsx`],[fT,`${d}_Pallet_Tea_Fronts.xlsx`],[bT,`${d}_Pallet_Tea_Backs.xlsx`],[f1,`${d}_Pallet_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Pallet_Print_Files.zip`);}
       else if(type==="all"){
-        const{f350,b350,fT,bT,f1}=genPrints(rows);
+        const{f350,b350,f350c,b350c,fT,bT,f1}=genPrints(rows);
         const specialFiles=genSpecialPrints(rows);
         const zipName=`${d}_Wholesale_State_Files.zip`;
         const prodSheets=genProduction(rows);
@@ -2223,6 +2235,7 @@ function App(){
           {sheets:genCoolCouriers(rows),     name:`${d}_COOLCOURIERS.xlsx`},
           {sheets:f350,                      name:`${d}_350ml_Fronts.xlsx`},
           {sheets:b350,                      name:`${d}_350ml_Backs.xlsx`},
+          ...(f350c?[{sheets:f350c,name:`${d}_350ml_Clear_Fronts.xlsx`},{sheets:b350c,name:`${d}_350ml_Clear_Backs.xlsx`}]:[]),
           {sheets:fT,                        name:`${d}_Tea_Fronts.xlsx`},
           {sheets:bT,                        name:`${d}_Tea_Backs.xlsx`},
           {sheets:f1,                        name:`${d}_1L_Fronts.xlsx`},

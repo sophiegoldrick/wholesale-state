@@ -1525,12 +1525,18 @@ if GEN_TYPE in ('prints','all'):
     # Exclude SPECIAL customers — they use different label stock
     sr = sorted(rows, key=lambda r:([-ord(c) for c in r.get('Courier','').upper()], r.get('Customer','').upper(), r.get('OrderNumber',''), r.get('SKU','')))
     sr_regular = [r for r in sr if (r.get('Customergroup','') or '').strip().upper() != 'SPECIAL']
-    r350=[r for r in sr_regular if r.get('Product')=='350']
+    r350_white=[r for r in sr_regular if r.get('Product')=='350' and (r.get('Label','') or '').strip().upper() != 'CLEAR']
+    r350_clear=[r for r in sr_regular if r.get('Product')=='350' and (r.get('Label','') or '').strip().upper() == 'CLEAR']
     rtea=[r for r in sr_regular if r.get('Product')=='TEA']
     r1l =[r for r in sr_regular if r.get('Product')=='1L']
 
-    make_print_file('FRONTS', False, r350, f'{OUT_DIR}/{DATE_STR}_350ml_Fronts.xlsx')
-    make_print_file('BACKS',  True,  r350, f'{OUT_DIR}/{DATE_STR}_350ml_Backs.xlsx')
+    # White label 350ml roll
+    make_print_file('FRONTS', False, r350_white, f'{OUT_DIR}/{DATE_STR}_350ml_Fronts.xlsx')
+    make_print_file('BACKS',  True,  r350_white, f'{OUT_DIR}/{DATE_STR}_350ml_Backs.xlsx')
+    # Clear label 350ml roll — separate file
+    if r350_clear:
+        make_print_file('FRONTS', False, r350_clear, f'{OUT_DIR}/{DATE_STR}_350ml_Clear_Fronts.xlsx')
+        make_print_file('BACKS',  True,  r350_clear, f'{OUT_DIR}/{DATE_STR}_350ml_Clear_Backs.xlsx')
     if rtea: make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Fronts.xlsx')
     if rtea: make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
     if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
