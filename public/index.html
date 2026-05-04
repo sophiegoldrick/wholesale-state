@@ -1059,6 +1059,62 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
   }
 
   function runHrs(stops){return stops.length?(stops.reduce(function(s,st){return s+(st.driveMins||0);},0)+stops.length*stopMins)/60:0;}
+
+  function mapsUrl(stops){
+    if(!stops.length)return null;
+    var origin="Keysborough+VIC+3173";
+    var dest=encodeURIComponent(stops[stops.length-1].address+","+stops[stops.length-1].suburb+",VIC");
+    var waypoints=stops.slice(0,-1).map(function(s){return encodeURIComponent(s.address+","+s.suburb+",VIC");}).join("|");
+    return "https://www.google.com/maps/dir/?api=1&origin="+origin+"&destination="+dest+(waypoints?"&waypoints="+waypoints:"")+"&travelmode=driving";
+  }
+
+  function reorder(stops){
+    if(stops.length<=1)return stops;
+    var locked=stops.filter(function(s){return lockedStops&&lockedStops[s.orderNumber];});
+    var free=stops.filter(function(s){return !lockedStops||!lockedStops[s.orderNumber];});
+    if(!free.length)return stops;
+    function coords(s){
+      if(s.lat&&s.lon)return[s.lat,s.lon];
+      var c=PC_COORDS[s.postcode];return c||null;
+    }
+    var depot=[-38.0024,145.1587];
+    function hav(a,b){
+      if(!a||!b)return 999;
+      var R=6371,dLat=(b[0]-a[0])*Math.PI/180,dLon=(b[1]-a[1])*Math.PI/180;
+      var x=Math.pow(Math.sin(dLat/2),2)+Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.pow(Math.sin(dLon/2),2);
+      return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+    }
+    var rem=free.slice(),sorted=[],last=depot;
+    while(rem.length){
+      var bi=0,bd=Infinity;
+      for(var i=0;i<rem.length;i++){var d=hav(last,coords(rem[i]));if(d<bd){bd=d;bi=i;}}
+      sorted.push(rem[bi]);last=coords(rem[bi])||depot;rem.splice(bi,1);
+    }
+    var improved=true,iter=0;
+    while(improved&&iter<200){
+      improved=false;iter++;
+      for(var i=0;i<sorted.length-1;i++){
+        for(var j=i+1;j<sorted.length;j++){
+          var a=i===0?depot:coords(sorted[i-1]);
+          var b=coords(sorted[i]),c=coords(sorted[j]);
+          var d2=j===sorted.length-1?depot:coords(sorted[j+1]);
+          var before=hav(a,b)+hav(c,d2),after=hav(a,c)+hav(b,d2);
+          if(after<before-0.001){
+            var seg=sorted.slice(i,j+1).reverse();
+            sorted=sorted.slice(0,i).concat(seg).concat(sorted.slice(j+1));
+            improved=true;
+          }
+        }
+      }
+    }
+    return locked.concat(sorted);
+  }
+
+  function recalc(stops){
+    if(stops.length<=1)return stops;
+    var reordered=reorder(stops);
+    return reordered.map(function(s,i){return Object.assign({},s,{stopNum:i+1});});
+  }
   var r1_hrs=runHrs(run1Stops), r2_hrs=runHrs(run2Stops), r3_hrs=runHrs(run3Stops);
   var r1_cost=parseFloat((r1_hrs*driverRate+(run1Stops.length>0?fuelCost:0)).toFixed(2));
   var r2_cost=parseFloat((r2_hrs*driverRate+(run2Stops.length>0?fuelCost:0)).toFixed(2));
