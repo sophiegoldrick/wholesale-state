@@ -1541,7 +1541,7 @@ if GEN_TYPE in ('prints','all'):
     # 350ml white label roll — combined or split VIC/Interstate
     total_350_units = sum(int(float(r.get('Quantity',0) or 0)) for r in r350_white)
     if SPLIT_INPUT == 'split' and total_350_units > 3000:
-        VIC_COURIERS = {'COLDXPRESS','RUN1','RUN2','RUN3'}
+        VIC_COURIERS = {'COLDXPRESS','RUN1','RUN2','RUN3','RUN4'}
         r350_vic  = [r for r in r350_white if (r.get('Courier','') or '').upper() in VIC_COURIERS]
         r350_intl = [r for r in r350_white if (r.get('Courier','') or '').upper() not in VIC_COURIERS]
         if r350_vic:
@@ -1602,7 +1602,7 @@ print(json.dumps(result))
 
 function validateCSV(rows) {
   const issues = [];
-  const VALID_COURIERS = ['COLDXPRESS','DKDISTRIBUTION','COOLCOURIERS','WSDRIVER','RUN1','RUN2','RUN3'];
+  const VALID_COURIERS = ['COLDXPRESS','DKDISTRIBUTION','COOLCOURIERS','WSDRIVER','RUN1','RUN2','RUN3','RUN4'];
   const VALID_PRODUCTS = ['350','TEA','1L'];
   const TEA_SKUS = new Set(['LTEA350','PTEA350','RTEA350']);
   rows.forEach((r, i) => {

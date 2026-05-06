@@ -645,7 +645,7 @@ function StopCard({stop,panel,onMove,nd,locked,onToggleLock,onDelete}){
       onMouseLeave={function(e){e.currentTarget.style.background=locked?"#FFFBEB":"transparent";}}>
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flexShrink:0}}>
         <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:9,color:"#CBD5E1",minWidth:14,textAlign:"right",paddingTop:1}}>{stop.stopNum||""}</div>
-        {(panel==="run1"||panel==="run2"||panel==="run3")&&<button onClick={function(){onToggleLock(stop.orderNumber);}} title={locked?"Unlock position":"Lock as first stop"} style={{fontSize:9,padding:"1px 4px",borderRadius:3,border:"1px solid "+(locked?"#F59E0B":"#E2E8F0"),background:locked?"#FEF3C7":"transparent",color:locked?"#D97706":"#CBD5E1",cursor:"pointer",fontWeight:700,lineHeight:1}}>
+        {(panel==="run1"||panel==="run2"||panel==="run3"||panel==="run4")&&<button onClick={function(){onToggleLock(stop.orderNumber);}} title={locked?"Unlock position":"Lock as first stop"} style={{fontSize:9,padding:"1px 4px",borderRadius:3,border:"1px solid "+(locked?"#F59E0B":"#E2E8F0"),background:locked?"#FEF3C7":"transparent",color:locked?"#D97706":"#CBD5E1",cursor:"pointer",fontWeight:700,lineHeight:1}}>
           {locked?"🔒":"🔓"}
         </button>}
       </div>
@@ -670,13 +670,14 @@ function StopCard({stop,panel,onMove,nd,locked,onToggleLock,onDelete}){
         {panel!=="run1"&&<button onClick={function(){onMove(stop,panel,"run1");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #BBF7D0",background:"#DCFCE7",color:"#15803D",cursor:"pointer",fontWeight:700}}>R1</button>}
         {panel!=="run2"&&<button onClick={function(){onMove(stop,panel,"run2");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #C7D2FE",background:"#E0E7FF",color:"#4338CA",cursor:"pointer",fontWeight:700}}>R2</button>}
         {panel!=="run3"&&<button onClick={function(){onMove(stop,panel,"run3");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #FED7AA",background:"#FFF7ED",color:"#C2410C",cursor:"pointer",fontWeight:700}}>R3</button>}
+        {panel!=="run4"&&<button onClick={function(){onMove(stop,panel,"run4");}} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #BAE6FD",background:"#F0F9FF",color:"#0369A1",cursor:"pointer",fontWeight:700}}>R4</button>}
         {onDelete&&<button onClick={function(){onDelete(stop,panel);}} title="Remove stop" style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:"1px solid #FECACA",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontWeight:700,marginTop:2}}>✕</button>}
       </div>
     </div>
   );
 }
 function DelivPanel({title,icon,stops,panel,color,meta,onMove,onDrop,dov,nd,lockedStops,onToggleLock,mapsUrl,runName,onRename,onClear,onExport,onDelete}){
-  var isRun=panel==="run1"||panel==="run2"||panel==="run3";
+  var isRun=panel==="run1"||panel==="run2"||panel==="run3"||panel==="run4";
   var editing_=React.useState(false),setEditing=editing_[1],editing=editing_[0];
   var nameVal_=React.useState(runName||""),setNameVal=nameVal_[1],nameVal=nameVal_[0];
   React.useEffect(function(){setNameVal(runName||"");},[runName]);
@@ -805,9 +806,11 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
   var r1_=React.useState(function(){try{return JSON.parse(localStorage.getItem("ws_run1_stops")||"[]");}catch(e){return[];}}), setRun1Stops=r1_[1]; var run1Stops=r1_[0];
   var r2_=React.useState(function(){try{return JSON.parse(localStorage.getItem("ws_run2_stops")||"[]");}catch(e){return[];}}), setRun2Stops=r2_[1]; var run2Stops=r2_[0];
   var r3_=React.useState(function(){try{return JSON.parse(localStorage.getItem("ws_run3_stops")||"[]");}catch(e){return[];}}), setRun3Stops=r3_[1]; var run3Stops=r3_[0];
+  var r4_=React.useState(function(){try{return JSON.parse(localStorage.getItem("ws_run4_stops")||"[]");}catch(e){return[];}}), setRun4Stops=r4_[1]; var run4Stops=r4_[0];
   var rn1_=React.useState(localStorage.getItem("ws_run1_name")||""), setRun1Name=rn1_[1]; var run1Name=rn1_[0];
   var rn2_=React.useState(localStorage.getItem("ws_run2_name")||""), setRun2Name=rn2_[1]; var run2Name=rn2_[0];
   var rn3_=React.useState(localStorage.getItem("ws_run3_name")||""), setRun3Name=rn3_[1]; var run3Name=rn3_[0];
+  var rn4_=React.useState(localStorage.getItem("ws_run4_name")||""), setRun4Name=rn4_[1]; var run4Name=rn4_[0];
   var dov_=React.useState(null), setDragOver=dov_[1]; var dragOver=dov_[0];
 
   React.useEffect(function(){localStorage.setItem("ws_opt_shift",shiftHrs);},[shiftHrs]);
@@ -817,6 +820,7 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
   React.useEffect(function(){localStorage.setItem("ws_opt_metro_pref",metroPref);},[metroPref]);
   React.useEffect(function(){localStorage.setItem("ws_opt_drivers",numDrivers);},[numDrivers]);
   React.useEffect(function(){localStorage.setItem("ws_opt_start",startTime);},[startTime]);
+  React.useEffect(function(){runFull();},[]);
 
   function saveRun(n,s){try{localStorage.setItem("ws_run"+n+"_stops",JSON.stringify(s));}catch(e){}}
   function saveRunName(n,v){try{localStorage.setItem("ws_run"+n+"_name",v);}catch(e){}}
@@ -826,9 +830,9 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
 
   // For compatibility - no suspense IDs needed, runs persist independently
   var suspIds=React.useMemo(function(){
-    var all=run1Stops.concat(run2Stops).concat(run3Stops);
+    var all=run1Stops.concat(run2Stops).concat(run3Stops).concat(run4Stops);
     return new Set(all.map(function(s){return s.orderNumber;}));
-  },[run1Stops,run2Stops,run3Stops]);
+  },[run1Stops,run2Stops,run3Stops,run4Stops]);
 
   var PC_COORDS={"3000":[-37.814,144.963],"3001":[-37.814,144.963],"3006":[-37.823,144.953],"3008":[-37.820,144.940],"3011":[-37.800,144.889],"3012":[-37.793,144.876],"3013":[-37.783,144.876],"3015":[-37.832,144.913],"3016":[-37.851,144.906],"3018":[-37.874,144.865],"3019":[-37.863,144.856],"3020":[-37.763,144.828],"3021":[-37.751,144.831],"3022":[-37.778,144.817],"3023":[-37.769,144.802],"3024":[-37.860,144.764],"3026":[-37.860,144.773],"3027":[-37.854,144.747],"3028":[-37.878,144.784],"3029":[-37.892,144.765],"3030":[-37.889,144.736],"3031":[-37.783,144.929],"3032":[-37.774,144.916],"3033":[-37.790,144.840],"3034":[-37.801,144.836],"3036":[-37.769,144.836],"3037":[-37.735,144.811],"3038":[-37.731,144.798],"3039":[-37.758,144.923],"3040":[-37.755,144.920],"3041":[-37.746,144.930],"3042":[-37.740,144.879],"3043":[-37.730,144.938],"3044":[-37.713,144.955],"3046":[-37.708,144.960],"3047":[-37.698,144.957],"3048":[-37.685,144.957],"3049":[-37.724,144.907],"3051":[-37.797,144.947],"3052":[-37.790,144.958],"3053":[-37.804,144.970],"3054":[-37.791,144.964],"3055":[-37.774,144.958],"3056":[-37.764,144.975],"3057":[-37.754,144.978],"3058":[-37.744,144.983],"3059":[-37.692,144.944],"3060":[-37.730,144.972],"3061":[-37.684,144.963],"3062":[-37.671,144.973],"3063":[-37.677,144.989],"3064":[-37.667,144.984],"3065":[-37.807,144.980],"3066":[-37.808,144.987],"3068":[-37.804,145.000],"3070":[-37.767,145.003],"3071":[-37.757,145.005],"3072":[-37.746,145.007],"3073":[-37.735,145.007],"3074":[-37.721,145.006],"3075":[-37.713,145.010],"3076":[-37.644,145.018],"3078":[-37.789,145.015],"3079":[-37.779,145.029],"3081":[-37.766,145.036],"3082":[-37.702,145.020],"3083":[-37.753,145.017],"3084":[-37.756,145.046],"3085":[-37.744,145.041],"3087":[-37.763,145.057],"3088":[-37.750,145.059],"3089":[-37.693,145.039],"3090":[-37.731,145.043],"3091":[-37.678,145.039],"3093":[-37.771,145.076],"3094":[-37.758,145.073],"3095":[-37.743,145.068],"3099":[-37.660,145.060],"3101":[-37.808,145.030],"3102":[-37.817,145.039],"3103":[-37.824,145.047],"3104":[-37.808,145.051],"3105":[-37.797,145.054],"3106":[-37.803,145.118],"3107":[-37.759,145.152],"3108":[-37.812,145.125],"3109":[-37.818,145.143],"3111":[-37.822,145.153],"3113":[-37.831,145.167],"3114":[-37.839,145.179],"3115":[-37.847,145.185],"3116":[-37.826,145.225],"3121":[-37.820,145.018],"3122":[-37.847,145.062],"3123":[-37.836,145.059],"3124":[-37.843,145.073],"3125":[-37.843,145.100],"3126":[-37.831,145.084],"3127":[-37.819,145.089],"3128":[-37.817,145.099],"3129":[-37.824,145.107],"3130":[-37.835,145.125],"3131":[-37.825,145.127],"3132":[-37.813,145.139],"3133":[-37.817,145.153],"3134":[-37.823,145.167],"3135":[-37.829,145.187],"3136":[-37.840,145.221],"3137":[-37.848,145.208],"3138":[-37.825,145.238],"3139":[-37.867,145.311],"3140":[-37.839,145.252],"3141":[-37.849,144.999],"3142":[-37.861,145.014],"3143":[-37.882,145.032],"3144":[-37.875,145.051],"3145":[-37.893,145.045],"3146":[-37.867,145.065],"3147":[-37.889,145.070],"3148":[-37.896,145.083],"3149":[-37.878,145.087],"3150":[-37.890,145.108],"3151":[-37.850,145.195],"3152":[-37.856,145.222],"3153":[-37.848,145.243],"3154":[-37.843,145.267],"3155":[-37.859,145.271],"3156":[-37.873,145.246],"3158":[-37.922,145.280],"3160":[-37.941,145.327],"3161":[-37.870,145.058],"3162":[-37.899,145.048],"3163":[-37.908,145.054],"3165":[-37.906,145.072],"3166":[-37.886,145.082],"3167":[-37.900,145.081],"3168":[-37.908,145.094],"3169":[-37.919,145.101],"3170":[-37.927,145.106],"3171":[-37.941,145.116],"3172":[-37.950,145.131],"3173":[-38.002,145.159],"3174":[-37.959,145.147],"3175":[-37.965,145.195],"3177":[-37.990,145.215],"3178":[-37.972,145.222],"3179":[-37.860,145.241],"3180":[-37.874,145.233],"3181":[-37.851,144.999],"3182":[-37.868,144.983],"3183":[-37.874,144.993],"3184":[-37.879,144.984],"3185":[-37.887,145.001],"3186":[-37.894,145.011],"3187":[-37.902,145.018],"3188":[-37.911,145.027],"3189":[-37.921,145.034],"3190":[-37.930,145.043],"3191":[-37.913,145.044],"3192":[-37.941,145.057],"3193":[-37.952,145.063],"3194":[-37.940,145.056],"3195":[-37.959,145.066],"3196":[-37.967,145.069],"3197":[-37.975,145.071],"3198":[-37.984,145.073],"3199":[-37.994,145.080],"3200":[-38.001,145.086],"3201":[-37.963,145.079],"3202":[-37.921,145.079],"3204":[-37.901,145.062],"3205":[-37.844,144.947],"3206":[-37.840,144.928],"3207":[-37.848,144.939],"3212":[-38.070,144.318],"3214":[-38.090,144.340],"3215":[-38.109,144.359],"3216":[-38.130,144.380],"3218":[-38.149,144.349],"3219":[-38.139,144.389],"3220":[-38.148,144.362],"3335":[-37.590,144.710],"3337":[-37.630,144.630],"3338":[-37.580,144.640],"3340":[-37.700,144.620],"3341":[-37.600,144.570],"3342":[-37.670,144.600],"3350":[-37.562,143.862],"3380":[-37.279,143.132],"3381":[-37.310,143.200],"3427":[-37.580,144.820],"3429":[-37.570,144.820],"3431":[-37.350,144.600],"3434":[-37.320,144.590],"3435":[-37.300,144.580],"3440":[-37.402,144.539],"3442":[-37.358,144.527],"3444":[-37.139,144.462],"3450":[-37.173,144.247],"3451":[-37.217,144.290],"3453":[-36.854,144.287],"3458":[-37.180,144.020],"3460":[-37.280,144.060],"3461":[-37.350,144.120],"3462":[-37.420,144.140],"3463":[-37.480,144.190],"3500":[-34.185,142.158],"3550":[-36.762,144.282],"3551":[-36.680,144.447],"3555":[-36.697,144.292],"3556":[-36.630,144.230],"3607":[-36.380,145.400],"3608":[-36.583,145.207],"3610":[-36.438,145.392],"3612":[-36.250,145.600],"3616":[-36.136,145.459],"3620":[-36.063,145.073],"3621":[-36.109,145.079],"3630":[-36.383,145.400],"3631":[-36.357,145.455],"3635":[-36.382,145.399],"3636":[-36.059,145.484],"3638":[-36.116,145.486],"3644":[-35.887,145.569],"3658":[-37.101,145.019],"3659":[-37.050,144.998],"3660":[-36.782,145.401],"3662":[-36.735,145.458],"3664":[-36.784,145.433],"3666":[-36.684,145.357],"3669":[-36.640,145.420],"3672":[-36.573,145.538],"3675":[-36.456,145.596],"3677":[-36.386,145.869],"3678":[-36.680,146.880],"3683":[-36.059,146.459],"3685":[-36.059,146.459],"3687":[-36.060,146.920],"3688":[-36.121,146.878],"3690":[-36.120,146.888],"3691":[-36.120,146.888],"3697":[-36.780,147.100],"3698":[-36.700,147.150],"3699":[-36.650,147.190],"3700":[-36.100,147.350],"3701":[-36.200,147.450],"3707":[-36.050,147.550],"3711":[-37.370,145.660],"3712":[-37.300,145.620],"3713":[-37.220,145.670],"3715":[-37.180,145.610],"3717":[-37.090,145.700],"3719":[-37.010,145.700],"3720":[-36.890,145.780],"3722":[-36.760,145.900],"3730":[-36.010,146.400],"3737":[-36.620,147.250],"3738":[-36.540,147.280],"3741":[-36.724,147.073],"3747":[-36.360,146.680],"3749":[-36.380,146.720],"3750":[-37.691,145.078],"3752":[-37.643,145.110],"3753":[-37.600,145.110],"3754":[-37.607,145.146],"3756":[-37.280,145.040],"3757":[-37.590,145.030],"3758":[-37.310,145.000],"3763":[-37.560,145.060],"3764":[-37.310,144.980],"3765":[-37.852,145.291],"3766":[-37.830,145.380],"3770":[-37.560,145.680],"3775":[-37.450,145.730],"3777":[-37.453,145.766],"3779":[-37.380,145.810],"3781":[-37.935,145.440],"3782":[-37.960,145.460],"3783":[-37.942,145.539],"3785":[-37.730,145.430],"3787":[-37.700,145.450],"3788":[-37.680,145.470],"3791":[-37.786,145.501],"3793":[-37.792,145.557],"3797":[-37.855,145.665],"3799":[-37.880,145.700],"3802":[-38.009,145.236],"3803":[-38.030,145.252],"3804":[-38.051,145.278],"3805":[-38.063,145.303],"3806":[-38.074,145.316],"3807":[-38.093,145.337],"3808":[-38.093,145.337],"3809":[-38.077,145.491],"3810":[-38.081,145.494],"3812":[-38.100,145.560],"3813":[-38.119,145.648],"3814":[-38.144,145.691],"3815":[-38.169,145.790],"3816":[-38.180,145.890],"3818":[-38.180,145.990],"3820":[-38.169,145.934],"3823":[-38.220,146.140],"3824":[-38.240,146.290],"3825":[-38.264,146.348],"3831":[-38.259,146.500],"3840":[-38.235,146.548],"3842":[-38.294,146.617],"3844":[-38.322,146.699],"3847":[-38.102,147.057],"3850":[-38.110,147.065],"3851":[-38.073,147.209],"3854":[-38.044,147.168],"3857":[-38.098,147.261],"3858":[-38.153,147.345],"3860":[-38.207,146.890],"3862":[-37.953,146.895],"3865":[-37.780,147.220],"3869":[-38.350,146.780],"3871":[-38.580,146.250],"3874":[-38.614,146.329],"3875":[-37.830,147.570],"3880":[-37.785,148.009],"3882":[-37.510,148.080],"3885":[-37.440,148.280],"3888":[-37.312,148.403],"3890":[-37.300,148.500],"3892":[-37.780,148.600],"3896":[-37.160,148.420],"3898":[-36.850,148.180],"3903":[-38.205,146.395],"3904":[-38.260,146.438],"3909":[-38.413,146.534],"3910":[-38.007,145.091],"3911":[-38.381,145.198],"3912":[-38.337,145.166],"3913":[-38.296,145.170],"3915":[-38.362,145.260],"3916":[-38.411,145.278],"3918":[-38.437,145.321],"3919":[-38.465,145.363],"3922":[-38.488,145.893],"3925":[-38.508,146.023],"3926":[-38.483,145.454],"3929":[-38.497,145.482],"3930":[-38.492,145.492],"3931":[-38.502,145.506],"3934":[-38.503,145.543],"3936":[-38.329,145.051],"3937":[-38.506,145.563],"3939":[-38.490,145.593],"3941":[-38.479,145.621],"3942":[-38.453,145.648],"3943":[-38.438,145.691],"3944":[-38.407,145.718],"3945":[-38.611,146.143],"3950":[-38.609,146.239],"3953":[-38.620,146.333],"3956":[-38.641,146.458],"3959":[-38.679,146.577],"3960":[-38.692,146.631],"3962":[-38.730,146.693],"3965":[-38.763,146.735],"3966":[-38.809,146.795],"3971":[-38.831,146.881],"3975":[-38.022,145.286],"3976":[-37.996,145.253],"3977":[-38.039,145.315],"3980":[-38.400,145.720],"3981":[-38.431,145.716],"3984":[-38.470,145.754],"3988":[-38.521,145.842],"3995":[-38.575,146.042],"3996":[-38.572,146.043]};
 
@@ -1005,7 +1009,7 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
     var raw=buildRawStops();
     // All CSV stops go to CX — user drags to runs manually
     // Existing run stops (from localStorage) are preserved
-    var allRunIds=new Set(run1Stops.concat(run2Stops).concat(run3Stops).map(function(s){return s.orderNumber;}));
+    var allRunIds=new Set(run1Stops.concat(run2Stops).concat(run3Stops).concat(run4Stops).map(function(s){return s.orderNumber;}));
     var newCx=raw.filter(function(s){return !allRunIds.has(s.orderNumber);});
     var enriched=newCx.map(function(s){
       var coord=PC_COORDS[s.postcode];
@@ -1023,27 +1027,29 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
     else if(from==="run1"){var u=rm(run1Stops);setRun1Stops(u);saveRun(1,u);}
     else if(from==="run2"){var u=rm(run2Stops);setRun2Stops(u);saveRun(2,u);}
     else if(from==="run3"){var u=rm(run3Stops);setRun3Stops(u);saveRun(3,u);}
+    else if(from==="run4"){var u=rm(run4Stops);setRun4Stops(u);saveRun(4,u);}
   }
 
   function setRun(n,stops){
     if(n===1){setRun1Stops(stops);saveRun(1,stops);}
     else if(n===2){setRun2Stops(stops);saveRun(2,stops);}
     else if(n===3){setRun3Stops(stops);saveRun(3,stops);}
+    else if(n===4){setRun4Stops(stops);saveRun(4,stops);}
   }
-  function getRun(n){return n===1?run1Stops:n===2?run2Stops:run3Stops;}
+  function getRun(n){return n===1?run1Stops:n===2?run2Stops:n===3?run3Stops:run4Stops;}
 
   function move(stop,from,to){
     var rm=function(lst){return lst.filter(function(s){return s.orderNumber!==stop.orderNumber;});};
     var nC=cxStops;
     // Remove from source
     if(from==="cx")nC=rm(nC);
-    else if(from==="run1"||from==="run2"||from==="run3"){
+    else if(from==="run1"||from==="run2"||from==="run3"||from==="run4"){
       var fn=parseInt(from.slice(3));
       setRun(fn,recalc(rm(getRun(fn))));
     }
     // Add to destination
     if(to==="cx")nC=rm(nC).concat([stop]);
-    else if(to==="run1"||to==="run2"||to==="run3"){
+    else if(to==="run1"||to==="run2"||to==="run3"||to==="run4"){
       var tn=parseInt(to.slice(3));
       var newList=recalc(rm(getRun(tn)).concat([stop]));
       setRun(tn,newList);
@@ -1052,7 +1058,7 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
   }
 
   function handleDrop(orderNumber,from,to){
-    var allStops=run1Stops.concat(run2Stops).concat(run3Stops).concat(cxStops);
+    var allStops=run1Stops.concat(run2Stops).concat(run3Stops).concat(run4Stops).concat(cxStops);
     var stop=allStops.find(function(s){return s.orderNumber===orderNumber;});
     if(stop)move(stop,from,to);
     setDragOver(null);
@@ -1115,14 +1121,15 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
     var reordered=reorder(stops);
     return reordered.map(function(s,i){return Object.assign({},s,{stopNum:i+1});});
   }
-  var r1_hrs=runHrs(run1Stops), r2_hrs=runHrs(run2Stops), r3_hrs=runHrs(run3Stops);
+  var r1_hrs=runHrs(run1Stops), r2_hrs=runHrs(run2Stops), r3_hrs=runHrs(run3Stops), r4_hrs=runHrs(run4Stops);
   var r1_cost=parseFloat((r1_hrs*driverRate+(run1Stops.length>0?fuelCost:0)).toFixed(2));
   var r2_cost=parseFloat((r2_hrs*driverRate+(run2Stops.length>0?fuelCost:0)).toFixed(2));
   var r3_cost=parseFloat((r3_hrs*driverRate+(run3Stops.length>0?fuelCost:0)).toFixed(2));
-  var ceAll=[].concat(run1Stops,run2Stops,run3Stops,cxStops).reduce(function(s,st){return s+(st.ce||0);},0);
-  var allRunStops=[].concat(run1Stops,run2Stops,run3Stops);
-  var saved=allRunStops.reduce(function(s,st){return s+st.ce;},0)-(r1_cost+r2_cost+r3_cost);
-  var placed=run1Stops.length+run2Stops.length+run3Stops.length+cxStops.length;
+  var r4_cost=parseFloat((r4_hrs*driverRate+(run4Stops.length>0?fuelCost:0)).toFixed(2));
+  var ceAll=[].concat(run1Stops,run2Stops,run3Stops,run4Stops,cxStops).reduce(function(s,st){return s+(st.ce||0);},0);
+  var allRunStops=[].concat(run1Stops,run2Stops,run3Stops,run4Stops);
+  var saved=allRunStops.reduce(function(s,st){return s+st.ce;},0)-(r1_cost+r2_cost+r3_cost+r4_cost);
+  var placed=run1Stops.length+run2Stops.length+run3Stops.length+run4Stops.length+cxStops.length;
   var countOk=placed>=totalVic;
   var isLoading=phase==="optimising";
 
@@ -1147,6 +1154,7 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
           {run1Stops.length>0&&<div><div style={{fontSize:15,fontWeight:800,color:"#059669"}}>${r1_cost.toFixed(0)} | {r1_hrs.toFixed(1)}h</div><div style={{fontSize:9,color:"#94A3B8"}}>{run1Name||"RUN 1"}</div></div>}
           {run2Stops.length>0&&<div><div style={{fontSize:15,fontWeight:800,color:"#4338CA"}}>${r2_cost.toFixed(0)} | {r2_hrs.toFixed(1)}h</div><div style={{fontSize:9,color:"#94A3B8"}}>{run2Name||"RUN 2"}</div></div>}
           {run3Stops.length>0&&<div><div style={{fontSize:15,fontWeight:800,color:"#C2410C"}}>${r3_cost.toFixed(0)} | {r3_hrs.toFixed(1)}h</div><div style={{fontSize:9,color:"#94A3B8"}}>{run3Name||"RUN 3"}</div></div>}
+          {run4Stops.length>0&&<div><div style={{fontSize:15,fontWeight:800,color:"#0369A1"}}>${r4_cost.toFixed(0)} | {r4_hrs.toFixed(1)}h</div><div style={{fontSize:9,color:"#94A3B8"}}>{run4Name||"RUN 4"}</div></div>}
           <div><div style={{fontSize:18,fontWeight:800,color:saved>0?"#059669":"#DC2626"}}>${Math.max(0,saved).toFixed(2)}</div><div style={{fontSize:9,color:"#94A3B8"}}>YOU SAVE</div></div>
           <button onClick={function(){runFull();}} disabled={isLoading} style={{marginLeft:"auto",padding:"7px 16px",borderRadius:8,border:"1.5px solid #BFDBFE",background:"#EFF6FF",color:"#2563EB",fontSize:11,fontWeight:700,cursor:"pointer"}}>Re-optimise</button>
         </div>
@@ -1167,11 +1175,12 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
 
           </div>
           <div style={{flex:1,padding:16,display:"flex",flexDirection:"column",gap:12,overflowY:"auto",background:"#F8FAFC"}}>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12,flex:1}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:12,flex:1}}>
               <DelivPanel title="Cold Xpress" icon="❄️" stops={cxStops} panel="cx" color="#2563EB" onMove={move} onDrop={handleDrop} dov={dragOver==="cx"} nd={3} meta={cxStops.length?"$"+cxStops.reduce(function(s,st){return s+st.ce;},0).toFixed(2):""} onDelete={deleteStop}/>
               <DelivPanel title={run1Name||"Run 1"} icon="🚐" stops={run1Stops} panel="run1" color="#059669" onMove={move} onDrop={handleDrop} dov={dragOver==="run1"} nd={3} meta={run1Stops.length?r1_hrs.toFixed(1)+"h | $"+r1_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(run1Stops)} runName={run1Name} onRename={function(v){setRun1Name(v);saveRunName(1,v);}} onClear={function(){setRun1Stops([]);saveRun(1,[]);}} onExport={function(){var d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");dlXlsx(genRunExport(run1Stops,run1Name||"Run 1",d),"WS-"+(run1Name||"Run1").replace(/\s+/g,"")+"-"+d+".xlsx");}} onDelete={deleteStop}/>
               <DelivPanel title={run2Name||"Run 2"} icon="🚐" stops={run2Stops} panel="run2" color="#4338CA" onMove={move} onDrop={handleDrop} dov={dragOver==="run2"} nd={3} meta={run2Stops.length?r2_hrs.toFixed(1)+"h | $"+r2_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(run2Stops)} runName={run2Name} onRename={function(v){setRun2Name(v);saveRunName(2,v);}} onClear={function(){setRun2Stops([]);saveRun(2,[]);}} onExport={function(){var d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");dlXlsx(genRunExport(run2Stops,run2Name||"Run 2",d),"WS-"+(run2Name||"Run2").replace(/\s+/g,"")+"-"+d+".xlsx");}} onDelete={deleteStop}/>
               <DelivPanel title={run3Name||"Run 3"} icon="🚐" stops={run3Stops} panel="run3" color="#C2410C" onMove={move} onDrop={handleDrop} dov={dragOver==="run3"} nd={3} meta={run3Stops.length?r3_hrs.toFixed(1)+"h | $"+r3_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(run3Stops)} runName={run3Name} onRename={function(v){setRun3Name(v);saveRunName(3,v);}} onClear={function(){setRun3Stops([]);saveRun(3,[]);}} onExport={function(){var d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");dlXlsx(genRunExport(run3Stops,run3Name||"Run 3",d),"WS-"+(run3Name||"Run3").replace(/\s+/g,"")+"-"+d+".xlsx");}} onDelete={deleteStop}/>
+              <DelivPanel title={run4Name||"Run 4"} icon="🚐" stops={run4Stops} panel="run4" color="#0369A1" onMove={move} onDrop={handleDrop} dov={dragOver==="run4"} nd={3} meta={run4Stops.length?r4_hrs.toFixed(1)+"h | $"+r4_cost:""} lockedStops={lockedStops} onToggleLock={toggleLock} mapsUrl={mapsUrl(run4Stops)} runName={run4Name} onRename={function(v){setRun4Name(v);saveRunName(4,v);}} onClear={function(){setRun4Stops([]);saveRun(4,[]);}} onExport={function(){var d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");dlXlsx(genRunExport(run4Stops,run4Name||"Run 4",d),"WS-"+(run4Name||"Run4").replace(/\s+/g,"")+"-"+d+".xlsx");}} onDelete={deleteStop}/>
             </div>
 
           </div>
@@ -1181,7 +1190,8 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
           <button onClick={function(){
             var alloc=run1Stops.map(function(s){return Object.assign({},s,{run:"RUN1",runName:run1Name||"Run 1"});})
               .concat(run2Stops.map(function(s){return Object.assign({},s,{run:"RUN2",runName:run2Name||"Run 2"});}))
-              .concat(run3Stops.map(function(s){return Object.assign({},s,{run:"RUN3",runName:run3Name||"Run 3"});}));
+              .concat(run3Stops.map(function(s){return Object.assign({},s,{run:"RUN3",runName:run3Name||"Run 3"});}))
+              .concat(run4Stops.map(function(s){return Object.assign({},s,{run:"RUN4",runName:run4Name||"Run 4"});}));
             onConfirm(alloc);
           }} disabled={!run1Stops.length&&!run2Stops.length&&!run3Stops.length} style={{padding:"9px 24px",borderRadius:8,border:"none",background:allRunStops.length?"#059669":"#94A3B8",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer"}}>Confirm Runs ({allRunStops.length} stops)</button>
         </div>
