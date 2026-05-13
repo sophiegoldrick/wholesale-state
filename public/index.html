@@ -371,6 +371,9 @@ function parseCSV(text){
     for(const ch of line){if(ch==='"'){inQ=!inQ}else if(ch===','&&!inQ){vals.push(cur);cur=""}else cur+=ch}
     vals.push(cur);
     const obj={};headers.forEach((h,i)=>obj[h]=(vals[i]||"").replace(/^"|"$/g,"").trim());
+    // Remap Happy Apple custom SKUs to real WS SKUs (packs of 12 — multiply qty × 12)
+    const THA_MAP={"THA-BO12":"BLUEBERRY350","THA-LG12":"BOTANICAL350","THA-OMP12":"TROPICALBLISS350","THA-PB12":"ROOTS350","THA-PH12":"ANTIOX350","THA-RR12":"REFRESH350","THA-SL12":"IMMUNITY350","THA-SUA12":"CLOUDYAPPLE350"};
+    if(THA_MAP[obj.SKU]){obj.Quantity=String((parseFloat(obj.Quantity)||0)*12);obj.SKU=THA_MAP[obj.SKU];}
     // Derive Product from SKU — CSV Product field is unreliable
     // (Ordermentum exports 'JUICE' for 350ml products, not '350')
     const sku=(obj.SKU||"").toUpperCase();
@@ -390,6 +393,7 @@ const totalC=rows=>rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU).reduce((s,r)=>s+cart
 // Rules: in production sheet (own section), NOT in prints, NOT in manifests
 const isSpecial=r=>(r.CustomerVisibilityGroup&&r.CustomerVisibilityGroup.toUpperCase()!=="REGULAR"&&r.CustomerVisibilityGroup!=="")||(r.CustomerPriceGroup&&r.CustomerPriceGroup.toUpperCase()!=="REGULAR"&&r.CustomerPriceGroup!=="")||(r.Customergroup&&r.Customergroup.toUpperCase()!=="REGULAR"&&r.Customergroup!=="");
 const isPallet=isSpecial; // alias — same customers, kept for compatibility
+const isNonStandard=r=>isSpecial(r)||isClear(r); // SPECIAL (any label) OR REGULAR+CLEAR
 const isClear=r=>(r.Label||"").trim().toUpperCase()==="CLEAR";
 
 /* ── ANALYTICS ── */
@@ -459,8 +463,8 @@ const E=null;
 
 /* ── SHEET GENERATORS ── */
 function genProduction(rows,palletOnly=false){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&(palletOnly?isPallet(r):(!isPallet(r)&&!isSpecial(r))));
-  const sf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&isSpecial(r));
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&(palletOnly?isPallet(r):!isNonStandard(r)));
+  const xf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&!palletOnly&&isNonStandard(r));
   function section(sr,title,lc,prod,customerGroupLabel){
     if(!sr.length)return[];
     const skus=[...new Set(sr.map(r=>r.Name))].sort();
@@ -489,20 +493,44 @@ function genProduction(rows,palletOnly=false){
     out.push([E],[E]);
     return out;
   }
+  function specialOrdersSection(sr){
+    if(!sr.length)return[];
+    const skus=[...new Set(sr.map(r=>r.Name))].sort();
+    const out=[];
+    out.push([{v:"Special Orders",bold:true,bg:"FF1F4E79",align:"left"},E,E,E,E,E,E,E,E,E,E,E,E,E,{v:"LABELS",bold:true},{v:"MIXED",bold:true}]);
+    out.push([E,E,E,E,E,E,E,E,E,E,E,E,E,E,{v:"CUSTOMERGROUP",bold:true},{v:"SPECIAL/CLEAR",bold:true}]);
+    out.push([{v:"Labelling Date:",bold:true},E,E,{v:"Staff Working:",bold:true}]);
+    out.push([E]);out.push([E,E,E,{v:"Batch Number:",bold:true}]);
+    out.push([H("Type"),H("OrderNumber"),H("CustomerId"),H("Customer"),...skus.map(s=>H(s)),H("Grand Total"),H("Cartons")]);
+    const custIds=[...new Map(sr.map(r=>[r.CustomerId,r])).keys()];
+    let gt={};skus.forEach(s=>gt[s]=0);let gtB=0,gtC=0;
+    custIds.forEach(cid=>{
+      const cr=sr.filter(r=>r.CustomerId===cid);
+      const r0=cr[0];
+      const typeLabel=isSpecial(r0)?"Pallet":"Clear Labels";
+      const typeDisplay=typeLabel+" — "+r0.Courier;
+      const omap={};
+      cr.forEach(r=>{if(!omap[r.OrderNumber])omap[r.OrderNumber]=[];omap[r.OrderNumber].push(r)});
+      let first=true;
+      Object.entries(omap).forEach(([on,or_])=>{
+        const r=or_[0],sm={};or_.forEach(r=>sm[r.Name]=parseInt(r.Quantity)||0);
+        const rB=skus.reduce((s,k)=>s+(sm[k]||0),0),rC=totalC(or_);
+        out.push([first?{v:typeDisplay,bold:true}:E,Cv(on),N(parseInt(r.CustomerId)),Cv(r.Customer),...skus.map(s=>sm[s]?N(sm[s]):E),N(rB),N(rC)]);
+        first=false;skus.forEach(s=>{gt[s]+=(sm[s]||0);});gtB+=rB;gtC+=rC;
+      });
+    });
+    out.push([{v:"Grand Total",bold:true,bg:"FF1F4E79",align:"left"},E,E,E,...skus.map(s=>({v:gt[s],t:"n",bold:true,bg:"FFBDD7EE"})),{v:gtB,t:"n",bold:true,bg:"FFBDD7EE"},{v:gtC,t:"n",bold:true,bg:"FFBDD7EE"}]);
+    out.push([E],[E]);
+    return out;
+  }
   const today=new Date().toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   const regularSections=[
-    ...section(nf.filter(r=>prodType(r.SKU)==="350"&&!isClear(r)),"350ml Orders","WHITE","350"),
-    ...section(nf.filter(r=>prodType(r.SKU)==="350"&&isClear(r)),"Clear Label Orders","CLEAR","350"),
+    ...section(nf.filter(r=>prodType(r.SKU)==="350"),"350ml Orders","WHITE","350"),
     ...section(nf.filter(r=>prodType(r.SKU)==="TEA"),"Tea Orders","CLEAR","TEA"),
     ...section(nf.filter(r=>prodType(r.SKU)==="1L"),"1L Orders","WHITE","1L"),
   ];
-  // SPECIAL section — only included in main production sheet (not pallet sheet)
-  const specialSections=!palletOnly&&sf.length?[
-    ...section(sf.filter(r=>prodType(r.SKU)==="350"),"350ml Orders — SPECIAL","WHITE","350","SPECIAL"),
-    ...section(sf.filter(r=>prodType(r.SKU)==="TEA"),"Tea Orders — SPECIAL","CLEAR","TEA","SPECIAL"),
-    ...section(sf.filter(r=>prodType(r.SKU)==="1L"),"1L Orders — SPECIAL","WHITE","1L","SPECIAL"),
-  ]:[];
-  return[{name:palletOnly?"Pallet Production":"Production",rows:[[{v:today.toUpperCase(),bold:true,bg:"FF1F4E79",align:"left"}],[E],...specialSections,...regularSections],colWidths:[18,14,13,28,...Array(20).fill(16),13,10]}];
+  const specialSection=!palletOnly?specialOrdersSection(xf):[];
+  return[{name:palletOnly?"Pallet Production":"Production",rows:[[{v:today.toUpperCase(),bold:true,bg:"FF1F4E79",align:"left"}],[E],...specialSection,...regularSections],colWidths:[18,14,13,28,...Array(20).fill(16),13,10]}];
 }
 function genColdXpress(rows,date){
   const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&r.Courier==="COLDXPRESS"&&!isPallet(r));
@@ -552,8 +580,8 @@ function buildPrint(rows,isBacks,sheetName,customerIdOverride){
   return[{name:sheetName,rows:[hdrRow,...dr],colWidths:[8,60,18,10,28,14,8,22,8,16,16,12,16]},{name:"File address",rows:[[{v:"Place your file address here",bold:true},Cv("G:\\My Drive\\Print Files")]],colWidths:[30,40]}];
 }
 function genSpecialPrints(rows){
-  // Group SPECIAL rows by customer, generate a fronts+backs pair per customer
-  const sf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&isSpecial(r));
+  // All non-standard: SPECIAL (any label) + REGULAR+CLEAR — each gets own print file
+  const sf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&isNonStandard(r));
   if(!sf.length)return[];
   // Get unique customers
   const customers=[...new Map(sf.map(r=>[r.CustomerId,{id:r.CustomerId,name:r.Customer}])).values()];
@@ -584,21 +612,18 @@ const VIC_COURIERS=new Set(["COLDXPRESS","RUN1","RUN2","RUN3"]);
 const INTL_COURIERS=new Set(["DKDISTRIBUTION","COOLCOURIERS"]);
 
 function genPrints(rows,palletOnly=false){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&(palletOnly?isPallet(r):(!isPallet(r)&&!isSpecial(r))));
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&(palletOnly?isPallet(r):!isNonStandard(r)));
   const sort=pr=>[...pr].sort((a,b)=>{for(const k of['Courier','Customer','OrderNumber','SKU']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
-  const r350w=sort(nf.filter(r=>prodType(r.SKU)==="350"&&!isClear(r)));
-  const r350c=sort(nf.filter(r=>prodType(r.SKU)==="350"&&isClear(r)));
+  const r350=sort(nf.filter(r=>prodType(r.SKU)==="350"));
   const rT=sort(nf.filter(r=>prodType(r.SKU)==="TEA"));
   const r1=sort(nf.filter(r=>prodType(r.SKU)==="1L"));
-  // Total units for threshold check
-  const total350=r350w.reduce(function(s,r){return s+(parseInt(r.Quantity)||0);},0);
+  const total350=r350.reduce(function(s,r){return s+(parseInt(r.Quantity)||0);},0);
   return{
-    f350:buildPrint(r350w,false,"FRONTS"),b350:buildPrint(r350w,true,"BACKS"),
-    f350c:r350c.length?buildPrint(r350c,false,"FRONTS"):null,
-    b350c:r350c.length?buildPrint(r350c,true,"BACKS"):null,
+    f350:buildPrint(r350,false,"FRONTS"),b350:buildPrint(r350,true,"BACKS"),
+    f350c:null,b350c:null,
     fT:buildPrint(rT,false,"FRONTS"),bT:buildPrint(rT,true,"BACKS"),
     f1:buildPrint(r1,false,"FRONTS","1L"),
-    total350, r350w, r350c, rT, r1,
+    total350,r350,rT,r1,
   };
 }
 
@@ -825,6 +850,26 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
   function saveRun(n,s){try{localStorage.setItem("ws_run"+n+"_stops",JSON.stringify(s));}catch(e){}}
   function saveRunName(n,v){try{localStorage.setItem("ws_run"+n+"_name",v);}catch(e){}}
 
+  var us_=React.useState([]), setUndoStack=us_[1]; var undoStack=us_[0];
+  function pushUndo(){
+    setUndoStack(function(prev){
+      var snapshot={cx:cxStops,r1:run1Stops,r2:run2Stops,r3:run3Stops,r4:run4Stops};
+      return prev.slice(-19).concat([snapshot]);
+    });
+  }
+  function undo(){
+    setUndoStack(function(prev){
+      if(!prev.length)return prev;
+      var snap=prev[prev.length-1];
+      setCxStops(snap.cx);
+      setRun1Stops(snap.r1);saveRun(1,snap.r1);
+      setRun2Stops(snap.r2);saveRun(2,snap.r2);
+      setRun3Stops(snap.r3);saveRun(3,snap.r3);
+      setRun4Stops(snap.r4);saveRun(4,snap.r4);
+      return prev.slice(0,-1);
+    });
+  }
+
   var lk_=React.useState({}), setLockedStops=lk_[1]; var lockedStops=lk_[0];
   function toggleLock(orderNumber){setLockedStops(function(prev){var n=Object.assign({},prev);if(n[orderNumber])delete n[orderNumber];else n[orderNumber]=true;return n;});}
 
@@ -1022,6 +1067,7 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
 
 
   function deleteStop(stop,from){
+    pushUndo();
     var rm=function(lst){return lst.filter(function(s){return s.orderNumber!==stop.orderNumber;});};
     if(from==="cx")setCxStops(rm(cxStops));
     else if(from==="run1"){var u=rm(run1Stops);setRun1Stops(u);saveRun(1,u);}
@@ -1039,6 +1085,7 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
   function getRun(n){return n===1?run1Stops:n===2?run2Stops:n===3?run3Stops:run4Stops;}
 
   function move(stop,from,to){
+    pushUndo();
     var rm=function(lst){return lst.filter(function(s){return s.orderNumber!==stop.orderNumber;});};
     var nC=cxStops;
     // Remove from source
@@ -1157,6 +1204,7 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
           {run4Stops.length>0&&<div><div style={{fontSize:15,fontWeight:800,color:"#0369A1"}}>${r4_cost.toFixed(0)} | {r4_hrs.toFixed(1)}h</div><div style={{fontSize:9,color:"#94A3B8"}}>{run4Name||"RUN 4"}</div></div>}
           <div><div style={{fontSize:18,fontWeight:800,color:saved>0?"#059669":"#DC2626"}}>${Math.max(0,saved).toFixed(2)}</div><div style={{fontSize:9,color:"#94A3B8"}}>YOU SAVE</div></div>
           <button onClick={function(){runFull();}} disabled={isLoading} style={{marginLeft:"auto",padding:"7px 16px",borderRadius:8,border:"1.5px solid #BFDBFE",background:"#EFF6FF",color:"#2563EB",fontSize:11,fontWeight:700,cursor:"pointer"}}>Re-optimise</button>
+          <button onClick={undo} disabled={undoStack.length===0} title="Undo last move or delete" style={{padding:"7px 14px",borderRadius:8,border:"1.5px solid #E2E8F0",background:undoStack.length?"#F8FAFC":"#F1F5F9",color:undoStack.length?"#374151":"#CBD5E1",fontSize:11,fontWeight:700,cursor:undoStack.length?"pointer":"default"}}>{"↩ Undo"+(undoStack.length>0?" ("+undoStack.length+")":"")}</button>
         </div>
         <div style={{flex:1,display:"flex",overflow:"hidden"}}>
           <div style={{width:175,background:"#fff",borderRight:"1px solid #E2E8F0",padding:14,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",flexShrink:0}}>

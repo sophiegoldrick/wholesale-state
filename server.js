@@ -1103,6 +1103,14 @@ with open(CSV_PATH, newline='', encoding='utf-8-sig') as f:
     ALL = list(csv.DictReader(f))
 rows = [r for r in ALL if r.get('SKU','') != 'FREIGHT']
 rows = [r for r in rows if str(r.get('CustomerId','')).strip() != '22']  # Exclude Taste Studios (ID:22)
+# Remap Happy Apple custom SKUs to real WS SKUs (packs of 12 — multiply qty × 12)
+THA_MAP = {'THA-BO12':'BLUEBERRY350','THA-LG12':'BOTANICAL350','THA-OMP12':'TROPICALBLISS350',
+           'THA-PB12':'ROOTS350','THA-PH12':'ANTIOX350','THA-RR12':'REFRESH350',
+           'THA-SL12':'IMMUNITY350','THA-SUA12':'CLOUDYAPPLE350'}
+for r in rows:
+    if r.get('SKU','') in THA_MAP:
+        r['Quantity'] = str(int(float(r.get('Quantity',0) or 0) * 12))
+        r['SKU'] = THA_MAP[r['SKU']]
 # Always derive Product from SKU — CSV Product field is unreliable (Ordermentum exports 'JUICE' or 'TEA' for 1L SKUs)
 TEA_SKUS = {'LTEA350','PTEA350','RTEA350'}
 for r in rows:
@@ -1532,11 +1540,11 @@ if GEN_TYPE in ('prints','all'):
     # Courier Z→A (OTHER, DKDISTRIBUTION, COOLCOURIERS, COLDXPRESS), customer A→Z within each
     # Exclude SPECIAL customers — they use different label stock
     sr = sorted(rows, key=lambda r:([-ord(c) for c in r.get('Courier','').upper()], r.get('Customer','').upper(), r.get('OrderNumber',''), r.get('SKU','')))
-    sr_regular = [r for r in sr if (r.get('Customergroup','') or '').strip().upper() != 'SPECIAL']
-    r350_white=[r for r in sr_regular if r.get('Product')=='350' and (r.get('Label','') or '').strip().upper() != 'CLEAR']
-    r350_clear=[r for r in sr_regular if r.get('Product')=='350' and (r.get('Label','') or '').strip().upper() == 'CLEAR']
-    rtea=[r for r in sr_regular if r.get('Product')=='TEA']
-    r1l =[r for r in sr_regular if r.get('Product')=='1L']
+    def is_non_standard(r): return is_special_row(r) or is_clear_row(r)
+    sr_regular_white = [r for r in sr if not is_non_standard(r)]
+    r350_white=[r for r in sr_regular_white if r.get('Product')=='350']
+    rtea=[r for r in sr_regular_white if r.get('Product')=='TEA']
+    r1l =[r for r in sr_regular_white if r.get('Product')=='1L']
 
     # 350ml white label roll — combined or split VIC/Interstate
     total_350_units = sum(int(float(r.get('Quantity',0) or 0)) for r in r350_white)
@@ -1554,39 +1562,36 @@ if GEN_TYPE in ('prints','all'):
     else:
         make_print_file('FRONTS', False, r350_white, f'{OUT_DIR}/{DATE_STR}_350ml_Fronts.xlsx')
         make_print_file('BACKS',  True,  r350_white, f'{OUT_DIR}/{DATE_STR}_350ml_Backs.xlsx')
-    # Clear label 350ml roll — separate file
-    if r350_clear:
-        make_print_file('FRONTS', False, r350_clear, f'{OUT_DIR}/{DATE_STR}_350ml_Clear_Fronts.xlsx')
-        make_print_file('BACKS',  True,  r350_clear, f'{OUT_DIR}/{DATE_STR}_350ml_Clear_Backs.xlsx')
     if rtea: make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Fronts.xlsx')
     if rtea: make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
     if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
 
-    # ── SPECIAL customers: one fronts+backs pair per customer ──────
+    # ── Non-standard: SPECIAL (any label) + REGULAR+CLEAR — own file per customer ──
     import re as _re
-    sr_special = [r for r in sr if (r.get('Customergroup','') or '').strip().upper() == 'SPECIAL']
-    if sr_special:
-        special_by_cid = {}
-        for r in sr_special:
+    sr_nonstandard = [r for r in sr if is_non_standard(r)]
+    if sr_nonstandard:
+        ns_by_cid = {}
+        for r in sr_nonstandard:
             cid = r.get('CustomerId','unknown')
-            if cid not in special_by_cid:
-                special_by_cid[cid] = {'name': r.get('Customer','Unknown'), 'rows': []}
-            special_by_cid[cid]['rows'].append(r)
-        for cid, cd in special_by_cid.items():
+            if cid not in ns_by_cid:
+                ns_by_cid[cid] = {'name': r.get('Customer','Unknown'), 'label': (r.get('Label','') or 'WHITE').strip().upper(), 'rows': []}
+            ns_by_cid[cid]['rows'].append(r)
+        for cid, cd in ns_by_cid.items():
             safe = _re.sub(r'[^a-zA-Z0-9 ]', '', cd['name']).strip().replace(' ', '_')[:30]
+            label = cd['label']
             crows = cd['rows']
             c350 = [r for r in crows if r.get('Product') == '350']
             ctea = [r for r in crows if r.get('Product') == 'TEA']
             c1l  = [r for r in crows if r.get('Product') == '1L']
             if c350:
-                make_print_file('FRONTS', False, c350, f'{OUT_DIR}/{safe}_350ml_Fronts.xlsx')
-                make_print_file('BACKS',  True,  c350, f'{OUT_DIR}/{safe}_350ml_Backs.xlsx')
+                make_print_file('FRONTS', False, c350, f'{OUT_DIR}/{safe}_{label}_350ml_Fronts.xlsx')
+                make_print_file('BACKS',  True,  c350, f'{OUT_DIR}/{safe}_{label}_350ml_Backs.xlsx')
             if ctea:
                 make_print_file('FRONTS', False, ctea, f'{OUT_DIR}/{safe}_Tea_Fronts.xlsx')
                 make_print_file('BACKS',  True,  ctea, f'{OUT_DIR}/{safe}_Tea_Backs.xlsx')
             if c1l:
                 make_print_file('FRONTS', False, c1l,  f'{OUT_DIR}/{safe}_1L_Fronts.xlsx', folder_override='1L')
-        print(f'✅ SPECIAL prints — {len(special_by_cid)} customer(s)', file=sys.stderr)
+        print(f'✅ Non-standard prints — {len(ns_by_cid)} customer(s)', file=sys.stderr)
 
 # ══ ZIP all generated files ══
 zip_path = f'{OUT_DIR}/{DATE_STR}_Wholesale_State_Files.zip'
