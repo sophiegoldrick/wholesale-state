@@ -1619,6 +1619,8 @@ function validateCSV(rows) {
   const VALID_PRODUCTS = ['350','TEA','1L'];
   const TEA_SKUS = new Set(['LTEA350','PTEA350','RTEA350']);
   rows.forEach((r, i) => {
+    // Skip ghost rows (continuation lines from multi-line quoted fields)
+    if (!r.OrderNumber && !r.Customer) return;
     const line = `Row ${i + 2} (${r.OrderNumber || '?'} — ${r.Customer || '?'})`;
     const sku = (r.SKU || '').trim();
     let product = r.Product;
