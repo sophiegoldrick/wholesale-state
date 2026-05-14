@@ -393,7 +393,7 @@ const totalC=rows=>rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU).reduce((s,r)=>s+cart
 // Rules: in production sheet (own section), NOT in prints, NOT in manifests
 const isSpecial=r=>(r.CustomerVisibilityGroup&&r.CustomerVisibilityGroup.toUpperCase()!=="REGULAR"&&r.CustomerVisibilityGroup!=="")||(r.CustomerPriceGroup&&r.CustomerPriceGroup.toUpperCase()!=="REGULAR"&&r.CustomerPriceGroup!=="")||(r.Customergroup&&r.Customergroup.toUpperCase()!=="REGULAR"&&r.Customergroup!=="");
 const isPallet=isSpecial; // alias — same customers, kept for compatibility
-const isNonStandard=r=>isSpecial(r)||isClear(r); // SPECIAL (any label) OR REGULAR+CLEAR
+const isNonStandard=r=>isSpecial(r); // only SPECIAL customers get own print files — REGULAR+CLEAR goes in shared clear roll
 const isClear=r=>(r.Label||"").trim().toUpperCase()==="CLEAR";
 
 /* ── ANALYTICS ── */
@@ -463,8 +463,8 @@ const E=null;
 
 /* ── SHEET GENERATORS ── */
 function genProduction(rows,palletOnly=false){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&(palletOnly?isPallet(r):!isNonStandard(r)));
-  const xf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&!palletOnly&&isNonStandard(r));
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&(palletOnly?isPallet(r):!isSpecial(r)));
+  const xf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&!palletOnly&&isSpecial(r));
   function section(sr,title,lc,prod,customerGroupLabel){
     if(!sr.length)return[];
     const skus=[...new Set(sr.map(r=>r.Name))].sort();
@@ -525,7 +525,8 @@ function genProduction(rows,palletOnly=false){
   }
   const today=new Date().toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   const regularSections=[
-    ...section(nf.filter(r=>prodType(r.SKU)==="350"),"350ml Orders","WHITE","350"),
+    ...section(nf.filter(r=>prodType(r.SKU)==="350"&&!isClear(r)),"350ml Orders","WHITE","350"),
+    ...section(nf.filter(r=>prodType(r.SKU)==="350"&&isClear(r)),"Clear Label Orders","CLEAR","350"),
     ...section(nf.filter(r=>prodType(r.SKU)==="TEA"),"Tea Orders","CLEAR","TEA"),
     ...section(nf.filter(r=>prodType(r.SKU)==="1L"),"1L Orders","WHITE","1L"),
   ];
@@ -580,8 +581,9 @@ function buildPrint(rows,isBacks,sheetName,customerIdOverride){
   return[{name:sheetName,rows:[hdrRow,...dr],colWidths:[8,60,18,10,28,14,8,22,8,16,16,12,16]},{name:"File address",rows:[[{v:"Place your file address here",bold:true},Cv("G:\\My Drive\\Print Files")]],colWidths:[30,40]}];
 }
 function genSpecialPrints(rows){
-  // All non-standard: SPECIAL (any label) + REGULAR+CLEAR — each gets own print file
-  const sf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&isNonStandard(r));
+  // Only SPECIAL customers get their own per-customer print files
+  // REGULAR+CLEAR customers go into the shared clear label roll
+  const sf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&isSpecial(r));
   if(!sf.length)return[];
   // Get unique customers
   const customers=[...new Map(sf.map(r=>[r.CustomerId,{id:r.CustomerId,name:r.Customer}])).values()];
@@ -608,22 +610,24 @@ function genSpecialPrints(rows){
   });
   return results;
 }
-const VIC_COURIERS=new Set(["COLDXPRESS","RUN1","RUN2","RUN3"]);
+const VIC_COURIERS=new Set(["COLDXPRESS","RUN1","RUN2","RUN3","RUN4"]);
 const INTL_COURIERS=new Set(["DKDISTRIBUTION","COOLCOURIERS"]);
 
 function genPrints(rows,palletOnly=false){
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&(palletOnly?isPallet(r):!isNonStandard(r)));
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&(palletOnly?isPallet(r):!isSpecial(r)));
   const sort=pr=>[...pr].sort((a,b)=>{for(const k of['Courier','Customer','OrderNumber','SKU']){if(a[k]<b[k])return-1;if(a[k]>b[k])return 1}return 0});
-  const r350=sort(nf.filter(r=>prodType(r.SKU)==="350"));
+  const r350w=sort(nf.filter(r=>prodType(r.SKU)==="350"&&!isClear(r)));
+  const r350c=sort(nf.filter(r=>prodType(r.SKU)==="350"&&isClear(r)));
   const rT=sort(nf.filter(r=>prodType(r.SKU)==="TEA"));
   const r1=sort(nf.filter(r=>prodType(r.SKU)==="1L"));
-  const total350=r350.reduce(function(s,r){return s+(parseInt(r.Quantity)||0);},0);
+  const total350=r350w.reduce(function(s,r){return s+(parseInt(r.Quantity)||0);},0);
   return{
-    f350:buildPrint(r350,false,"FRONTS"),b350:buildPrint(r350,true,"BACKS"),
-    f350c:null,b350c:null,
+    f350:buildPrint(r350w,false,"FRONTS"),b350:buildPrint(r350w,true,"BACKS"),
+    f350c:r350c.length?buildPrint(r350c,false,"FRONTS"):null,
+    b350c:r350c.length?buildPrint(r350c,true,"BACKS"):null,
     fT:buildPrint(rT,false,"FRONTS"),bT:buildPrint(rT,true,"BACKS"),
     f1:buildPrint(r1,false,"FRONTS","1L"),
-    total350,r350,rT,r1,
+    total350,r350w,r350c,rT,r1,
   };
 }
 
@@ -1336,8 +1340,8 @@ function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
         else if(type==="dk") dlXlsx(genDK(selRows),`${d}_Sel_DK.xlsx`);
         else if(type==="coolcouriers") dlXlsx(genCoolCouriers(selRows),`${d}_Sel_CoolCouriers.xlsx`);
         else if(type==="prints"){
-          const{f350,b350,fT,bT,f1}=genPrints(selRows);
-          dlZip([[f350,`${d}_Sel_350ml_Fronts.xlsx`],[b350,`${d}_Sel_350ml_Backs.xlsx`],[fT,`${d}_Sel_Tea_Fronts.xlsx`],[bT,`${d}_Sel_Tea_Backs.xlsx`],[f1,`${d}_Sel_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Sel_Print_Files.zip`);
+          const{f350,b350,f350c,b350c,fT,bT,f1}=genPrints(selRows);
+          dlZip([[f350,`${d}_Sel_350ml_Fronts.xlsx`],[b350,`${d}_Sel_350ml_Backs.xlsx`],...(f350c?[[f350c,`${d}_Sel_350ml_Clear_Fronts.xlsx`],[b350c,`${d}_Sel_350ml_Clear_Backs.xlsx`]]:[]),[fT,`${d}_Sel_Tea_Fronts.xlsx`],[bT,`${d}_Sel_Tea_Backs.xlsx`],[f1,`${d}_Sel_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Sel_Print_Files.zip`);
         }
         else if(type==="all"){
           const files=[{sheets:genProduction(selRows),name:`${d}_Sel_Production.xlsx`}];
@@ -2146,6 +2150,17 @@ function App(){
       if(!rows||rows.length===0){alert("No CSV data loaded. Please drop your CSV file first.");setGen(null);return;}
       const d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
 
+      // ── Split prompt check — fires BEFORE server/browser fork ──
+      if(type==="all"&&!genSplitChoice){
+        const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&!isSpecial(r));
+        const total350=nf.filter(r=>prodType(r.SKU)==="350"&&!isClear(r)).reduce(function(s,r){return s+(parseInt(r.Quantity)||0);},0);
+        if(total350>3000){
+          setSplitPrompt({total350,type,d,rows});
+          setGen(null);
+          return;
+        }
+      }
+
       // Server-side generation via Python + openpyxl
       if(IS_DEPLOYED){
         const csvText=JSON.stringify(rows);
@@ -2201,7 +2216,7 @@ function App(){
       else if(type==="dk")dlXlsx(genDK(rows),`${d}_DK_DISTRIBUTIONS.xlsx`);
       else if(type==="coolcouriers")dlXlsx(genCoolCouriers(rows),`${d}_COOLCOURIERS.xlsx`);
       else if(type==="wsdriver")dlXlsx(genWsDriver(rows,driverAllocation,d),`${d}_WS_Delivery_Run.xlsx`);
-      else if(type==="prints"){const{f350,b350,fT,bT,f1}=genPrints(rows);dlZip([[f350,`${d}_350ml_Fronts.xlsx`],[b350,`${d}_350ml_Backs.xlsx`],[fT,`${d}_Tea_Fronts.xlsx`],[bT,`${d}_Tea_Backs.xlsx`],[f1,`${d}_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Print_Files.zip`);}
+      else if(type==="prints"){const{f350,b350,f350c,b350c,fT,bT,f1}=genPrints(rows);dlZip([[f350,`${d}_350ml_Fronts.xlsx`],[b350,`${d}_350ml_Backs.xlsx`],...(f350c?[[f350c,`${d}_350ml_Clear_Fronts.xlsx`],[b350c,`${d}_350ml_Clear_Backs.xlsx`]]:[]),[fT,`${d}_Tea_Fronts.xlsx`],[bT,`${d}_Tea_Backs.xlsx`],[f1,`${d}_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Print_Files.zip`);}
       else if(type==="pallet-prod")dlXlsx(genProduction(rows,true),`${d}_Pallet_Production.xlsx`);
       else if(type==="pallet-prints"){const{f350,b350,fT,bT,f1}=genPrints(rows,true);dlZip([[f350,`${d}_Pallet_350ml_Fronts.xlsx`],[b350,`${d}_Pallet_350ml_Backs.xlsx`],[fT,`${d}_Pallet_Tea_Fronts.xlsx`],[bT,`${d}_Pallet_Tea_Backs.xlsx`],[f1,`${d}_Pallet_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Pallet_Print_Files.zip`);}
       else if(type==="all"){

@@ -1541,8 +1541,10 @@ if GEN_TYPE in ('prints','all'):
     # Exclude SPECIAL customers — they use different label stock
     sr = sorted(rows, key=lambda r:([-ord(c) for c in r.get('Courier','').upper()], r.get('Customer','').upper(), r.get('OrderNumber',''), r.get('SKU','')))
     def is_non_standard(r): return is_special_row(r) or is_clear_row(r)
-    sr_regular_white = [r for r in sr if not is_non_standard(r)]
+    sr_regular_white = [r for r in sr if not is_special_row(r) and not is_clear_row(r)]
+    sr_regular_clear = [r for r in sr if not is_special_row(r) and is_clear_row(r)]
     r350_white=[r for r in sr_regular_white if r.get('Product')=='350']
+    r350_clear=[r for r in sr_regular_clear if r.get('Product')=='350']
     rtea=[r for r in sr_regular_white if r.get('Product')=='TEA']
     r1l =[r for r in sr_regular_white if r.get('Product')=='1L']
 
@@ -1562,13 +1564,17 @@ if GEN_TYPE in ('prints','all'):
     else:
         make_print_file('FRONTS', False, r350_white, f'{OUT_DIR}/{DATE_STR}_350ml_Fronts.xlsx')
         make_print_file('BACKS',  True,  r350_white, f'{OUT_DIR}/{DATE_STR}_350ml_Backs.xlsx')
+    # Clear label roll — all REGULAR+CLEAR customers combined
+    if r350_clear:
+        make_print_file('FRONTS', False, r350_clear, f'{OUT_DIR}/{DATE_STR}_350ml_Clear_Fronts.xlsx')
+        make_print_file('BACKS',  True,  r350_clear, f'{OUT_DIR}/{DATE_STR}_350ml_Clear_Backs.xlsx')
     if rtea: make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Fronts.xlsx')
     if rtea: make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
     if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
 
-    # ── Non-standard: SPECIAL (any label) + REGULAR+CLEAR — own file per customer ──
+    # ── SPECIAL customers only: one fronts+backs file per customer ──
     import re as _re
-    sr_nonstandard = [r for r in sr if is_non_standard(r)]
+    sr_nonstandard = [r for r in sr if is_special_row(r)]
     if sr_nonstandard:
         ns_by_cid = {}
         for r in sr_nonstandard:
