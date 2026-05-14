@@ -435,7 +435,7 @@ function buildAnalytics(rows,prevIds=[]){
 /* ── VALIDATION ── */
 function validate(rows){
   const issues=[];
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT");
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.OrderNumber&&r.Customer);
   const pr=nf.filter(r=>r.SKU);
   const allONs=[...new Set(nf.map(r=>r.OrderNumber).filter(Boolean))];
   const withProd=[...new Set(pr.map(r=>r.OrderNumber))];

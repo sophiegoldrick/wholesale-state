@@ -1021,7 +1021,9 @@ app.post('/api/send-production-files', auth, async (req, res) => {
       'leopegoli@bigpond.com',
     ]).map(addr => ({ emailAddress: { address: addr } }));
 
-    const subject = `Wholesale State Production Files — ${dateLabel || new Date().toLocaleDateString('en-AU')}`;
+    const emailDate = dateLabel || new Date().toLocaleDateString('en-AU');
+    const dayOfWeek = new Date().toLocaleDateString('en-AU', { weekday: 'long' });
+    const subject = `${dayOfWeek} Production Files ${emailDate}`;
 
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:600px;color:#333">
