@@ -1150,6 +1150,10 @@ GREY = PatternFill('solid', fgColor='D3D3D3')
 BOLD = Font(bold=True, name='Calibri', size=11)
 generated = []
 
+# Helper functions used across multiple GEN_TYPE blocks
+def is_special_row(r): return (r.get('Customergroup','') or '').strip().upper() == 'SPECIAL'
+def is_clear_row(r):   return (r.get('Label','') or '').strip().upper() == 'CLEAR'
+
 # ══════════════════════════════════════════════
 # 1. COLDXPRESS
 # ══════════════════════════════════════════════
@@ -1436,9 +1440,6 @@ if GEN_TYPE in ('production','all'):
         if row[0].value == 'Courier': courier_rows.append(row[0].row)
 
     # Split rows correctly: exclude SPECIAL, split 350ml by Label
-    def is_special_row(r): return (r.get('Customergroup','') or '').strip().upper() == 'SPECIAL'
-    def is_clear_row(r):   return (r.get('Label','') or '').strip().upper() == 'CLEAR'
-
     r350_white = [r for r in rows if r.get('Product')=='350' and not is_special_row(r) and not is_clear_row(r)]
     r350_clear = [r for r in rows if r.get('Product')=='350' and not is_special_row(r) and is_clear_row(r)]
     rtea_data  = [r for r in rows if r.get('Product')=='TEA'  and not is_special_row(r)]
