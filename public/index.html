@@ -851,8 +851,37 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
   React.useEffect(function(){localStorage.setItem("ws_opt_start",startTime);},[startTime]);
   React.useEffect(function(){runFull();},[]);
 
-  function saveRun(n,s){try{localStorage.setItem("ws_run"+n+"_stops",JSON.stringify(s));}catch(e){}}
-  function saveRunName(n,v){try{localStorage.setItem("ws_run"+n+"_name",v);}catch(e){}}
+  function saveRun(n,s){
+    try{localStorage.setItem("ws_run"+n+"_stops",JSON.stringify(s));}catch(e){}
+    // Also persist to server so runs are available on any device
+    var allRuns={
+      r1:n===1?s:run1Stops, r2:n===2?s:run2Stops,
+      r3:n===3?s:run3Stops, r4:n===4?s:run4Stops,
+      n1:run1Name,n2:run2Name,n3:run3Name,n4:run4Name
+    };
+    apiFetch("/api/store/ws_runs",{method:"POST",body:JSON.stringify({value:allRuns})}).catch(function(){});
+  }
+  function saveRunName(n,v){
+    try{localStorage.setItem("ws_run"+n+"_name",v);}catch(e){}
+    var allRuns={
+      r1:run1Stops,r2:run2Stops,r3:run3Stops,r4:run4Stops,
+      n1:n===1?v:run1Name,n2:n===2?v:run2Name,n3:n===3?v:run3Name,n4:n===4?v:run4Name
+    };
+    apiFetch("/api/store/ws_runs",{method:"POST",body:JSON.stringify({value:allRuns})}).catch(function(){});
+  }
+  // Load runs from server on first render — overwrites localStorage with server state
+  React.useEffect(function(){
+    apiFetch("/api/store/ws_runs").then(function(r){return r.ok?r.json():null;}).then(function(d){
+      if(!d||!d.value)return;
+      var v=d.value;
+      if(v.r1&&v.r1.length){setRun1Stops(v.r1);try{localStorage.setItem("ws_run1_stops",JSON.stringify(v.r1));}catch(e){}}
+      if(v.r2&&v.r2.length){setRun2Stops(v.r2);try{localStorage.setItem("ws_run2_stops",JSON.stringify(v.r2));}catch(e){}}
+      if(v.r3&&v.r3.length){setRun3Stops(v.r3);try{localStorage.setItem("ws_run3_stops",JSON.stringify(v.r3));}catch(e){}}
+      if(v.r4&&v.r4.length){setRun4Stops(v.r4);try{localStorage.setItem("ws_run4_stops",JSON.stringify(v.r4));}catch(e){}}
+      if(v.n1){setRun1Name(v.n1);}if(v.n2){setRun2Name(v.n2);}
+      if(v.n3){setRun3Name(v.n3);}if(v.n4){setRun4Name(v.n4);}
+    }).catch(function(){});
+  },[]);
 
   var us_=React.useState([]), setUndoStack=us_[1]; var undoStack=us_[0];
   function pushUndo(){
