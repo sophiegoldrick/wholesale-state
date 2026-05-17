@@ -815,7 +815,7 @@ function VicTile({csvRows,driverAllocation,onOpen,T}){
     </div>
   );
 }
-function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
+function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T,apiFetch}){
   var shiftHrs=parseFloat(localStorage.getItem("ws_opt_shift")||"9");
   var stopMins=parseFloat(localStorage.getItem("ws_opt_stop")||"10");
   var driverRate=parseFloat(localStorage.getItem("ws_opt_rate")||"30");
@@ -869,19 +869,6 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
     };
     apiFetch("/api/store/ws_runs",{method:"POST",body:JSON.stringify({value:allRuns})}).catch(function(){});
   }
-  // Load runs from server on first render — overwrites localStorage with server state
-  React.useEffect(function(){
-    apiFetch("/api/store/ws_runs").then(function(r){return r.ok?r.json():null;}).then(function(d){
-      if(!d||!d.value)return;
-      var v=d.value;
-      if(v.r1&&v.r1.length){setRun1Stops(v.r1);try{localStorage.setItem("ws_run1_stops",JSON.stringify(v.r1));}catch(e){}}
-      if(v.r2&&v.r2.length){setRun2Stops(v.r2);try{localStorage.setItem("ws_run2_stops",JSON.stringify(v.r2));}catch(e){}}
-      if(v.r3&&v.r3.length){setRun3Stops(v.r3);try{localStorage.setItem("ws_run3_stops",JSON.stringify(v.r3));}catch(e){}}
-      if(v.r4&&v.r4.length){setRun4Stops(v.r4);try{localStorage.setItem("ws_run4_stops",JSON.stringify(v.r4));}catch(e){}}
-      if(v.n1){setRun1Name(v.n1);}if(v.n2){setRun2Name(v.n2);}
-      if(v.n3){setRun3Name(v.n3);}if(v.n4){setRun4Name(v.n4);}
-    }).catch(function(){});
-  },[]);
 
   var us_=React.useState([]), setUndoStack=us_[1]; var undoStack=us_[0];
   function pushUndo(){
@@ -2357,7 +2344,7 @@ function App(){
   return(
     <>
       <style>{currentCSS}</style>
-      {showOptimiser&&<DeliveryOptimiserModal csvRows={csvRows} onConfirm={function(alloc){
+      {showOptimiser&&<DeliveryOptimiserModal csvRows={csvRows} apiFetch={apiFetch} onConfirm={function(alloc){
         var mutated=rowsRef.current.map(function(r){
           var a=alloc.find(function(a){return a.orderNumber===r.OrderNumber;});
           if(!a)return r;
@@ -2599,7 +2586,19 @@ function App(){
                           :<span style={{fontSize:16,color:T.sand,fontWeight:300}}>↓</span>}
                       </button>
                       {isCX&&hasVic&&!skipped&&(
-                        <button onClick={function(e){e.stopPropagation();setShowOptimiser(true);}}
+                        <button onClick={function(e){e.stopPropagation();
+                          // Load latest runs from server before opening optimiser
+                          apiFetch("/api/store/ws_runs").then(function(r){return r.ok?r.json():null;}).then(function(d){
+                            if(d&&d.value){
+                              var v=d.value;
+                              if(v.r1&&v.r1.length)setRun1Stops(v.r1);
+                              if(v.r2&&v.r2.length)setRun2Stops(v.r2);
+                              if(v.r3&&v.r3.length)setRun3Stops(v.r3);
+                              if(v.r4&&v.r4.length)setRun4Stops(v.r4);
+                              if(v.n1)setRun1Name(v.n1);if(v.n2)setRun2Name(v.n2);
+                              if(v.n3)setRun3Name(v.n3);if(v.n4)setRun4Name(v.n4);
+                            }
+                          }).catch(function(){}).finally(function(){setShowOptimiser(true);});}}
                           style={{position:"absolute",top:6,right:38,padding:"3px 8px",borderRadius:6,border:"1px solid "+(hasAlloc?T.blue:T.border),background:hasAlloc?T.blue:"rgba(255,255,255,0.9)",color:hasAlloc?"#fff":T.blue,fontSize:9,fontWeight:700,fontFamily:"'Montserrat',sans-serif",cursor:"pointer",letterSpacing:.5,whiteSpace:"nowrap"}}>
                           {hasAlloc?"✓ VIC run sorted":"⚡ sort VIC deliveries"}
                         </button>
