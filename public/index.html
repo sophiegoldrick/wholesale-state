@@ -435,7 +435,7 @@ function buildAnalytics(rows,prevIds=[]){
 /* ── VALIDATION ── */
 function validate(rows){
   const issues=[];
-  const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.OrderNumber&&r.Customer);
+  const nf=rows.filter(r=>r.SKU!=="FREIGHT");
   const pr=nf.filter(r=>r.SKU);
   const allONs=[...new Set(nf.map(r=>r.OrderNumber).filter(Boolean))];
   const withProd=[...new Set(pr.map(r=>r.OrderNumber))];
@@ -815,7 +815,7 @@ function VicTile({csvRows,driverAllocation,onOpen,T}){
     </div>
   );
 }
-function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T,apiFetch}){
+function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T}){
   var shiftHrs=parseFloat(localStorage.getItem("ws_opt_shift")||"9");
   var stopMins=parseFloat(localStorage.getItem("ws_opt_stop")||"10");
   var driverRate=parseFloat(localStorage.getItem("ws_opt_rate")||"30");
@@ -851,24 +851,8 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T,apiFetch}){
   React.useEffect(function(){localStorage.setItem("ws_opt_start",startTime);},[startTime]);
   React.useEffect(function(){runFull();},[]);
 
-  function saveRun(n,s){
-    try{localStorage.setItem("ws_run"+n+"_stops",JSON.stringify(s));}catch(e){}
-    // Also persist to server so runs are available on any device
-    var allRuns={
-      r1:n===1?s:run1Stops, r2:n===2?s:run2Stops,
-      r3:n===3?s:run3Stops, r4:n===4?s:run4Stops,
-      n1:run1Name,n2:run2Name,n3:run3Name,n4:run4Name
-    };
-    apiFetch("/api/store/ws_runs",{method:"POST",body:JSON.stringify({value:allRuns})}).catch(function(){});
-  }
-  function saveRunName(n,v){
-    try{localStorage.setItem("ws_run"+n+"_name",v);}catch(e){}
-    var allRuns={
-      r1:run1Stops,r2:run2Stops,r3:run3Stops,r4:run4Stops,
-      n1:n===1?v:run1Name,n2:n===2?v:run2Name,n3:n===3?v:run3Name,n4:n===4?v:run4Name
-    };
-    apiFetch("/api/store/ws_runs",{method:"POST",body:JSON.stringify({value:allRuns})}).catch(function(){});
-  }
+  function saveRun(n,s){try{localStorage.setItem("ws_run"+n+"_stops",JSON.stringify(s));}catch(e){}}
+  function saveRunName(n,v){try{localStorage.setItem("ws_run"+n+"_name",v);}catch(e){}}
 
   var us_=React.useState([]), setUndoStack=us_[1]; var undoStack=us_[0];
   function pushUndo(){
@@ -2344,7 +2328,7 @@ function App(){
   return(
     <>
       <style>{currentCSS}</style>
-      {showOptimiser&&<DeliveryOptimiserModal csvRows={csvRows} apiFetch={apiFetch} onConfirm={function(alloc){
+      {showOptimiser&&<DeliveryOptimiserModal csvRows={csvRows} onConfirm={function(alloc){
         var mutated=rowsRef.current.map(function(r){
           var a=alloc.find(function(a){return a.orderNumber===r.OrderNumber;});
           if(!a)return r;
@@ -2359,7 +2343,7 @@ function App(){
           <div style={{padding:"22px 26px 18px",borderBottom:"1px solid "+T.border}}>
             <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:15,color:T.ink,marginBottom:6}}>Large 350ml Roll</div>
             <div style={{fontSize:13,color:T.inkM,lineHeight:1.6}}>
-              Your 350ml white label roll has <strong>{splitPrompt.prints.total350.toLocaleString()} units</strong> — over the 3,000 unit threshold.
+              Your 350ml white label roll has <strong>{(splitPrompt.total350||0).toLocaleString()} units</strong> — over the 3,000 unit threshold.
             </div>
             <div style={{fontSize:12,color:T.inkL,marginTop:10,lineHeight:1.7}}>
               <strong>Split into two rolls?</strong><br/>
@@ -2586,19 +2570,7 @@ function App(){
                           :<span style={{fontSize:16,color:T.sand,fontWeight:300}}>↓</span>}
                       </button>
                       {isCX&&hasVic&&!skipped&&(
-                        <button onClick={function(e){e.stopPropagation();
-                          // Load latest runs from server before opening optimiser
-                          apiFetch("/api/store/ws_runs").then(function(r){return r.ok?r.json():null;}).then(function(d){
-                            if(d&&d.value){
-                              var v=d.value;
-                              if(v.r1&&v.r1.length)setRun1Stops(v.r1);
-                              if(v.r2&&v.r2.length)setRun2Stops(v.r2);
-                              if(v.r3&&v.r3.length)setRun3Stops(v.r3);
-                              if(v.r4&&v.r4.length)setRun4Stops(v.r4);
-                              if(v.n1)setRun1Name(v.n1);if(v.n2)setRun2Name(v.n2);
-                              if(v.n3)setRun3Name(v.n3);if(v.n4)setRun4Name(v.n4);
-                            }
-                          }).catch(function(){}).finally(function(){setShowOptimiser(true);});}}
+                        <button onClick={function(e){e.stopPropagation();setShowOptimiser(true);}}
                           style={{position:"absolute",top:6,right:38,padding:"3px 8px",borderRadius:6,border:"1px solid "+(hasAlloc?T.blue:T.border),background:hasAlloc?T.blue:"rgba(255,255,255,0.9)",color:hasAlloc?"#fff":T.blue,fontSize:9,fontWeight:700,fontFamily:"'Montserrat',sans-serif",cursor:"pointer",letterSpacing:.5,whiteSpace:"nowrap"}}>
                           {hasAlloc?"✓ VIC run sorted":"⚡ sort VIC deliveries"}
                         </button>
