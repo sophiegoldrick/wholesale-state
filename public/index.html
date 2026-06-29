@@ -385,8 +385,8 @@ function parseCSV(text){
     return obj;
   });
 }
-const prodType=sku=>{const s=(sku||"").toUpperCase();if(!s||s==="FREIGHT")return"";if(s.includes("TEA"))return"TEA";if(s.endsWith("1L")||s.endsWith("1"))return"1L";if(s.endsWith("350"))return"350";return"350";};
-const packSize=sku=>sku==="TEA"?18:sku==="1L"?12:24;
+const prodType=sku=>{const s=(sku||"").toUpperCase();if(!s||s==="FREIGHT")return"";if(s.includes("TEA"))return"TEA";if(s.endsWith("100"))return"ELIXIR";if(s.endsWith("1L")||s.endsWith("1"))return"1L";if(s.endsWith("350"))return"350";return"350";};
+const packSize=sku=>sku==="TEA"?18:sku==="1L"?12:sku==="ELIXIR"?24:24;
 const cartons=(qty,p)=>Math.ceil((parseInt(qty)||0)/packSize(p));
 const totalC=rows=>rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU).reduce((s,r)=>s+cartons(r.Quantity,prodType(r.SKU)),0);
 // SPECIAL customers: Customergroup !== "REGULAR" (and non-empty)
@@ -529,6 +529,7 @@ function genProduction(rows,palletOnly=false){
     ...section(nf.filter(r=>prodType(r.SKU)==="350"&&isClear(r)),"Clear Label Orders","CLEAR","350"),
     ...section(nf.filter(r=>prodType(r.SKU)==="TEA"),"Tea Orders","CLEAR","TEA"),
     ...section(nf.filter(r=>prodType(r.SKU)==="1L"),"1L Orders","WHITE","1L"),
+    ...section(nf.filter(r=>prodType(r.SKU)==="ELIXIR"),"Elixir Orders","WHITE","ELIXIR"),
   ];
   const specialSection=!palletOnly?specialOrdersSection(xf):[];
   return[{name:palletOnly?"Pallet Production":"Production",rows:[[{v:today.toUpperCase(),bold:true,bg:"FF1F4E79",align:"left"}],[E],...specialSection,...regularSections],colWidths:[18,14,13,28,...Array(20).fill(16),13,10]}];
@@ -620,6 +621,7 @@ function genPrints(rows,palletOnly=false){
   const r350c=sort(nf.filter(r=>prodType(r.SKU)==="350"&&isClear(r)));
   const rT=sort(nf.filter(r=>prodType(r.SKU)==="TEA"));
   const r1=sort(nf.filter(r=>prodType(r.SKU)==="1L"));
+  const rElx=sort(nf.filter(r=>prodType(r.SKU)==="ELIXIR"));
   const total350=r350w.reduce(function(s,r){return s+(parseInt(r.Quantity)||0);},0);
   return{
     f350:buildPrint(r350w,false,"FRONTS"),b350:buildPrint(r350w,true,"BACKS"),
@@ -627,7 +629,8 @@ function genPrints(rows,palletOnly=false){
     b350c:r350c.length?buildPrint(r350c,true,"BACKS"):null,
     fT:buildPrint(rT,false,"FRONTS"),bT:buildPrint(rT,true,"BACKS"),
     f1:buildPrint(r1,false,"FRONTS","1L"),
-    total350,r350w,r350c,rT,r1,
+    fElx:rElx.length?buildPrint(rElx,false,"FRONTS","ELIXIR"):null,
+    total350,r350w,r350c,rT,r1,rElx,
   };
 }
 
@@ -1340,8 +1343,8 @@ function OrdersTable({rows,allOrders,setOrders,discrepancies,setDiscrepancies}){
         else if(type==="dk") dlXlsx(genDK(selRows),`${d}_Sel_DK.xlsx`);
         else if(type==="coolcouriers") dlXlsx(genCoolCouriers(selRows),`${d}_Sel_CoolCouriers.xlsx`);
         else if(type==="prints"){
-          const{f350,b350,f350c,b350c,fT,bT,f1}=genPrints(selRows);
-          dlZip([[f350,`${d}_Sel_350ml_Fronts.xlsx`],[b350,`${d}_Sel_350ml_Backs.xlsx`],...(f350c?[[f350c,`${d}_Sel_350ml_Clear_Fronts.xlsx`],[b350c,`${d}_Sel_350ml_Clear_Backs.xlsx`]]:[]),[fT,`${d}_Sel_Tea_Fronts.xlsx`],[bT,`${d}_Sel_Tea_Backs.xlsx`],[f1,`${d}_Sel_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Sel_Print_Files.zip`);
+          const{f350,b350,f350c,b350c,fT,bT,f1,fElx}=genPrints(selRows);
+          dlZip([[f350,`${d}_Sel_350ml_Fronts.xlsx`],[b350,`${d}_Sel_350ml_Backs.xlsx`],...(f350c?[[f350c,`${d}_Sel_350ml_Clear_Fronts.xlsx`],[b350c,`${d}_Sel_350ml_Clear_Backs.xlsx`]]:[]),[fT,`${d}_Sel_Tea_Fronts.xlsx`],[bT,`${d}_Sel_Tea_Backs.xlsx`],[f1,`${d}_Sel_1L_Fronts.xlsx`],...(fElx?[[fElx,`${d}_Sel_Elixir_Fronts.xlsx`]]:[]  )].map(([s,n])=>({sheets:s,name:n})),`${d}_Sel_Print_Files.zip`);
         }
         else if(type==="all"){
           const files=[{sheets:genProduction(selRows),name:`${d}_Sel_Production.xlsx`}];
@@ -2216,7 +2219,7 @@ function App(){
       else if(type==="dk")dlXlsx(genDK(rows),`${d}_DK_DISTRIBUTIONS.xlsx`);
       else if(type==="coolcouriers")dlXlsx(genCoolCouriers(rows),`${d}_COOLCOURIERS.xlsx`);
       else if(type==="wsdriver")dlXlsx(genWsDriver(rows,driverAllocation,d),`${d}_WS_Delivery_Run.xlsx`);
-      else if(type==="prints"){const{f350,b350,f350c,b350c,fT,bT,f1}=genPrints(rows);dlZip([[f350,`${d}_350ml_Fronts.xlsx`],[b350,`${d}_350ml_Backs.xlsx`],...(f350c?[[f350c,`${d}_350ml_Clear_Fronts.xlsx`],[b350c,`${d}_350ml_Clear_Backs.xlsx`]]:[]),[fT,`${d}_Tea_Fronts.xlsx`],[bT,`${d}_Tea_Backs.xlsx`],[f1,`${d}_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Print_Files.zip`);}
+      else if(type==="prints"){const{f350,b350,f350c,b350c,fT,bT,f1,fElx}=genPrints(rows);dlZip([[f350,`${d}_350ml_Fronts.xlsx`],[b350,`${d}_350ml_Backs.xlsx`],...(f350c?[[f350c,`${d}_350ml_Clear_Fronts.xlsx`],[b350c,`${d}_350ml_Clear_Backs.xlsx`]]:[]),[fT,`${d}_Tea_Fronts.xlsx`],[bT,`${d}_Tea_Backs.xlsx`],[f1,`${d}_1L_Fronts.xlsx`],...(fElx?[[fElx,`${d}_Elixir_Fronts.xlsx`]]:[]  )].map(([s,n])=>({sheets:s,name:n})),`${d}_Print_Files.zip`);}
       else if(type==="pallet-prod")dlXlsx(genProduction(rows,true),`${d}_Pallet_Production.xlsx`);
       else if(type==="pallet-prints"){const{f350,b350,fT,bT,f1}=genPrints(rows,true);dlZip([[f350,`${d}_Pallet_350ml_Fronts.xlsx`],[b350,`${d}_Pallet_350ml_Backs.xlsx`],[fT,`${d}_Pallet_Tea_Fronts.xlsx`],[bT,`${d}_Pallet_Tea_Backs.xlsx`],[f1,`${d}_Pallet_1L_Fronts.xlsx`]].map(([s,n])=>({sheets:s,name:n})),`${d}_Pallet_Print_Files.zip`);}
       else if(type==="all"){

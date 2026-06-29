@@ -1118,6 +1118,7 @@ TEA_SKUS = {'LTEA350','PTEA350','RTEA350'}
 for r in rows:
     sku = r.get('SKU','')
     if sku in TEA_SKUS:              r['Product'] = 'TEA'
+    elif sku.endswith('100'):        r['Product'] = 'ELIXIR'
     elif sku.endswith('350'):        r['Product'] = '350'
     elif sku.endswith('1') or sku.endswith('1L'): r['Product'] = '1L'
 # Fix float quantities
@@ -1265,6 +1266,7 @@ if GEN_TYPE in ('production','all'):
     SKUS_350 = sorted(set(r['Name'] for r in rows if r.get('Product') == '350'))
     SKUS_TEA = sorted(set(r['Name'] for r in rows if r.get('Product') == 'TEA'))
     SKUS_1L  = sorted(set(r['Name'] for r in rows if r.get('Product') == '1L'))
+    SKUS_ELIXIR = sorted(set(r['Name'] for r in rows if r.get('Product') == 'ELIXIR'))
 
     def build_section_rows(skus, product_filter):
         """Build list of row dicts for this product section — couriers sorted, with subtotals + grand total."""
@@ -1276,7 +1278,7 @@ if GEN_TYPE in ('production','all'):
             sq = defaultdict(int)
             for r in pr: sq[r['Name']] += int(r.get('Quantity', 0) or 0)
             total_qty = sum(sq.values())
-            divisor = 24 if product_filter=='350' else 18 if product_filter=='TEA' else 12
+            divisor = 24 if product_filter=='350' else 18 if product_filter=='TEA' else 24 if product_filter=='ELIXIR' else 12
             tot_crt = total_qty / divisor  # exact decimal e.g. 2.5, not rounded up
             couriers_data[r0.get('Courier','')].append({
                 'courier': r0.get('Courier',''), 'onum': onum,
@@ -1444,10 +1446,12 @@ if GEN_TYPE in ('production','all'):
     r350_clear = [r for r in rows if r.get('Product')=='350' and not is_special_row(r) and is_clear_row(r)]
     rtea_data  = [r for r in rows if r.get('Product')=='TEA'  and not is_special_row(r)]
     r1l_data   = [r for r in rows if r.get('Product')=='1L'   and not is_special_row(r)]
+    relixir_data = [r for r in rows if r.get('Product')=='ELIXIR' and not is_special_row(r)]
     r350_data  = r350_white  # for delete_section compatibility
 
     if len(courier_rows) >= 3:
         # Write sections in REVERSE order so insert_rows doesn't shift subsequent section positions
+        if relixir_data: write_section(ws, courier_rows[2], SKUS_ELIXIR, 'ELIXIR')
         if r1l_data:  write_section(ws, courier_rows[2], SKUS_1L,  '1L')
         if rtea_data: write_section(ws, courier_rows[1], SKUS_TEA, 'TEA')
         write_section(ws, courier_rows[0], SKUS_350, '350')
@@ -1481,8 +1485,9 @@ if GEN_TYPE in ('production','all'):
             ws.delete_rows(actual_start, count)
             print(f'  Deleted {section_marker} section ({count} rows)', file=sys.stderr)
 
-    if not r1l_data:  delete_section(ws, '1L Orders')
-    if not rtea_data: delete_section(ws, 'Tea Orders')
+    if not r1l_data:      delete_section(ws, '1L Orders')
+    if not rtea_data:     delete_section(ws, 'Tea Orders')
+    if not relixir_data:  delete_section(ws, 'Elixir Orders')
 
     wb.save(dst); generated.append(dst)
     print(f'✅ Production_Sheet', file=sys.stderr)
@@ -1574,6 +1579,9 @@ if GEN_TYPE in ('prints','all'):
     if rtea: make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Fronts.xlsx')
     if rtea: make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
     if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
+    # Elixir label roll — fronts only (wraparound label), 24 per carton
+    relixir = [r for r in sr_regular_white if r.get('Product')=='ELIXIR']
+    if relixir: make_print_file('FRONTS', False, relixir, f'{OUT_DIR}/{DATE_STR}_Elixir_Fronts.xlsx', folder_override='ELIXIR')
 
     # ── SPECIAL customers only: one fronts+backs file per customer ──
     import re as _re
