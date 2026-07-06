@@ -1133,19 +1133,21 @@ for r in rows:
 
 def total_cartons(ords):
     # Sum ALL qty by product type first, THEN divide — mixed SKUs fill the same carton
-    q350 = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='350')
-    qtea = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='TEA')
-    q1l  = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='1L')
-    t  = math.ceil(q350/24) if q350 else 0
-    t += math.ceil(qtea/18) if qtea else 0
-    t += math.ceil(q1l /12) if q1l  else 0
+    q350    = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='350')
+    qtea    = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='TEA')
+    q1l     = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='1L')
+    qelixir = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='ELIXIR')
+    t  = math.ceil(q350/24)    if q350    else 0
+    t += math.ceil(qtea/18)    if qtea    else 0
+    t += math.ceil(q1l /12)    if q1l     else 0
+    t += math.ceil(qelixir/24) if qelixir else 0
     return t
 
 def inv_value(ords):
     return sum(float(r.get('UnitPrice',0) or 0)*int(r.get('Quantity',0) or 0) for r in ords if r.get('Product'))
 
 def courier_orders(courier):
-    return {k:v for k,v in by_order.items() if v[0].get('Courier','')==courier}
+    return {k:v for k,v in by_order.items() if v[0].get('Courier','')==courier and not is_special_row(v[0])}
 
 GREY = PatternFill('solid', fgColor='D3D3D3')
 BOLD = Font(bold=True, name='Calibri', size=11)
@@ -1451,7 +1453,6 @@ if GEN_TYPE in ('production','all'):
 
     if len(courier_rows) >= 3:
         # Write sections in REVERSE order so insert_rows doesn't shift subsequent section positions
-        if relixir_data: write_section(ws, courier_rows[2], SKUS_ELIXIR, 'ELIXIR')
         if r1l_data:  write_section(ws, courier_rows[2], SKUS_1L,  '1L')
         if rtea_data: write_section(ws, courier_rows[1], SKUS_TEA, 'TEA')
         write_section(ws, courier_rows[0], SKUS_350, '350')
@@ -1485,9 +1486,89 @@ if GEN_TYPE in ('production','all'):
             ws.delete_rows(actual_start, count)
             print(f'  Deleted {section_marker} section ({count} rows)', file=sys.stderr)
 
-    if not r1l_data:      delete_section(ws, '1L Orders')
-    if not rtea_data:     delete_section(ws, 'Tea Orders')
-    if not relixir_data:  delete_section(ws, 'Elixir Orders')
+    if not r1l_data:  delete_section(ws, '1L Orders')
+    if not rtea_data: delete_section(ws, 'Tea Orders')
+
+    # Append Elixir Orders section at end of sheet (no template slot — appended directly)
+    if relixir_data:
+        from openpyxl.styles import Side, Border as OBorder, Alignment as OAlignment
+        THIN   = Side(style='thin')
+        NOBDR  = OBorder()
+        BF     = Font(bold=True, name='Calibri', size=11)
+        PF     = Font(bold=False, name='Calibri', size=11)
+        LEFT   = OAlignment(horizontal='left')
+        CENTRE = OAlignment(horizontal='center')
+        last_col_e = 6 + len(SKUS_ELIXIR)
+        # Section rows: blank gap, title, labelling date, blank, batch number, header
+        nr = ws.max_row + 2  # blank gap
+        ws.cell(nr, 1).value = None
+        nr += 1
+        ws.cell(nr, 1).value = 'ELIXIR ORDERS'
+        ws.cell(nr, 1).font  = Font(bold=True, name='Calibri', size=14)
+        nr += 1
+        ws.cell(nr, 1).value = 'Labelling Date:'; ws.cell(nr, 1).font = BF
+        ws.cell(nr, 4).value = 'Staff Working:';  ws.cell(nr, 4).font = BF
+        nr += 1  # blank
+        nr += 1
+        ws.cell(nr, 4).value = 'Batch Number:'; ws.cell(nr, 4).font = BF
+        for bc in range(4, last_col_e + 1):
+            ws.cell(nr, bc).border = OBorder(
+                top=THIN, bottom=THIN,
+                left=THIN if bc==4 else None,
+                right=THIN if bc==last_col_e else None)
+        nr += 1
+        # Header row
+        hdr_r = nr
+        ws.cell(hdr_r, 1).value = 'Courier';      ws.cell(hdr_r, 1).font = BF; ws.cell(hdr_r, 1).alignment = LEFT
+        ws.cell(hdr_r, 2).value = 'OrderNumber';  ws.cell(hdr_r, 2).font = BF; ws.cell(hdr_r, 2).alignment = LEFT
+        ws.cell(hdr_r, 3).value = 'CustomerId';   ws.cell(hdr_r, 3).font = BF; ws.cell(hdr_r, 3).alignment = LEFT
+        ws.cell(hdr_r, 4).value = 'Customer';     ws.cell(hdr_r, 4).font = BF; ws.cell(hdr_r, 4).alignment = LEFT
+        for ci, sku in enumerate(SKUS_ELIXIR, 5):
+            ws.cell(hdr_r, ci).value = sku; ws.cell(hdr_r, ci).font = BF; ws.cell(hdr_r, ci).alignment = CENTRE
+        ws.cell(hdr_r, 5+len(SKUS_ELIXIR)).value = 'Grand Total'; ws.cell(hdr_r, 5+len(SKUS_ELIXIR)).font = BF; ws.cell(hdr_r, 5+len(SKUS_ELIXIR)).alignment = CENTRE
+        ws.cell(hdr_r, 6+len(SKUS_ELIXIR)).value = 'Cartons';     ws.cell(hdr_r, 6+len(SKUS_ELIXIR)).font = BF; ws.cell(hdr_r, 6+len(SKUS_ELIXIR)).alignment = CENTRE
+        nr += 1
+        # Data rows — grouped by courier then order
+        from collections import defaultdict as _dd
+        elixir_by_courier = _dd(lambda: _dd(list))
+        for r in relixir_data:
+            elixir_by_courier[r.get('Courier','')][r.get('OrderNumber','')].append(r)
+        grand = {s:0 for s in SKUS_ELIXIR}; grand_qty = 0; grand_crt = 0
+        for courier in sorted(elixir_by_courier.keys()):
+            c_orders = elixir_by_courier[courier]
+            c_tot = {s:0 for s in SKUS_ELIXIR}; c_qty = 0; c_crt = 0; first = True
+            for onum in sorted(c_orders.keys()):
+                ords = c_orders[onum]; r0 = ords[0]
+                sq = {s:0 for s in SKUS_ELIXIR}
+                for r in ords: sq[r['Name']] = sq.get(r['Name'],0) + int(r.get('Quantity',0) or 0)
+                tq = sum(sq.values()); tc = math.ceil(tq/24)
+                ws.cell(nr, 1).value = courier if first else None; ws.cell(nr, 1).font = BF if first else PF; ws.cell(nr, 1).alignment = LEFT; first = False
+                ws.cell(nr, 2).value = onum;              ws.cell(nr, 2).font = PF; ws.cell(nr, 2).alignment = LEFT
+                ws.cell(nr, 3).value = r0.get('CustomerId',''); ws.cell(nr, 3).font = PF; ws.cell(nr, 3).alignment = LEFT
+                ws.cell(nr, 4).value = r0.get('Customer',''); ws.cell(nr, 4).font = PF; ws.cell(nr, 4).alignment = LEFT
+                for ci, sku in enumerate(SKUS_ELIXIR, 5):
+                    if sq.get(sku,0):
+                        ws.cell(nr, ci).value = sq[sku]; ws.cell(nr, ci).font = PF; ws.cell(nr, ci).alignment = CENTRE
+                ws.cell(nr, 5+len(SKUS_ELIXIR)).value = tq; ws.cell(nr, 5+len(SKUS_ELIXIR)).alignment = CENTRE
+                ws.cell(nr, 6+len(SKUS_ELIXIR)).value = tc; ws.cell(nr, 6+len(SKUS_ELIXIR)).alignment = CENTRE
+                for s in SKUS_ELIXIR: c_tot[s] = c_tot.get(s,0)+sq.get(s,0); grand[s] = grand.get(s,0)+sq.get(s,0)
+                c_qty += tq; grand_qty += tq; c_crt += tc; grand_crt += tc; nr += 1
+            # Courier subtotal
+            for c in range(1, last_col_e+1): ws.cell(nr,c).font=BF; ws.cell(nr,c).border=OBorder(top=THIN,bottom=THIN)
+            ws.cell(nr,4).value='Total'; ws.cell(nr,4).alignment=LEFT
+            for ci,sku in enumerate(SKUS_ELIXIR,5):
+                if c_tot.get(sku,0): ws.cell(nr,ci).value=c_tot[sku]; ws.cell(nr,ci).alignment=CENTRE
+            ws.cell(nr,5+len(SKUS_ELIXIR)).value=c_qty; ws.cell(nr,5+len(SKUS_ELIXIR)).alignment=CENTRE
+            ws.cell(nr,6+len(SKUS_ELIXIR)).value=c_crt; ws.cell(nr,6+len(SKUS_ELIXIR)).alignment=CENTRE
+            nr += 1
+        # Grand total
+        for c in range(1, last_col_e+1): ws.cell(nr,c).font=BF; ws.cell(nr,c).border=OBorder(top=THIN,bottom=THIN)
+        ws.cell(nr,4).value='Grand Total'; ws.cell(nr,4).alignment=LEFT
+        for ci,sku in enumerate(SKUS_ELIXIR,5):
+            if grand.get(sku,0): ws.cell(nr,ci).value=grand[sku]; ws.cell(nr,ci).alignment=CENTRE
+        ws.cell(nr,5+len(SKUS_ELIXIR)).value=grand_qty; ws.cell(nr,5+len(SKUS_ELIXIR)).alignment=CENTRE
+        ws.cell(nr,6+len(SKUS_ELIXIR)).value=grand_crt; ws.cell(nr,6+len(SKUS_ELIXIR)).alignment=CENTRE
+        print(f'  Elixir section appended: {grand_qty} units, {grand_crt} cartons', file=sys.stderr)
 
     wb.save(dst); generated.append(dst)
     print(f'✅ Production_Sheet', file=sys.stderr)
@@ -1581,7 +1662,7 @@ if GEN_TYPE in ('prints','all'):
     if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
     # Elixir label roll — fronts only (wraparound label), 24 per carton
     relixir = [r for r in sr_regular_white if r.get('Product')=='ELIXIR']
-    if relixir: make_print_file('FRONTS', False, relixir, f'{OUT_DIR}/{DATE_STR}_Elixir_Fronts.xlsx', folder_override='ELIXIR')
+    if relixir: make_print_file('FRONTS', False, relixir, f'{OUT_DIR}/{DATE_STR}_Elixir_Fronts.xlsx')
 
     # ── SPECIAL customers only: one fronts+backs file per customer ──
     import re as _re
