@@ -1706,7 +1706,7 @@ print(json.dumps(result))
 function validateCSV(rows) {
   const issues = [];
   const VALID_COURIERS = ['COLDXPRESS','DKDISTRIBUTION','COOLCOURIERS','WSDRIVER','RUN1','RUN2','RUN3','RUN4'];
-  const VALID_PRODUCTS = ['350','TEA','1L'];
+  const VALID_PRODUCTS = ['350','TEA','1L','ELIXIR'];
   const TEA_SKUS = new Set(['LTEA350','PTEA350','RTEA350']);
   rows.forEach((r, i) => {
     // Skip ghost rows (continuation lines from multi-line quoted fields)

@@ -818,7 +818,10 @@ function VicTile({csvRows,driverAllocation,onOpen,T}){
     </div>
   );
 }
-function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T,apiFetch}){
+function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T,apiFetch,
+  cxStops,setCxStops,run1Stops,setRun1Stops,run2Stops,setRun2Stops,run3Stops,setRun3Stops,run4Stops,setRun4Stops,
+  run1Name,setRun1Name,run2Name,setRun2Name,run3Name,setRun3Name,run4Name,setRun4Name,
+  undoStack,setUndoStack,saveRun,saveRunName,pushUndo,undo}){
   var shiftHrs=parseFloat(localStorage.getItem("ws_opt_shift")||"9");
   var stopMins=parseFloat(localStorage.getItem("ws_opt_stop")||"10");
   var driverRate=parseFloat(localStorage.getItem("ws_opt_rate")||"30");
@@ -834,15 +837,7 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T,apiFetch}){
   var ph=React.useState("idle"), setPhase=ph[1]; var phase=ph[0];
   var gp=React.useState(0), setGeoProgress=gp[1]; var geoProgress=gp[0];
   var gt=React.useState(0), setGeoTotal=gt[1]; var geoTotal=gt[0];
-  var cx_=React.useState([]), setCxStops=cx_[1]; var cxStops=cx_[0];
-  var r1_=React.useState([]), setRun1Stops=r1_[1]; var run1Stops=r1_[0];
-  var r2_=React.useState([]), setRun2Stops=r2_[1]; var run2Stops=r2_[0];
-  var r3_=React.useState([]), setRun3Stops=r3_[1]; var run3Stops=r3_[0];
-  var r4_=React.useState([]), setRun4Stops=r4_[1]; var run4Stops=r4_[0];
-  var rn1_=React.useState(""), setRun1Name=rn1_[1]; var run1Name=rn1_[0];
-  var rn2_=React.useState(""), setRun2Name=rn2_[1]; var run2Name=rn2_[0];
-  var rn3_=React.useState(""), setRun3Name=rn3_[1]; var run3Name=rn3_[0];
-  var rn4_=React.useState(""), setRun4Name=rn4_[1]; var run4Name=rn4_[0];
+  // Run state, undo, and save functions all come from App-level props (shared, server-synced)
   var dov_=React.useState(null), setDragOver=dov_[1]; var dragOver=dov_[0];
 
   React.useEffect(function(){localStorage.setItem("ws_opt_shift",shiftHrs);},[shiftHrs]);
@@ -853,48 +848,6 @@ function DeliveryOptimiserModal({csvRows,onConfirm,onSkip,onClose,T,apiFetch}){
   React.useEffect(function(){localStorage.setItem("ws_opt_drivers",numDrivers);},[numDrivers]);
   React.useEffect(function(){localStorage.setItem("ws_opt_start",startTime);},[startTime]);
   React.useEffect(function(){runFull();},[]);
-
-  function saveRun(n,s){
-    try{localStorage.setItem("ws_run"+n+"_stops",JSON.stringify(s));}catch(e){}
-    if(apiFetch){
-      var payload={
-        r1:n===1?s:run1Stops,r2:n===2?s:run2Stops,
-        r3:n===3?s:run3Stops,r4:n===4?s:run4Stops,
-        n1:run1Name,n2:run2Name,n3:run3Name,n4:run4Name
-      };
-      apiFetch("/api/store/ws_runs",{method:"POST",body:JSON.stringify({value:payload})}).catch(function(){});
-    }
-  }
-  function saveRunName(n,v){
-    try{localStorage.setItem("ws_run"+n+"_name",v);}catch(e){}
-    if(apiFetch){
-      var payload={
-        r1:run1Stops,r2:run2Stops,r3:run3Stops,r4:run4Stops,
-        n1:n===1?v:run1Name,n2:n===2?v:run2Name,n3:n===3?v:run3Name,n4:n===4?v:run4Name
-      };
-      apiFetch("/api/store/ws_runs",{method:"POST",body:JSON.stringify({value:payload})}).catch(function(){});
-    }
-  }
-
-  var us_=React.useState([]), setUndoStack=us_[1]; var undoStack=us_[0];
-  function pushUndo(){
-    setUndoStack(function(prev){
-      var snapshot={cx:cxStops,r1:run1Stops,r2:run2Stops,r3:run3Stops,r4:run4Stops};
-      return prev.slice(-19).concat([snapshot]);
-    });
-  }
-  function undo(){
-    setUndoStack(function(prev){
-      if(!prev.length)return prev;
-      var snap=prev[prev.length-1];
-      setCxStops(snap.cx);
-      setRun1Stops(snap.r1);saveRun(1,snap.r1);
-      setRun2Stops(snap.r2);saveRun(2,snap.r2);
-      setRun3Stops(snap.r3);saveRun(3,snap.r3);
-      setRun4Stops(snap.r4);saveRun(4,snap.r4);
-      return prev.slice(0,-1);
-    });
-  }
 
   var lk_=React.useState({}), setLockedStops=lk_[1]; var lockedStops=lk_[0];
   function toggleLock(orderNumber){setLockedStops(function(prev){var n=Object.assign({},prev);if(n[orderNumber])delete n[orderNumber];else n[orderNumber]=true;return n;});}
@@ -1824,6 +1777,51 @@ function App(){
     return res;
   }
 
+  // ── Shared delivery run state — lives at App level so it persists across modal open/close ──
+  var cx_=React.useState([]), setCxStops=cx_[1]; var cxStops=cx_[0];
+  var r1_=React.useState([]), setRun1Stops=r1_[1]; var run1Stops=r1_[0];
+  var r2_=React.useState([]), setRun2Stops=r2_[1]; var run2Stops=r2_[0];
+  var r3_=React.useState([]), setRun3Stops=r3_[1]; var run3Stops=r3_[0];
+  var r4_=React.useState([]), setRun4Stops=r4_[1]; var run4Stops=r4_[0];
+  var rn1_=React.useState(""), setRun1Name=rn1_[1]; var run1Name=rn1_[0];
+  var rn2_=React.useState(""), setRun2Name=rn2_[1]; var run2Name=rn2_[0];
+  var rn3_=React.useState(""), setRun3Name=rn3_[1]; var run3Name=rn3_[0];
+  var rn4_=React.useState(""), setRun4Name=rn4_[1]; var run4Name=rn4_[0];
+  var us_=React.useState([]), setUndoStack=us_[1]; var undoStack=us_[0];
+  function saveRun(n,s){
+    var payload={
+      r1:n===1?s:run1Stops,r2:n===2?s:run2Stops,
+      r3:n===3?s:run3Stops,r4:n===4?s:run4Stops,
+      n1:run1Name,n2:run2Name,n3:run3Name,n4:run4Name
+    };
+    apiFetch("/api/store/ws_runs",{method:"POST",body:JSON.stringify({value:payload})}).catch(function(){});
+  }
+  function saveRunName(n,v){
+    var payload={
+      r1:run1Stops,r2:run2Stops,r3:run3Stops,r4:run4Stops,
+      n1:n===1?v:run1Name,n2:n===2?v:run2Name,n3:n===3?v:run3Name,n4:n===4?v:run4Name
+    };
+    apiFetch("/api/store/ws_runs",{method:"POST",body:JSON.stringify({value:payload})}).catch(function(){});
+  }
+  function pushUndo(){
+    setUndoStack(function(prev){
+      var snapshot={cx:cxStops,r1:run1Stops,r2:run2Stops,r3:run3Stops,r4:run4Stops};
+      return prev.slice(-19).concat([snapshot]);
+    });
+  }
+  function undo(){
+    setUndoStack(function(prev){
+      if(!prev.length)return prev;
+      var snap=prev[prev.length-1];
+      setCxStops(snap.cx);
+      setRun1Stops(snap.r1);saveRun(1,snap.r1);
+      setRun2Stops(snap.r2);saveRun(2,snap.r2);
+      setRun3Stops(snap.r3);saveRun(3,snap.r3);
+      setRun4Stops(snap.r4);saveRun(4,snap.r4);
+      return prev.slice(0,-1);
+    });
+  }
+
   async function handleLogin(e){
     e.preventDefault();
     setLoginLoading(true); setLoginErr('');
@@ -2350,7 +2348,21 @@ function App(){
   return(
     <>
       <style>{currentCSS}</style>
-      {showOptimiser&&<DeliveryOptimiserModal csvRows={csvRows} apiFetch={apiFetch} onConfirm={function(alloc){
+      {showOptimiser&&<DeliveryOptimiserModal csvRows={csvRows}
+        apiFetch={apiFetch}
+        cxStops={cxStops} setCxStops={setCxStops}
+        run1Stops={run1Stops} setRun1Stops={setRun1Stops}
+        run2Stops={run2Stops} setRun2Stops={setRun2Stops}
+        run3Stops={run3Stops} setRun3Stops={setRun3Stops}
+        run4Stops={run4Stops} setRun4Stops={setRun4Stops}
+        run1Name={run1Name} setRun1Name={setRun1Name}
+        run2Name={run2Name} setRun2Name={setRun2Name}
+        run3Name={run3Name} setRun3Name={setRun3Name}
+        run4Name={run4Name} setRun4Name={setRun4Name}
+        undoStack={undoStack} setUndoStack={setUndoStack}
+        saveRun={saveRun} saveRunName={saveRunName}
+        pushUndo={pushUndo} undo={undo}
+        onConfirm={function(alloc){
         var mutated=rowsRef.current.map(function(r){
           var a=alloc.find(function(a){return a.orderNumber===r.OrderNumber;});
           if(!a)return r;
@@ -3565,7 +3577,7 @@ function SettingsPanel({T, apiFetch, themeKey, setTheme, token, setToken}){
     window.storage.get('ws-notif-settings').then(r=>{if(r)setNotifSettings(JSON.parse(r.value));}).catch(()=>{});
     // Load biz settings
     window.storage.get('ws-biz-settings').then(r=>{if(r)setBizSettings(s=>({...s,...JSON.parse(r.value)}));}).catch(()=>{});
-    // Load shared runs from server
+    // Load delivery runs from database (shared across all devices)
     apiFetch("/api/store/ws_runs").then(function(r){return r.ok?r.json():null;}).then(function(d){
       if(d&&d.value){var v=d.value;
         if(v.r1&&v.r1.length)setRun1Stops(v.r1);
@@ -3576,7 +3588,7 @@ function SettingsPanel({T, apiFetch, themeKey, setTheme, token, setToken}){
         if(v.n3)setRun3Name(v.n3);if(v.n4)setRun4Name(v.n4);
       }
     }).catch(function(){});
-    // Load shared CSV history from server
+    // Load shared CSV upload history from server
     apiFetch("/api/store/ws_csv_history").then(function(r){return r.ok?r.json():null;}).then(function(d){
       if(d&&d.value&&d.value.length)setCsvHistory(d.value);
     }).catch(function(){});
