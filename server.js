@@ -977,12 +977,19 @@ app.post('/api/request-labels', auth, async (req, res) => {
       const email = AM_EMAILS[am] || Object.entries(AM_EMAILS).find(([k]) => am.startsWith(k))?.[1];
       if (email) amEmails.add(email);
     });
-    const toRecipients = [
-      'jasmin@pressedjuices.com.au',
-      'sophie@pressedjuices.com.au',
-      'info@wholesalestate.com.au',
-      ...amEmails,
-    ].map(addr => ({ emailAddress: { address: addr } }));
+    const toRecipients = await (async () => {
+      const fixed = ['jasmin@pressedjuices.com.au','sophie@pressedjuices.com.au','info@wholesalestate.com.au'];
+      let base = [...fixed];
+      try {
+        const dbSettings = await db(`SELECT value FROM kv_store WHERE key = 'ws-email-settings'`);
+        if (dbSettings.rows.length > 0) {
+          const parsed = JSON.parse(dbSettings.rows[0].value);
+          if (parsed.labelRecipients && parsed.labelRecipients.length > 0)
+            base = parsed.labelRecipients;
+        }
+      } catch(e) {}
+      return [...new Set([...base, ...amEmails])].map(addr => ({ emailAddress: { address: addr } }));
+    })();
     const rows = customers.map(c =>
       `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee">${c.id}</td><td style="padding:8px 12px;border-bottom:1px solid #eee">${c.name}</td><td style="padding:8px 12px;border-bottom:1px solid #eee">${c.accountManager || '—'}</td></tr>`
     ).join('');
@@ -1014,12 +1021,24 @@ app.post('/api/send-production-files', auth, async (req, res) => {
 
     const accessToken = await getAccessToken();
 
-    const toRecipients = (recipients || [
+    // Load recipients from database settings, fall back to hardcoded defaults
+    const defaultProdRecipients = [
       'leopegoli@gmail.com',
       'production@pressedjuices.com.au',
       'sophie@pressedjuices.com.au',
       'leopegoli@bigpond.com',
-    ]).map(addr => ({ emailAddress: { address: addr } }));
+    ];
+    let prodRecipients = recipients || defaultProdRecipients;
+    try {
+      const dbSettings = await db(`SELECT value FROM kv_store WHERE key = 'ws-email-settings'`);
+      if (dbSettings.rows.length > 0) {
+        const parsed = JSON.parse(dbSettings.rows[0].value);
+        if (parsed.productionRecipients && parsed.productionRecipients.length > 0)
+          prodRecipients = parsed.productionRecipients;
+      }
+    } catch(e) {}
+
+    const toRecipients = prodRecipients.map(addr => ({ emailAddress: { address: addr } }));
 
     const emailDate = dateLabel || new Date().toLocaleDateString('en-AU');
     const dayOfWeek = new Date().toLocaleDateString('en-AU', { weekday: 'long' });
@@ -1681,6 +1700,7 @@ if GEN_TYPE in ('prints','all'):
             c350 = [r for r in crows if r.get('Product') == '350']
             ctea = [r for r in crows if r.get('Product') == 'TEA']
             c1l  = [r for r in crows if r.get('Product') == '1L']
+            celixir = [r for r in crows if r.get('Product') == 'ELIXIR']
             if c350:
                 make_print_file('FRONTS', False, c350, f'{OUT_DIR}/{safe}_{label}_350ml_Fronts.xlsx')
                 make_print_file('BACKS',  True,  c350, f'{OUT_DIR}/{safe}_{label}_350ml_Backs.xlsx')
@@ -1689,6 +1709,8 @@ if GEN_TYPE in ('prints','all'):
                 make_print_file('BACKS',  True,  ctea, f'{OUT_DIR}/{safe}_Tea_Backs.xlsx')
             if c1l:
                 make_print_file('FRONTS', False, c1l,  f'{OUT_DIR}/{safe}_1L_Fronts.xlsx', folder_override='1L')
+            if celixir:
+                make_print_file('FRONTS', False, celixir, f'{OUT_DIR}/{safe}_Elixir_Fronts.xlsx')
         print(f'✅ Non-standard prints — {len(ns_by_cid)} customer(s)', file=sys.stderr)
 
 # ══ ZIP all generated files ══

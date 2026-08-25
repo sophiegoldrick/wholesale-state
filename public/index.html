@@ -2162,16 +2162,17 @@ function App(){
     else doGen(type);
   };
 
-  const doGen=async(type,forceGen=false)=>{
+  const doGen=async(type,forceGen=false,splitOverride=null)=>{
     setValModal(null);setGen(type);
     await new Promise(r=>setTimeout(r,80));
     try{
       const rows=rowsRef.current;
       if(!rows||rows.length===0){alert("No CSV data loaded. Please drop your CSV file first.");setGen(null);return;}
       const d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
+      const activeSplit=splitOverride!==null?splitOverride:genSplitChoice;
 
       // ── Split prompt check — fires BEFORE server/browser fork ──
-      if(type==="all"&&!genSplitChoice){
+      if(type==="all"&&!activeSplit){
         const nf=rows.filter(r=>r.SKU!=="FREIGHT"&&r.SKU&&!isSpecial(r));
         const total350=nf.filter(r=>prodType(r.SKU)==="350"&&!isClear(r)).reduce(function(s,r){return s+(parseInt(r.Quantity)||0);},0);
         if(total350>3000){
@@ -2184,7 +2185,7 @@ function App(){
       // Server-side generation via Python + openpyxl
       if(IS_DEPLOYED){
         const csvText=JSON.stringify(rows);
-        const resp=await apiFetch("/api/generate",{method:"POST",body:JSON.stringify({csvData:csvText,type,dateStr:d,force:!!forceGen,splitInput:genSplitChoice||"combined"})});
+        const resp=await apiFetch("/api/generate",{method:"POST",body:JSON.stringify({csvData:csvText,type,dateStr:d,force:!!forceGen,splitInput:activeSplit||"combined"})});
         if(!resp.ok){
           const e=await resp.json().catch(()=>({}));
           if(e.issues&&e.issues.length){
@@ -2243,12 +2244,12 @@ function App(){
         const prints=genPrints(rows);
         const SPLIT_THRESHOLD=3000;
         // If 350ml roll is large, ask the user if they want to split VIC vs Interstate
-        if(prints.total350>SPLIT_THRESHOLD&&!genSplitChoice){
+        if(prints.total350>SPLIT_THRESHOLD&&!activeSplit){
           setSplitPrompt({prints,type,d,rows});
           setGen(null);
           return;
         }
-        const splitChoice=genSplitChoice;
+        const splitChoice=activeSplit;
         setSplitChoice(null);
         const{f350,b350,f350c,b350c,fT,bT,f1}=prints;
         const specialFiles=genSpecialPrints(rows);
@@ -2389,12 +2390,12 @@ function App(){
             <button className="btn-t" style={{flex:1,justifyContent:"center"}} onClick={function(){
               setSplitChoice("split");
               setSplitPrompt(null);
-              handleGen("all");
+              doGen("all",false,"split");
             }}>✂️ Split into VIC + Interstate</button>
             <button className="btn-o" style={{flex:1,justifyContent:"center"}} onClick={function(){
               setSplitChoice("combined");
               setSplitPrompt(null);
-              handleGen("all");
+              doGen("all",false,"combined");
             }}>One Roll (combined)</button>
           </div>
           <div style={{padding:"0 26px 16px"}}>
@@ -2603,7 +2604,7 @@ function App(){
                           ?<span style={{fontSize:11,color:T.sage,fontWeight:600,fontFamily:"'Montserrat',sans-serif",whiteSpace:"nowrap"}}>Downloaded ✓</span>
                           :<span style={{fontSize:16,color:T.sand,fontWeight:300}}>↓</span>}
                       </button>
-                      {isCX&&hasVic&&!skipped&&(
+                      {isCX&&!skipped&&(
                         <button onClick={function(e){e.stopPropagation();
                           apiFetch("/api/store/ws_runs").then(function(r){return r.ok?r.json():null;}).then(function(d){
                             if(d&&d.value){var v=d.value;
@@ -3567,7 +3568,11 @@ function SettingsPanel({T, apiFetch, themeKey, setTheme, token, setToken}){
   const[pwConfirm,setPwConfirm]=useState('');
   const[pwMsg,setPwMsg]=useState(null);
   const[bizSettings,setBizSettings]=useState({companyName:'Wholesale State',abn:'',contactEmail:'',contactPhone:'',address:'',defaultCourier:'',orderPrefix:'OMO',timezone:'Australia/Melbourne'});
-  const[bizSaved,setBizSaved]=useState(false);
+  const[emailSettings,setEmailSettings]=useState({
+    productionRecipients:['leopegoli@gmail.com','production@pressedjuices.com.au','sophie@pressedjuices.com.au','leopegoli@bigpond.com'],
+    labelRecipients:['jasmin@pressedjuices.com.au','sophie@pressedjuices.com.au','info@wholesalestate.com.au'],
+  });
+  const[emailSaved,setEmailSaved]=useState(false);
   const[currentUser,setCurrentUser]=useState(null);
 
   useEffect(()=>{
@@ -3577,6 +3582,8 @@ function SettingsPanel({T, apiFetch, themeKey, setTheme, token, setToken}){
     window.storage.get('ws-notif-settings').then(r=>{if(r)setNotifSettings(JSON.parse(r.value));}).catch(()=>{});
     // Load biz settings
     window.storage.get('ws-biz-settings').then(r=>{if(r)setBizSettings(s=>({...s,...JSON.parse(r.value)}));}).catch(()=>{});
+    // Load email recipient settings
+    window.storage.get('ws-email-settings').then(r=>{if(r)setEmailSettings(JSON.parse(r.value));}).catch(()=>{});
     // Load delivery runs from database (shared across all devices)
     apiFetch("/api/store/ws_runs").then(function(r){return r.ok?r.json():null;}).then(function(d){
       if(d&&d.value){var v=d.value;
@@ -3655,6 +3662,7 @@ function SettingsPanel({T, apiFetch, themeKey, setTheme, token, setToken}){
     {id:'display',label:'Display & Theme',icon:'🎨'},
     {id:'users',label:'Users & Access',icon:'👥'},
     {id:'notifications',label:'Notifications',icon:'🔔'},
+    {id:'emails',label:'Email Recipients',icon:'📧'},
     {id:'business',label:'Business Settings',icon:'🏢'},
     {id:'account',label:'My Account',icon:'🔑'},
   ];
@@ -3967,6 +3975,39 @@ function SettingsPanel({T, apiFetch, themeKey, setTheme, token, setToken}){
             </div>
           )}
 
+          {/* ── EMAIL RECIPIENTS ── */}
+          {settingsTab==='emails'&&(
+            <div>
+              {[
+                {key:'productionRecipients',title:'Production Files Email',sub:'Everyone who receives the daily production files, print files and manifests when you click Send.'},
+                {key:'labelRecipients',title:'Label Requests Email',sub:'Everyone who is notified when a customer is missing a label folder in Google Drive.'},
+              ].map(({key,title,sub})=>(
+                <div key={key} style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:16,padding:24,marginBottom:16}}>
+                  <div style={{fontSize:13,fontWeight:800,color:T.ink,fontFamily:T.font,marginBottom:4}}>{title}</div>
+                  <div style={{fontSize:12,color:T.inkL,marginBottom:16}}>{sub}</div>
+                  {emailSettings[key].map((addr,i)=>(
+                    <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                      <div style={{flex:1,fontSize:13,color:T.ink,background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:'8px 12px'}}>{addr}</div>
+                      <button onClick={()=>setEmailSettings(p=>({...p,[key]:p[key].filter((_,j)=>j!==i)}))}
+                        style={{flexShrink:0,padding:'7px 12px',borderRadius:8,border:`1px solid ${T.border}`,background:'none',color:T.inkL,fontSize:12,cursor:'pointer',fontWeight:600}}>Remove</button>
+                    </div>
+                  ))}
+                  <div style={{display:'flex',gap:8,marginTop:8}}>
+                    <input id={`new-${key}`} type="email" placeholder="Add email address..."
+                      style={{flex:1,fontSize:13,border:`1px solid ${T.border}`,borderRadius:8,padding:'8px 12px',background:T.bg,color:T.ink,outline:'none'}}
+                      onKeyDown={e=>{if(e.key==='Enter'){const v=e.target.value.trim().toLowerCase();if(v&&v.includes('@')&&!emailSettings[key].includes(v)){setEmailSettings(p=>({...p,[key]:[...p[key],v]}));e.target.value='';}}}}
+                    />
+                    <button onClick={()=>{const el=document.getElementById(`new-${key}`);const v=(el.value||'').trim().toLowerCase();if(v&&v.includes('@')&&!emailSettings[key].includes(v)){setEmailSettings(p=>({...p,[key]:[...p[key],v]}));el.value='';}}}
+                      style={{flexShrink:0,padding:'7px 16px',borderRadius:8,border:'none',background:T.accent,color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer'}}>Add</button>
+                  </div>
+                </div>
+              ))}
+              <button onClick={()=>{window.storage.set('ws-email-settings',JSON.stringify(emailSettings)).then(()=>{setEmailSaved(true);setTimeout(()=>setEmailSaved(false),2500);});}}
+                style={{padding:'10px 28px',borderRadius:10,border:'none',background:T.accent,color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+                {emailSaved?'✓ Saved':'Save Recipients'}
+              </button>
+            </div>
+          )}
           {/* ── BUSINESS SETTINGS ── */}
           {settingsTab==='business'&&(
             <div>
