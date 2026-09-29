@@ -1326,16 +1326,17 @@ if GEN_TYPE in ('production','all'):
         # ── Remove info boxes (LABELS/CUSTOMERGROUP/PRODUCT) in cols O/P ──
         # They sit in the 3 rows before the Labelling Date row (hrow-3 to hrow-1 approx)
         for info_r in range(max(1, hrow - 6), hrow + 1):
-            for info_c in range(last_col + 1, 20):
+            for info_c in range(last_col + 1, 30):
                 cell = ws.cell(info_r, info_c)
                 cell.value  = None
                 cell.border = NO_BORDER
 
-        # ── Section title: uppercase, bold, size 14 ──
+        # ── Section title: date-prefixed, uppercase, bold, size 14 ──
+        day_prefix = f"{d.strftime('%A')} {d.day}{suffix} {d.strftime('%B')}"
         for title_r in range(max(1, hrow - 6), hrow):
             tv = ws.cell(title_r, 1).value
             if tv and isinstance(tv, str) and 'order' in tv.lower():
-                ws.cell(title_r, 1).value = tv.upper()
+                ws.cell(title_r, 1).value = f"{day_prefix} - {tv.strip().upper()}"
                 ws.cell(title_r, 1).font  = Font(bold=True, name='Calibri', size=14)
 
         # ── Batch Number box: outline border spanning col D to last_col ──
@@ -1358,7 +1359,7 @@ if GEN_TYPE in ('production','all'):
             ws.cell(hrow, ci).value = sku
         ws.cell(hrow, 5 + len(skus)).value = 'Grand Total'
         ws.cell(hrow, 6 + len(skus)).value = 'Cartons'
-        for ci in range(last_col + 1, 20):
+        for ci in range(last_col + 1, 30):
             ws.cell(hrow, ci).value  = None
             ws.cell(hrow, ci).border = NO_BORDER
         for ci in range(1, last_col + 1):
@@ -1483,8 +1484,22 @@ if GEN_TYPE in ('production','all'):
         r = ws.max_row + 2      # 2-row gap after previous section
 
         # Title row
-        ws.cell(r, 1).value = title.upper()
+        ws.cell(r, 1).value = title
         ws.cell(r, 1).font  = BLD14
+        r += 1
+
+        # Batch Number row (outline border spanning col D to last col)
+        THIN_b = Side(style='thin')
+        ws.cell(r, 4).value     = 'Batch Number:'
+        ws.cell(r, 4).font      = BLDF
+        ws.cell(r, 4).alignment = LFT
+        for bc in range(4, lc + 1):
+            ws.cell(r, bc).border = Border(
+                top    = THIN_b,
+                bottom = THIN_b,
+                left   = THIN_b if bc == 4   else None,
+                right  = THIN_b if bc == lc  else None
+            )
         r += 1
 
         # Header row
@@ -1544,27 +1559,48 @@ if GEN_TYPE in ('production','all'):
             r += 1
         print(f'  Appended section: {title} ({len(data_rows)} orders)', file=sys.stderr)
 
+    # Build date prefix for appended section titles (e.g. "Tuesday 29th September")
+    _day_prefix = f"{d.strftime('%A')} {d.day}{suffix} {d.strftime('%B')}"
+
     # Clear Label: regular (non-special) customers with clear-label 350ml
     if r350_clear:
         SKUS_CLEAR = sorted(set(r['Name'] for r in r350_clear))
-        append_section(ws, 'Clear Label Orders', SKUS_CLEAR, '350', row_filter=rf_clear)
+        append_section(ws, f'{_day_prefix} - CLEAR LABEL ORDERS', SKUS_CLEAR, '350', row_filter=rf_clear)
 
     # Special Orders: pallet/non-standard customers (350ml)
     if r350_special:
         SKUS_SP = sorted(set(r['Name'] for r in r350_special))
-        append_section(ws, 'Special Orders', SKUS_SP, '350', row_filter=rf_special)
+        append_section(ws, f'{_day_prefix} - SPECIAL ORDERS', SKUS_SP, '350', row_filter=rf_special)
 
     # Elixir Orders
     if relixir_data and SKUS_ELIXIR:
-        append_section(ws, 'Elixir Orders', SKUS_ELIXIR, 'ELIXIR')
+        append_section(ws, f'{_day_prefix} - ELIXIR ORDERS', SKUS_ELIXIR, 'ELIXIR')
 
     # Strip fill from all rows EXCEPT the 'Courier' header rows (SKU headers)
     NO_FILL = PatternFill(fill_type=None)
+    # Detect the blue fill colour from the first Courier header row in the template
+    BLUE_FILL = None
+    for row in ws.iter_rows():
+        if row[0].value == 'Courier':
+            fill = row[0].fill
+            if fill and fill.fgColor and fill.fgColor.type == 'rgb' and fill.fgColor.rgb not in ('00000000', 'FFFFFFFF', '00FFFFFF'):
+                BLUE_FILL = PatternFill(fill_type='solid', fgColor=fill.fgColor.rgb)
+            break
+    if BLUE_FILL is None:
+        BLUE_FILL = PatternFill(fill_type='solid', fgColor='9DC3E6')
+
     for row in ws.iter_rows():
         is_header = row[0].value == 'Courier'
         if not is_header:
             for cell in row:
                 cell.fill = NO_FILL
+
+    # Extend blue fill across all used columns on every Courier header row
+    for row in ws.iter_rows():
+        if row[0].value == 'Courier':
+            last_used = max((c for c in range(len(row), 0, -1) if row[c-1].value is not None), default=len(row))
+            for cell in row[:last_used]:
+                cell.fill = BLUE_FILL
 
     # Delete Tea / 1L sections entirely if no orders for that SKU type
     def delete_section(ws, section_marker):
@@ -1587,6 +1623,15 @@ if GEN_TYPE in ('production','all'):
 
     if not r1l_data:  delete_section(ws, '1L Orders')
     if not rtea_data: delete_section(ws, 'Tea Orders')
+
+    # Blank all remaining Discrepancies rows (no longer needed)
+    NO_BORDER = Border()
+    for ri in range(1, ws.max_row + 1):
+        v = str(ws.cell(ri, 1).value or '')
+        if 'Discrepancies' in v:
+            for c in range(1, 30):
+                ws.cell(ri, c).value  = None
+                ws.cell(ri, c).border = NO_BORDER
 
     wb.save(dst); generated.append(dst)
     print(f'✅ Production_Sheet', file=sys.stderr)
@@ -1732,6 +1777,7 @@ function validateCSV(rows) {
     if (TEA_SKUS.has(sku))                             product = 'TEA';
     else if (sku.endsWith('350'))                       product = '350';
     else if (sku.endsWith('1') || sku.endsWith('1L'))   product = '1L';
+    else if (sku.endsWith('100'))                        product = 'ELIXIR';
     if (!product || !VALID_PRODUCTS.includes(product))
       issues.push(`${line}: SKU "${sku}" couldn't be classified as 350ml, Tea, 1L, or Elixir`);
     if (!r.OrderNumber) issues.push(`${line}: Missing Order Number`);
