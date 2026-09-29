@@ -859,10 +859,12 @@ app.post('/api/sheets/upload-production', auth, async (req, res) => {
         body: JSON.stringify({ requests: [{ updateCells: { range: { sheetId: newSheetId }, fields: 'userEnteredValue,userEnteredFormat' } }] })
       });
     } else {
+      // index: 0 in addSheet properties creates the tab at the leftmost position directly —
+      // more reliable than a separate moveSheet call after creation.
       const addResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName, gridProperties: { rowCount: Math.max(rows.length + 20, 200), columnCount: numCols } } } }] })
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName, index: 0, gridProperties: { rowCount: Math.max(rows.length + 20, 200), columnCount: numCols } } } }] })
       });
       const addData = await addResp.json();
       if (addData.error) throw new Error('Failed to add sheet: ' + addData.error.message);
@@ -1318,24 +1320,28 @@ if GEN_TYPE in ('production','all'):
         CENTER    = Alignment(horizontal='center')
         last_col  = 6 + len(skus)  # D=4, SKUs, Grand Total, Cartons
 
-        # ── Remove info boxes (LABELS/CUSTOMERGROUP/PRODUCT) — clear everything right of data ──
-        # Unmerge any merged cells that overlap with clear area, then blank value/border/fill
-        clear_cols = range(last_col + 1, max(ws.max_column + 1, last_col + 30))
-        clear_rows = range(max(1, hrow - 10), hrow + 1)
-        # Catch merges that OVERLAP the clear area (min_col may be within data range)
+        # ── Remove info boxes (LABELS/CUSTOMERGROUP/PRODUCT) ──
+        # The box lives in the title rows, overlapping the SKU columns.
+        # Clear ALL columns (1 through max_column) for every title row above hrow,
+        # but restore column A value (section title) and skip the batch-number row (hrow-1).
+        title_rows = range(max(1, hrow - 10), hrow)  # rows above the header row
+        # Unmerge anything in title rows that spans beyond col 3 (i.e. the info box)
         merged_to_remove = [
             m for m in list(ws.merged_cells.ranges)
-            if m.max_col > last_col and any(m.min_row <= r <= m.max_row for r in clear_rows)
+            if m.max_col > 3 and any(m.min_row <= r <= m.max_row for r in title_rows)
         ]
         for m in merged_to_remove:
             ws.unmerge_cells(str(m))
-        for info_r in clear_rows:
-            for info_c in clear_cols:
+        for info_r in title_rows:
+            col_a_val = ws.cell(info_r, 1).value  # preserve section title in col A
+            for info_c in range(1, max(ws.max_column + 1, last_col + 10)):
                 cell = ws.cell(info_r, info_c)
                 cell.value  = None
                 cell.border = NO_BORDER
                 cell.fill   = PatternFill(fill_type=None)
                 cell.font   = Font(name='Calibri', size=11)
+            # Restore col A title value (section title / date prefix written below)
+            ws.cell(info_r, 1).value = col_a_val
 
         # ── Section title: date-prefixed, uppercase, bold, size 14 ──
         day_prefix = f"{d.strftime('%A')} {d.day}{suffix} {d.strftime('%B')}"
