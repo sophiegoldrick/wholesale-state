@@ -1836,32 +1836,6 @@ function App(){
     finally{ setLoginLoading(false); }
   }
 
-  // Show login screen when deployed and not authenticated
-  if(IS_DEPLOYED && !token) return(
-    <div style={{minHeight:'100vh',background:'#F5F0E8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24}}>
-      <div style={{display:'flex',flexDirection:'column',alignItems:'center',marginBottom:32}}>
-        <div style={{width:64,height:64,borderRadius:18,background:`linear-gradient(135deg,${currentT.accent},${currentT.accentD})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:30,marginBottom:16,boxShadow:`0 4px 20px ${currentT.accent}44`}}>🧃</div>
-        <div style={{fontFamily:currentT.font,fontWeight:800,fontSize:22,color:'#2D1B14',letterSpacing:.5}}>Wholesale State</div>
-        <div style={{fontSize:12,color:'#A07A6E',letterSpacing:1,marginTop:4,fontWeight:500}}>ORDER MANAGEMENT</div>
-      </div>
-      <div style={{background:'#FFFDF9',borderRadius:16,padding:'32px 28px',width:'100%',maxWidth:380,boxShadow:'0 2px 24px rgba(80,40,20,.08)',border:'1px solid #EDE0D0'}}>
-        <form onSubmit={handleLogin}>
-          <div style={{marginBottom:16}}>
-            <div style={{fontSize:11,fontWeight:700,color:'#A07A6E',letterSpacing:1,marginBottom:8,fontFamily:currentT.font}}>PASSWORD</div>
-            <input type="password" value={loginPw} onChange={e=>setLoginPw(e.target.value)}
-              className="inp" style={{width:'100%',fontSize:15,padding:'12px 14px',borderRadius:10,border:'1.5px solid #EDE0D0',outline:'none',boxSizing:'border-box',background:'#FBF7F2'}}
-              placeholder="Enter your password" autoFocus/>
-          </div>
-          {loginErr&&<div style={{fontSize:12,color:currentT.red,marginBottom:12,padding:'8px 12px',background:'#fff0f0',borderRadius:8}}>⚠ {loginErr}</div>}
-          <button type="submit" disabled={loginLoading}
-            style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:`linear-gradient(135deg,${currentT.accent},${currentT.accentD})`,color:'#fff',fontFamily:currentT.font,fontWeight:700,fontSize:14,cursor:'pointer',letterSpacing:.3,boxShadow:`0 4px 14px ${currentT.accent}44`,marginTop:4}}>
-            {loginLoading?'Signing in…':'Sign in'}
-          </button>
-        </form>
-      </div>
-      <div style={{marginTop:20,fontSize:11,color:'#C4A882'}}>Wholesale State — Internal use only</div>
-    </div>
-  );
 
   const[tab,setTab]=useState("generate");
   const[csvName,setCsvName]=useState(null);
@@ -2136,7 +2110,9 @@ function App(){
           if(r.SKU)custMap[r.CustomerId].skus.add(r.SKU.toUpperCase());
         });
         const uc=Object.values(custMap).map(c=>({...c,skus:[...c.skus]}));
-        const dr=await apiFetch("/api/drive/check-labels",{method:"POST",body:JSON.stringify({customers:uc})});
+        // Use raw fetch (not apiFetch) so a Drive API error never clears the session token
+        const _drTok=localStorage.getItem("ws-token");
+        const dr=await fetch("/api/drive/check-labels",{method:"POST",headers:{"Content-Type":"application/json",...(_drTok?{Authorization:"Bearer "+_drTok}:{})},body:JSON.stringify({customers:uc})});
         if(dr.ok){
           const dd=await dr.json();
           if(!dd.unconfigured){
@@ -2154,6 +2130,34 @@ function App(){
   },[snapshots]);
 
   const onDrop=useCallback((e)=>{e.preventDefault();setDrag(false);loadFile(e.dataTransfer.files[0]);},[loadFile]);
+
+  // LOGIN GUARD — placed AFTER all hooks so a mid-upload 401 / setToken(null) never
+  // causes 'Rendered fewer hooks than expected' crash. Previously caused blank cream page.
+  if(IS_DEPLOYED && !token) return(
+    <div style={{minHeight:'100vh',background:'#F5F0E8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24}}>
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',marginBottom:32}}>
+        <div style={{width:64,height:64,borderRadius:18,background:`linear-gradient(135deg,${currentT.accent},${currentT.accentD})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:30,marginBottom:16,boxShadow:`0 4px 20px ${currentT.accent}44`}}>🧃</div>
+        <div style={{fontFamily:currentT.font,fontWeight:800,fontSize:22,color:'#2D1B14',letterSpacing:.5}}>Wholesale State</div>
+        <div style={{fontSize:12,color:'#A07A6E',letterSpacing:1,marginTop:4,fontWeight:500}}>ORDER MANAGEMENT</div>
+      </div>
+      <div style={{background:'#FFFDF9',borderRadius:16,padding:'32px 28px',width:'100%',maxWidth:380,boxShadow:'0 2px 24px rgba(80,40,20,.08)',border:'1px solid #EDE0D0'}}>
+        <form onSubmit={handleLogin}>
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:11,fontWeight:700,color:'#A07A6E',letterSpacing:1,marginBottom:8,fontFamily:currentT.font}}>PASSWORD</div>
+            <input type="password" value={loginPw} onChange={e=>setLoginPw(e.target.value)}
+              className="inp" style={{width:'100%',fontSize:15,padding:'12px 14px',borderRadius:10,border:'1.5px solid #EDE0D0',outline:'none',boxSizing:'border-box',background:'#FBF7F2'}}
+              placeholder="Enter your password" autoFocus/>
+          </div>
+          {loginErr&&<div style={{fontSize:12,color:currentT.red,marginBottom:12,padding:'8px 12px',background:'#fff0f0',borderRadius:8}}>⚠ {loginErr}</div>}
+          <button type="submit" disabled={loginLoading}
+            style={{width:'100%',padding:'13px',borderRadius:10,border:'none',background:`linear-gradient(135deg,${currentT.accent},${currentT.accentD})`,color:'#fff',fontFamily:currentT.font,fontWeight:700,fontSize:14,cursor:'pointer',letterSpacing:.3,boxShadow:`0 4px 14px ${currentT.accent}44`,marginTop:4}}>
+            {loginLoading?'Signing in…':'Sign in'}
+          </button>
+        </form>
+      </div>
+      <div style={{marginTop:20,fontSize:11,color:'#C4A882'}}>Wholesale State — Internal use only</div>
+    </div>
+  );
 
   const triggerGen=(type,label)=>{
     const result=validate(rowsRef.current);
