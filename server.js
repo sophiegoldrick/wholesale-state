@@ -870,11 +870,13 @@ app.post('/api/sheets/upload-production', auth, async (req, res) => {
     }
 
     // ── STEP 2: Move tab to position 0 (leftmost — most recent date always first) ──
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
+    const moveResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ requests: [{ moveSheet: { sheetId: newSheetId, newIndex: 0 } }] })
     });
+    const moveData = await moveResp.json();
+    if (moveData.error) console.error('moveSheet error:', JSON.stringify(moveData.error));
 
     // ── STEP 3: Write plain values ────────────────────────────────
     // rows is a 2D array of plain values (strings/numbers) from SheetJS
@@ -1317,12 +1319,13 @@ if GEN_TYPE in ('production','all'):
         last_col  = 6 + len(skus)  # D=4, SKUs, Grand Total, Cartons
 
         # ── Remove info boxes (LABELS/CUSTOMERGROUP/PRODUCT) — clear everything right of data ──
-        # Unmerge any merged cells in the area first, then blank value/border/fill
-        clear_cols = range(last_col + 1, max(ws.max_column + 1, last_col + 20))
-        clear_rows = range(max(1, hrow - 6), hrow + 1)
+        # Unmerge any merged cells that overlap with clear area, then blank value/border/fill
+        clear_cols = range(last_col + 1, max(ws.max_column + 1, last_col + 30))
+        clear_rows = range(max(1, hrow - 10), hrow + 1)
+        # Catch merges that OVERLAP the clear area (min_col may be within data range)
         merged_to_remove = [
-            m for m in ws.merged_cells.ranges
-            if any(m.min_row <= r <= m.max_row and m.min_col > last_col for r in clear_rows)
+            m for m in list(ws.merged_cells.ranges)
+            if m.max_col > last_col and any(m.min_row <= r <= m.max_row for r in clear_rows)
         ]
         for m in merged_to_remove:
             ws.unmerge_cells(str(m))
@@ -1332,6 +1335,7 @@ if GEN_TYPE in ('production','all'):
                 cell.value  = None
                 cell.border = NO_BORDER
                 cell.fill   = PatternFill(fill_type=None)
+                cell.font   = Font(name='Calibri', size=11)
 
         # ── Section title: date-prefixed, uppercase, bold, size 14 ──
         day_prefix = f"{d.strftime('%A')} {d.day}{suffix} {d.strftime('%B')}"
