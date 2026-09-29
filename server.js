@@ -859,26 +859,29 @@ app.post('/api/sheets/upload-production', auth, async (req, res) => {
         body: JSON.stringify({ requests: [{ updateCells: { range: { sheetId: newSheetId }, fields: 'userEnteredValue,userEnteredFormat' } }] })
       });
     } else {
-      // index: 0 in addSheet properties creates the tab at the leftmost position directly —
-      // more reliable than a separate moveSheet call after creation.
       const addResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName, index: 0, gridProperties: { rowCount: Math.max(rows.length + 20, 200), columnCount: numCols } } } }] })
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName, gridProperties: { rowCount: Math.max(rows.length + 20, 200), columnCount: numCols } } } }] })
       });
       const addData = await addResp.json();
       if (addData.error) throw new Error('Failed to add sheet: ' + addData.error.message);
       newSheetId = addData.replies[0].addSheet.properties.sheetId;
     }
 
-    // ── STEP 2: Move tab to position 0 (leftmost — most recent date always first) ──
-    const moveResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
+    // ── STEP 2: Move tab to position 3 (4th tab, right after the 3 fixed tabs) ──
+    // Re-fetch after creation to get accurate count
+    const metaMove = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties.sheetId`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const metaMoveData = await metaMove.json();
+    const totalSheets = (metaMoveData.sheets||[]).length;
+    const insertAt = Math.min(3, Math.max(0, totalSheets - 1));
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requests: [{ moveSheet: { sheetId: newSheetId, newIndex: 0 } }] })
+      body: JSON.stringify({ requests: [{ moveSheet: { sheetId: newSheetId, newIndex: insertAt } }] })
     });
-    const moveData = await moveResp.json();
-    if (moveData.error) console.error('moveSheet error:', JSON.stringify(moveData.error));
 
     // ── STEP 3: Write plain values ────────────────────────────────
     // rows is a 2D array of plain values (strings/numbers) from SheetJS
@@ -974,12 +977,19 @@ app.post('/api/request-labels', auth, async (req, res) => {
       const email = AM_EMAILS[am] || Object.entries(AM_EMAILS).find(([k]) => am.startsWith(k))?.[1];
       if (email) amEmails.add(email);
     });
-    const toRecipients = [
-      'jasmin@pressedjuices.com.au',
-      'sophie@pressedjuices.com.au',
-      'info@wholesalestate.com.au',
-      ...amEmails,
-    ].map(addr => ({ emailAddress: { address: addr } }));
+    const toRecipients = await (async () => {
+      const fixed = ['jasmin@pressedjuices.com.au','sophie@pressedjuices.com.au','info@wholesalestate.com.au'];
+      let base = [...fixed];
+      try {
+        const dbSettings = await db(`SELECT value FROM kv_store WHERE key = 'ws-email-settings'`);
+        if (dbSettings.rows.length > 0) {
+          const parsed = JSON.parse(dbSettings.rows[0].value);
+          if (parsed.labelRecipients && parsed.labelRecipients.length > 0)
+            base = parsed.labelRecipients;
+        }
+      } catch(e) {}
+      return [...new Set([...base, ...amEmails])].map(addr => ({ emailAddress: { address: addr } }));
+    })();
     const rows = customers.map(c =>
       `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee">${c.id}</td><td style="padding:8px 12px;border-bottom:1px solid #eee">${c.name}</td><td style="padding:8px 12px;border-bottom:1px solid #eee">${c.accountManager || '—'}</td></tr>`
     ).join('');
@@ -1011,12 +1021,24 @@ app.post('/api/send-production-files', auth, async (req, res) => {
 
     const accessToken = await getAccessToken();
 
-    const toRecipients = (recipients || [
+    // Load recipients from database settings, fall back to hardcoded defaults
+    const defaultProdRecipients = [
       'leopegoli@gmail.com',
       'production@pressedjuices.com.au',
       'sophie@pressedjuices.com.au',
       'leopegoli@bigpond.com',
-    ]).map(addr => ({ emailAddress: { address: addr } }));
+    ];
+    let prodRecipients = recipients || defaultProdRecipients;
+    try {
+      const dbSettings = await db(`SELECT value FROM kv_store WHERE key = 'ws-email-settings'`);
+      if (dbSettings.rows.length > 0) {
+        const parsed = JSON.parse(dbSettings.rows[0].value);
+        if (parsed.productionRecipients && parsed.productionRecipients.length > 0)
+          prodRecipients = parsed.productionRecipients;
+      }
+    } catch(e) {}
+
+    const toRecipients = prodRecipients.map(addr => ({ emailAddress: { address: addr } }));
 
     const emailDate = dateLabel || new Date().toLocaleDateString('en-AU');
     const dayOfWeek = new Date().toLocaleDateString('en-AU', { weekday: 'long' });
@@ -1115,8 +1137,8 @@ TEA_SKUS = {'LTEA350','PTEA350','RTEA350'}
 for r in rows:
     sku = r.get('SKU','')
     if sku in TEA_SKUS:              r['Product'] = 'TEA'
-    elif sku.endswith('350'):        r['Product'] = '350'
     elif sku.endswith('100'):        r['Product'] = 'ELIXIR'
+    elif sku.endswith('350'):        r['Product'] = '350'
     elif sku.endswith('1') or sku.endswith('1L'): r['Product'] = '1L'
 # Fix float quantities
 for r in rows:
@@ -1130,21 +1152,21 @@ for r in rows:
 
 def total_cartons(ords):
     # Sum ALL qty by product type first, THEN divide — mixed SKUs fill the same carton
-    q350 = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='350')
-    qtea = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='TEA')
-    q1l  = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='1L')
-    qelx = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='ELIXIR')
-    t  = math.ceil(q350/24) if q350 else 0
-    t += math.ceil(qtea/18) if qtea else 0
-    t += math.ceil(q1l /12) if q1l  else 0
-    t += math.ceil(qelx/24) if qelx else 0
+    q350    = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='350')
+    qtea    = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='TEA')
+    q1l     = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='1L')
+    qelixir = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='ELIXIR')
+    t  = math.ceil(q350/24)    if q350    else 0
+    t += math.ceil(qtea/18)    if qtea    else 0
+    t += math.ceil(q1l /12)    if q1l     else 0
+    t += math.ceil(qelixir/24) if qelixir else 0
     return t
 
 def inv_value(ords):
     return sum(float(r.get('UnitPrice',0) or 0)*int(r.get('Quantity',0) or 0) for r in ords if r.get('Product'))
 
 def courier_orders(courier):
-    return {k:v for k,v in by_order.items() if v[0].get('Courier','')==courier}
+    return {k:v for k,v in by_order.items() if v[0].get('Courier','')==courier and not is_special_row(v[0])}
 
 GREY = PatternFill('solid', fgColor='D3D3D3')
 BOLD = Font(bold=True, name='Calibri', size=11)
@@ -1262,23 +1284,22 @@ if GEN_TYPE in ('production','all'):
     ws.cell(1,1).value = f"{d.strftime('%A')} - {d.day}{suffix} {d.strftime('%B %Y')}"
 
     # Build SKU lists dynamically from actual CSV data (sorted for consistent column order)
-    SKUS_350    = sorted(set(r['Name'] for r in rows if r.get('Product') == '350'))
-    SKUS_TEA    = sorted(set(r['Name'] for r in rows if r.get('Product') == 'TEA'))
-    SKUS_1L     = sorted(set(r['Name'] for r in rows if r.get('Product') == '1L'))
+    SKUS_350 = sorted(set(r['Name'] for r in rows if r.get('Product') == '350'))
+    SKUS_TEA = sorted(set(r['Name'] for r in rows if r.get('Product') == 'TEA'))
+    SKUS_1L  = sorted(set(r['Name'] for r in rows if r.get('Product') == '1L'))
     SKUS_ELIXIR = sorted(set(r['Name'] for r in rows if r.get('Product') == 'ELIXIR'))
 
-    def build_section_rows(skus, product_filter, row_filter=None):
+    def build_section_rows(skus, product_filter):
         """Build list of row dicts for this product section — couriers sorted, with subtotals + grand total."""
-        if row_filter is None: row_filter = lambda r: True
         couriers_data = defaultdict(list)
         for onum, ords in sorted(by_order.items(), key=lambda x: x[1][0].get('Customer','').upper()):
-            pr = [r for r in ords if r.get('Product') == product_filter and row_filter(r)]
+            pr = [r for r in ords if r.get('Product') == product_filter]
             if not pr: continue
             r0 = ords[0]
             sq = defaultdict(int)
             for r in pr: sq[r['Name']] += int(r.get('Quantity', 0) or 0)
             total_qty = sum(sq.values())
-            divisor = 24 if product_filter in ('350','ELIXIR') else 18 if product_filter=='TEA' else 12
+            divisor = 24 if product_filter=='350' else 18 if product_filter=='TEA' else 24 if product_filter=='ELIXIR' else 12
             tot_crt = total_qty / divisor  # exact decimal e.g. 2.5, not rounded up
             couriers_data[r0.get('Courier','')].append({
                 'courier': r0.get('Courier',''), 'onum': onum,
@@ -1302,7 +1323,7 @@ if GEN_TYPE in ('production','all'):
         out_rows.append(('grandtotal', {'grand_totals': dict(grand_totals), 'grand_cartons': grand_cartons}))
         return out_rows
 
-    def write_section(ws, hrow, skus, product_filter, row_filter=None):
+    def write_section(ws, hrow, skus, product_filter):
         """
         Write section data with correct formatting:
         - Info boxes (LABELS/CUSTOMERGROUP/PRODUCT) removed including borders
@@ -1320,35 +1341,19 @@ if GEN_TYPE in ('production','all'):
         CENTER    = Alignment(horizontal='center')
         last_col  = 6 + len(skus)  # D=4, SKUs, Grand Total, Cartons
 
-        # ── Remove info boxes (LABELS/CUSTOMERGROUP/PRODUCT) ──
-        # The box lives in the title rows, overlapping the SKU columns.
-        # Clear ALL columns (1 through max_column) for every title row above hrow,
-        # but restore column A value (section title) and skip the batch-number row (hrow-1).
-        title_rows = range(max(1, hrow - 10), hrow)  # rows above the header row
-        # Unmerge anything in title rows that spans beyond col 3 (i.e. the info box)
-        merged_to_remove = [
-            m for m in list(ws.merged_cells.ranges)
-            if m.max_col > 3 and any(m.min_row <= r <= m.max_row for r in title_rows)
-        ]
-        for m in merged_to_remove:
-            ws.unmerge_cells(str(m))
-        for info_r in title_rows:
-            col_a_val = ws.cell(info_r, 1).value  # preserve section title in col A
-            for info_c in range(1, max(ws.max_column + 1, last_col + 10)):
+        # ── Remove info boxes (LABELS/CUSTOMERGROUP/PRODUCT) in cols O/P ──
+        # They sit in the 3 rows before the Labelling Date row (hrow-3 to hrow-1 approx)
+        for info_r in range(max(1, hrow - 6), hrow + 1):
+            for info_c in range(last_col + 1, 20):
                 cell = ws.cell(info_r, info_c)
                 cell.value  = None
                 cell.border = NO_BORDER
-                cell.fill   = PatternFill(fill_type=None)
-                cell.font   = Font(name='Calibri', size=11)
-            # Restore col A title value (section title / date prefix written below)
-            ws.cell(info_r, 1).value = col_a_val
 
-        # ── Section title: date-prefixed, uppercase, bold, size 14 ──
-        day_prefix = f"{d.strftime('%A')} {d.day}{suffix} {d.strftime('%B')}"
+        # ── Section title: uppercase, bold, size 14 ──
         for title_r in range(max(1, hrow - 6), hrow):
             tv = ws.cell(title_r, 1).value
             if tv and isinstance(tv, str) and 'order' in tv.lower():
-                ws.cell(title_r, 1).value = f"{day_prefix} - {tv.strip().upper()}"
+                ws.cell(title_r, 1).value = tv.upper()
                 ws.cell(title_r, 1).font  = Font(bold=True, name='Calibri', size=14)
 
         # ── Batch Number box: outline border spanning col D to last_col ──
@@ -1371,7 +1376,7 @@ if GEN_TYPE in ('production','all'):
             ws.cell(hrow, ci).value = sku
         ws.cell(hrow, 5 + len(skus)).value = 'Grand Total'
         ws.cell(hrow, 6 + len(skus)).value = 'Cartons'
-        for ci in range(last_col + 1, 30):
+        for ci in range(last_col + 1, 20):
             ws.cell(hrow, ci).value  = None
             ws.cell(hrow, ci).border = NO_BORDER
         for ci in range(1, last_col + 1):
@@ -1388,7 +1393,7 @@ if GEN_TYPE in ('production','all'):
             return
 
         # ── Resize rows ──
-        section_rows = build_section_rows(skus, product_filter, row_filter)
+        section_rows = build_section_rows(skus, product_filter)
         rows_needed  = len(section_rows)
         existing_data_rows = disc_row - hrow - 1
         print(f'  Section at row {hrow}: {existing_data_rows} existing rows, need {rows_needed}', file=sys.stderr)
@@ -1457,162 +1462,29 @@ if GEN_TYPE in ('production','all'):
     for row in ws.iter_rows(min_row=1, max_row=ws.max_row):
         if row[0].value == 'Courier': courier_rows.append(row[0].row)
 
-    # Row filter helpers
-    rf_white   = lambda r: not is_special_row(r) and not is_clear_row(r)
-    rf_clear   = lambda r: not is_special_row(r) and is_clear_row(r)
-    rf_special = is_special_row
-
-    # Data subsets (used to decide if a section has content)
-    r350_white   = [r for r in rows if r.get('Product')=='350'    and rf_white(r)]
-    r350_clear   = [r for r in rows if r.get('Product')=='350'    and rf_clear(r)]
-    rtea_data    = [r for r in rows if r.get('Product')=='TEA'    and rf_white(r)]
-    r1l_data     = [r for r in rows if r.get('Product')=='1L'     and rf_white(r)]
-    r350_special = [r for r in rows if r.get('Product')=='350'    and rf_special(r)]
-    relixir_data = [r for r in rows if r.get('Product')=='ELIXIR']
-    r350_data    = r350_white  # for delete_section compatibility
+    # Split rows correctly: exclude SPECIAL, split 350ml by Label
+    r350_white = [r for r in rows if r.get('Product')=='350' and not is_special_row(r) and not is_clear_row(r)]
+    r350_clear = [r for r in rows if r.get('Product')=='350' and not is_special_row(r) and is_clear_row(r)]
+    rtea_data  = [r for r in rows if r.get('Product')=='TEA'  and not is_special_row(r)]
+    r1l_data   = [r for r in rows if r.get('Product')=='1L'   and not is_special_row(r)]
+    relixir_data = [r for r in rows if r.get('Product')=='ELIXIR' and not is_special_row(r)]
+    r350_data  = r350_white  # for delete_section compatibility
 
     if len(courier_rows) >= 3:
-        # Write template sections in REVERSE order so insert_rows doesn't shift positions
-        if r1l_data:  write_section(ws, courier_rows[2], SKUS_1L,  '1L',  row_filter=rf_white)
-        if rtea_data: write_section(ws, courier_rows[1], SKUS_TEA, 'TEA', row_filter=rf_white)
-        write_section(ws, courier_rows[0], SKUS_350, '350', row_filter=rf_white)
+        # Write sections in REVERSE order so insert_rows doesn't shift subsequent section positions
+        if r1l_data:  write_section(ws, courier_rows[2], SKUS_1L,  '1L')
+        if rtea_data: write_section(ws, courier_rows[1], SKUS_TEA, 'TEA')
+        write_section(ws, courier_rows[0], SKUS_350, '350')
     else:
         print(f'  ERROR: only found {len(courier_rows)} Courier header rows', file=sys.stderr)
 
-    # ── Append extra sections below the template (Clear Label, Special, Elixir) ──
-    def append_section(ws, title, skus, product_filter, row_filter=None):
-        """Append a clean production section at the bottom of the worksheet."""
-        sec_rows  = build_section_rows(skus, product_filter, row_filter)
-        data_rows = [x for x in sec_rows if x[0]=='data']
-        if not data_rows: return
-        THIN_s = Side(style='thin')
-        NO_BDR = Border()
-        PLAIN  = Font(bold=False, name='Calibri', size=11)
-        BLDF   = Font(bold=True,  name='Calibri', size=11)
-        BLD14  = Font(bold=True,  name='Calibri', size=14)
-        LFT    = Alignment(horizontal='left')
-        CTR    = Alignment(horizontal='center')
-        lc     = 6 + len(skus)  # last column index
-        r = ws.max_row + 2      # 2-row gap after previous section
-
-        # Title row
-        ws.cell(r, 1).value = title
-        ws.cell(r, 1).font  = BLD14
-        r += 1
-
-        # Batch Number row (outline border spanning col D to last col)
-        THIN_b = Side(style='thin')
-        ws.cell(r, 4).value     = 'Batch Number:'
-        ws.cell(r, 4).font      = BLDF
-        ws.cell(r, 4).alignment = LFT
-        for bc in range(4, lc + 1):
-            ws.cell(r, bc).border = Border(
-                top    = THIN_b,
-                bottom = THIN_b,
-                left   = THIN_b if bc == 4   else None,
-                right  = THIN_b if bc == lc  else None
-            )
-        r += 1
-
-        # Header row
-        ws.cell(r, 1).value = 'Courier'
-        ws.cell(r, 2).value = 'OrderNumber'
-        ws.cell(r, 3).value = 'CustomerId'
-        ws.cell(r, 4).value = 'Customer'
-        for ci, sku in enumerate(skus, 5):
-            ws.cell(r, ci).value = sku
-        ws.cell(r, 5+len(skus)).value = 'Grand Total'
-        ws.cell(r, 6+len(skus)).value = 'Cartons'
-        for ci in range(1, lc+1):
-            ws.cell(r, ci).font      = BLDF
-            ws.cell(r, ci).alignment = LFT if ci<=4 else CTR
-        r += 1
-
-        # Data / subtotal / grandtotal rows
-        for rtype, rdata in sec_rows:
-            for c in range(1, lc+1):
-                ws.cell(r, c).value     = None
-                ws.cell(r, c).font      = PLAIN
-                ws.cell(r, c).border    = NO_BDR
-                ws.cell(r, c).alignment = Alignment()
-            if rtype == 'data':
-                for ci, val in enumerate([rdata['courier'],rdata['onum'],rdata['cid'],rdata['cust']], 1):
-                    ws.cell(r, ci).value     = val
-                    ws.cell(r, ci).alignment = LFT
-                for ci, sku in enumerate(skus, 5):
-                    q = rdata['sq'].get(sku, 0)
-                    if q:
-                        ws.cell(r, ci).value     = q
-                        ws.cell(r, ci).alignment = CTR
-                ws.cell(r, 5+len(skus)).value     = rdata['tq']
-                ws.cell(r, 5+len(skus)).alignment = CTR
-                ws.cell(r, 6+len(skus)).value     = rdata['tc']
-                ws.cell(r, 6+len(skus)).alignment = CTR
-            elif rtype in ('subtotal','grandtotal'):
-                is_sub = rtype=='subtotal'
-                lbl    = 'Total' if is_sub else 'Grand Total'
-                tsks   = rdata['cst']          if is_sub else rdata['grand_totals']
-                qty    = rdata['cqt']          if is_sub else sum(rdata['grand_totals'].values())
-                crt    = rdata['cct']          if is_sub else rdata['grand_cartons']
-                for c in range(1, lc+1):
-                    ws.cell(r, c).font   = BLDF
-                    ws.cell(r, c).border = Border(top=THIN_s, bottom=THIN_s)
-                ws.cell(r, 4).value     = lbl
-                ws.cell(r, 4).alignment = LFT
-                for ci, sku in enumerate(skus, 5):
-                    v = tsks.get(sku, 0)
-                    if v:
-                        ws.cell(r, ci).value     = v
-                        ws.cell(r, ci).alignment = CTR
-                ws.cell(r, 5+len(skus)).value     = qty
-                ws.cell(r, 5+len(skus)).alignment = CTR
-                ws.cell(r, 6+len(skus)).value     = crt
-                ws.cell(r, 6+len(skus)).alignment = CTR
-            r += 1
-        print(f'  Appended section: {title} ({len(data_rows)} orders)', file=sys.stderr)
-
-    # Build date prefix for appended section titles (e.g. "Tuesday 29th September")
-    _day_prefix = f"{d.strftime('%A')} {d.day}{suffix} {d.strftime('%B')}"
-
-    # Clear Label: regular (non-special) customers with clear-label 350ml
-    if r350_clear:
-        SKUS_CLEAR = sorted(set(r['Name'] for r in r350_clear))
-        append_section(ws, f'{_day_prefix} - CLEAR LABEL ORDERS', SKUS_CLEAR, '350', row_filter=rf_clear)
-
-    # Special Orders: pallet/non-standard customers (350ml)
-    if r350_special:
-        SKUS_SP = sorted(set(r['Name'] for r in r350_special))
-        append_section(ws, f'{_day_prefix} - SPECIAL ORDERS', SKUS_SP, '350', row_filter=rf_special)
-
-    # Elixir Orders
-    if relixir_data and SKUS_ELIXIR:
-        append_section(ws, f'{_day_prefix} - ELIXIR ORDERS', SKUS_ELIXIR, 'ELIXIR')
-
     # Strip fill from all rows EXCEPT the 'Courier' header rows (SKU headers)
     NO_FILL = PatternFill(fill_type=None)
-    # Detect the blue fill colour from the first Courier header row in the template
-    BLUE_FILL = None
-    for row in ws.iter_rows():
-        if row[0].value == 'Courier':
-            fill = row[0].fill
-            if fill and fill.fgColor and fill.fgColor.type == 'rgb' and fill.fgColor.rgb not in ('00000000', 'FFFFFFFF', '00FFFFFF'):
-                BLUE_FILL = PatternFill(fill_type='solid', fgColor=fill.fgColor.rgb)
-            break
-    if BLUE_FILL is None:
-        BLUE_FILL = PatternFill(fill_type='solid', fgColor='9DC3E6')
-
     for row in ws.iter_rows():
         is_header = row[0].value == 'Courier'
         if not is_header:
             for cell in row:
                 cell.fill = NO_FILL
-
-    # Extend blue fill across all used columns on every Courier header row
-    for row in ws.iter_rows():
-        if row[0].value == 'Courier':
-            last_used = max((c for c in range(len(row), 0, -1) if row[c-1].value is not None), default=len(row))
-            for cell in row[:last_used]:
-                cell.fill = BLUE_FILL
 
     # Delete Tea / 1L sections entirely if no orders for that SKU type
     def delete_section(ws, section_marker):
@@ -1636,14 +1508,86 @@ if GEN_TYPE in ('production','all'):
     if not r1l_data:  delete_section(ws, '1L Orders')
     if not rtea_data: delete_section(ws, 'Tea Orders')
 
-    # Blank all remaining Discrepancies rows (no longer needed)
-    NO_BORDER = Border()
-    for ri in range(1, ws.max_row + 1):
-        v = str(ws.cell(ri, 1).value or '')
-        if 'Discrepancies' in v:
-            for c in range(1, 30):
-                ws.cell(ri, c).value  = None
-                ws.cell(ri, c).border = NO_BORDER
+    # Append Elixir Orders section at end of sheet (no template slot — appended directly)
+    if relixir_data:
+        from openpyxl.styles import Side, Border as OBorder, Alignment as OAlignment
+        THIN   = Side(style='thin')
+        NOBDR  = OBorder()
+        BF     = Font(bold=True, name='Calibri', size=11)
+        PF     = Font(bold=False, name='Calibri', size=11)
+        LEFT   = OAlignment(horizontal='left')
+        CENTRE = OAlignment(horizontal='center')
+        last_col_e = 6 + len(SKUS_ELIXIR)
+        # Section rows: blank gap, title, labelling date, blank, batch number, header
+        nr = ws.max_row + 2  # blank gap
+        ws.cell(nr, 1).value = None
+        nr += 1
+        ws.cell(nr, 1).value = 'ELIXIR ORDERS'
+        ws.cell(nr, 1).font  = Font(bold=True, name='Calibri', size=14)
+        nr += 1
+        ws.cell(nr, 1).value = 'Labelling Date:'; ws.cell(nr, 1).font = BF
+        ws.cell(nr, 4).value = 'Staff Working:';  ws.cell(nr, 4).font = BF
+        nr += 1  # blank
+        nr += 1
+        ws.cell(nr, 4).value = 'Batch Number:'; ws.cell(nr, 4).font = BF
+        for bc in range(4, last_col_e + 1):
+            ws.cell(nr, bc).border = OBorder(
+                top=THIN, bottom=THIN,
+                left=THIN if bc==4 else None,
+                right=THIN if bc==last_col_e else None)
+        nr += 1
+        # Header row
+        hdr_r = nr
+        ws.cell(hdr_r, 1).value = 'Courier';      ws.cell(hdr_r, 1).font = BF; ws.cell(hdr_r, 1).alignment = LEFT
+        ws.cell(hdr_r, 2).value = 'OrderNumber';  ws.cell(hdr_r, 2).font = BF; ws.cell(hdr_r, 2).alignment = LEFT
+        ws.cell(hdr_r, 3).value = 'CustomerId';   ws.cell(hdr_r, 3).font = BF; ws.cell(hdr_r, 3).alignment = LEFT
+        ws.cell(hdr_r, 4).value = 'Customer';     ws.cell(hdr_r, 4).font = BF; ws.cell(hdr_r, 4).alignment = LEFT
+        for ci, sku in enumerate(SKUS_ELIXIR, 5):
+            ws.cell(hdr_r, ci).value = sku; ws.cell(hdr_r, ci).font = BF; ws.cell(hdr_r, ci).alignment = CENTRE
+        ws.cell(hdr_r, 5+len(SKUS_ELIXIR)).value = 'Grand Total'; ws.cell(hdr_r, 5+len(SKUS_ELIXIR)).font = BF; ws.cell(hdr_r, 5+len(SKUS_ELIXIR)).alignment = CENTRE
+        ws.cell(hdr_r, 6+len(SKUS_ELIXIR)).value = 'Cartons';     ws.cell(hdr_r, 6+len(SKUS_ELIXIR)).font = BF; ws.cell(hdr_r, 6+len(SKUS_ELIXIR)).alignment = CENTRE
+        nr += 1
+        # Data rows — grouped by courier then order
+        from collections import defaultdict as _dd
+        elixir_by_courier = _dd(lambda: _dd(list))
+        for r in relixir_data:
+            elixir_by_courier[r.get('Courier','')][r.get('OrderNumber','')].append(r)
+        grand = {s:0 for s in SKUS_ELIXIR}; grand_qty = 0; grand_crt = 0
+        for courier in sorted(elixir_by_courier.keys()):
+            c_orders = elixir_by_courier[courier]
+            c_tot = {s:0 for s in SKUS_ELIXIR}; c_qty = 0; c_crt = 0; first = True
+            for onum in sorted(c_orders.keys()):
+                ords = c_orders[onum]; r0 = ords[0]
+                sq = {s:0 for s in SKUS_ELIXIR}
+                for r in ords: sq[r['Name']] = sq.get(r['Name'],0) + int(r.get('Quantity',0) or 0)
+                tq = sum(sq.values()); tc = math.ceil(tq/24)
+                ws.cell(nr, 1).value = courier if first else None; ws.cell(nr, 1).font = BF if first else PF; ws.cell(nr, 1).alignment = LEFT; first = False
+                ws.cell(nr, 2).value = onum;              ws.cell(nr, 2).font = PF; ws.cell(nr, 2).alignment = LEFT
+                ws.cell(nr, 3).value = r0.get('CustomerId',''); ws.cell(nr, 3).font = PF; ws.cell(nr, 3).alignment = LEFT
+                ws.cell(nr, 4).value = r0.get('Customer',''); ws.cell(nr, 4).font = PF; ws.cell(nr, 4).alignment = LEFT
+                for ci, sku in enumerate(SKUS_ELIXIR, 5):
+                    if sq.get(sku,0):
+                        ws.cell(nr, ci).value = sq[sku]; ws.cell(nr, ci).font = PF; ws.cell(nr, ci).alignment = CENTRE
+                ws.cell(nr, 5+len(SKUS_ELIXIR)).value = tq; ws.cell(nr, 5+len(SKUS_ELIXIR)).alignment = CENTRE
+                ws.cell(nr, 6+len(SKUS_ELIXIR)).value = tc; ws.cell(nr, 6+len(SKUS_ELIXIR)).alignment = CENTRE
+                for s in SKUS_ELIXIR: c_tot[s] = c_tot.get(s,0)+sq.get(s,0); grand[s] = grand.get(s,0)+sq.get(s,0)
+                c_qty += tq; grand_qty += tq; c_crt += tc; grand_crt += tc; nr += 1
+            # Courier subtotal
+            for c in range(1, last_col_e+1): ws.cell(nr,c).font=BF; ws.cell(nr,c).border=OBorder(top=THIN,bottom=THIN)
+            ws.cell(nr,4).value='Total'; ws.cell(nr,4).alignment=LEFT
+            for ci,sku in enumerate(SKUS_ELIXIR,5):
+                if c_tot.get(sku,0): ws.cell(nr,ci).value=c_tot[sku]; ws.cell(nr,ci).alignment=CENTRE
+            ws.cell(nr,5+len(SKUS_ELIXIR)).value=c_qty; ws.cell(nr,5+len(SKUS_ELIXIR)).alignment=CENTRE
+            ws.cell(nr,6+len(SKUS_ELIXIR)).value=c_crt; ws.cell(nr,6+len(SKUS_ELIXIR)).alignment=CENTRE
+            nr += 1
+        # Grand total
+        for c in range(1, last_col_e+1): ws.cell(nr,c).font=BF; ws.cell(nr,c).border=OBorder(top=THIN,bottom=THIN)
+        ws.cell(nr,4).value='Grand Total'; ws.cell(nr,4).alignment=LEFT
+        for ci,sku in enumerate(SKUS_ELIXIR,5):
+            if grand.get(sku,0): ws.cell(nr,ci).value=grand[sku]; ws.cell(nr,ci).alignment=CENTRE
+        ws.cell(nr,5+len(SKUS_ELIXIR)).value=grand_qty; ws.cell(nr,5+len(SKUS_ELIXIR)).alignment=CENTRE
+        ws.cell(nr,6+len(SKUS_ELIXIR)).value=grand_crt; ws.cell(nr,6+len(SKUS_ELIXIR)).alignment=CENTRE
+        print(f'  Elixir section appended: {grand_qty} units, {grand_crt} cartons', file=sys.stderr)
 
     wb.save(dst); generated.append(dst)
     print(f'✅ Production_Sheet', file=sys.stderr)
@@ -1735,6 +1679,9 @@ if GEN_TYPE in ('prints','all'):
     if rtea: make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Fronts.xlsx')
     if rtea: make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
     if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
+    # Elixir label roll — fronts only (wraparound label), 24 per carton
+    relixir = [r for r in sr_regular_white if r.get('Product')=='ELIXIR']
+    if relixir: make_print_file('FRONTS', False, relixir, f'{OUT_DIR}/{DATE_STR}_Elixir_Fronts.xlsx')
 
     # ── SPECIAL customers only: one fronts+backs file per customer ──
     import re as _re
@@ -1753,6 +1700,7 @@ if GEN_TYPE in ('prints','all'):
             c350 = [r for r in crows if r.get('Product') == '350']
             ctea = [r for r in crows if r.get('Product') == 'TEA']
             c1l  = [r for r in crows if r.get('Product') == '1L']
+            celixir = [r for r in crows if r.get('Product') == 'ELIXIR']
             if c350:
                 make_print_file('FRONTS', False, c350, f'{OUT_DIR}/{safe}_{label}_350ml_Fronts.xlsx')
                 make_print_file('BACKS',  True,  c350, f'{OUT_DIR}/{safe}_{label}_350ml_Backs.xlsx')
@@ -1761,6 +1709,8 @@ if GEN_TYPE in ('prints','all'):
                 make_print_file('BACKS',  True,  ctea, f'{OUT_DIR}/{safe}_Tea_Backs.xlsx')
             if c1l:
                 make_print_file('FRONTS', False, c1l,  f'{OUT_DIR}/{safe}_1L_Fronts.xlsx', folder_override='1L')
+            if celixir:
+                make_print_file('FRONTS', False, celixir, f'{OUT_DIR}/{safe}_Elixir_Fronts.xlsx')
         print(f'✅ Non-standard prints — {len(ns_by_cid)} customer(s)', file=sys.stderr)
 
 # ══ ZIP all generated files ══
@@ -1789,9 +1739,8 @@ function validateCSV(rows) {
     if (TEA_SKUS.has(sku))                             product = 'TEA';
     else if (sku.endsWith('350'))                       product = '350';
     else if (sku.endsWith('1') || sku.endsWith('1L'))   product = '1L';
-    else if (sku.endsWith('100'))                        product = 'ELIXIR';
     if (!product || !VALID_PRODUCTS.includes(product))
-      issues.push(`${line}: SKU "${sku}" couldn't be classified as 350ml, Tea, 1L, or Elixir`);
+      issues.push(`${line}: SKU "${sku}" couldn't be classified as 350ml, Tea, or 1L`);
     if (!r.OrderNumber) issues.push(`${line}: Missing Order Number`);
     if (!r.Customer)    issues.push(`${line}: Missing Customer name`);
     if (!r.Courier || !VALID_COURIERS.includes((r.Courier || '').trim().toUpperCase()))
