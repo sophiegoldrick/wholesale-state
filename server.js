@@ -869,18 +869,11 @@ app.post('/api/sheets/upload-production', auth, async (req, res) => {
       newSheetId = addData.replies[0].addSheet.properties.sheetId;
     }
 
-    // ── STEP 2: Move tab to position 3 (4th tab, right after the 3 fixed tabs) ──
-    // Re-fetch after creation to get accurate count
-    const metaMove = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties.sheetId`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const metaMoveData = await metaMove.json();
-    const totalSheets = (metaMoveData.sheets||[]).length;
-    const insertAt = Math.min(3, Math.max(0, totalSheets - 1));
+    // ── STEP 2: Move tab to position 0 (leftmost — most recent date always first) ──
     await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requests: [{ moveSheet: { sheetId: newSheetId, newIndex: insertAt } }] })
+      body: JSON.stringify({ requests: [{ moveSheet: { sheetId: newSheetId, newIndex: 0 } }] })
     });
 
     // ── STEP 3: Write plain values ────────────────────────────────
@@ -1323,13 +1316,22 @@ if GEN_TYPE in ('production','all'):
         CENTER    = Alignment(horizontal='center')
         last_col  = 6 + len(skus)  # D=4, SKUs, Grand Total, Cartons
 
-        # ── Remove info boxes (LABELS/CUSTOMERGROUP/PRODUCT) in cols O/P ──
-        # They sit in the 3 rows before the Labelling Date row (hrow-3 to hrow-1 approx)
-        for info_r in range(max(1, hrow - 6), hrow + 1):
-            for info_c in range(last_col + 1, 30):
+        # ── Remove info boxes (LABELS/CUSTOMERGROUP/PRODUCT) — clear everything right of data ──
+        # Unmerge any merged cells in the area first, then blank value/border/fill
+        clear_cols = range(last_col + 1, max(ws.max_column + 1, last_col + 20))
+        clear_rows = range(max(1, hrow - 6), hrow + 1)
+        merged_to_remove = [
+            m for m in ws.merged_cells.ranges
+            if any(m.min_row <= r <= m.max_row and m.min_col > last_col for r in clear_rows)
+        ]
+        for m in merged_to_remove:
+            ws.unmerge_cells(str(m))
+        for info_r in clear_rows:
+            for info_c in clear_cols:
                 cell = ws.cell(info_r, info_c)
                 cell.value  = None
                 cell.border = NO_BORDER
+                cell.fill   = PatternFill(fill_type=None)
 
         # ── Section title: date-prefixed, uppercase, bold, size 14 ──
         day_prefix = f"{d.strftime('%A')} {d.day}{suffix} {d.strftime('%B')}"
