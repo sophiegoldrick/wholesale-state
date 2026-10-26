@@ -1742,6 +1742,8 @@ if GEN_TYPE in ('prints','all'):
     r350_clear=[r for r in sr_regular_clear if r.get('Product')=='350']
     rtea=[r for r in sr_regular_white if r.get('Product')=='TEA']
     r1l =[r for r in sr_regular_white if r.get('Product')=='1L']
+    relixir_white=[r for r in sr_regular_white if r.get('Product')=='ELIXIR']
+    relixir_clear=[r for r in sr_regular_clear if r.get('Product')=='ELIXIR']
 
     # 350ml white label roll — combined or split VIC/Interstate
     total_350_units = sum(int(float(r.get('Quantity',0) or 0)) for r in r350_white)
@@ -1766,6 +1768,14 @@ if GEN_TYPE in ('prints','all'):
     if rtea: make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Fronts.xlsx')
     if rtea: make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
     if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
+    # Elixir white label roll
+    if relixir_white:
+        make_print_file('FRONTS', False, relixir_white, f'{OUT_DIR}/{DATE_STR}_Elixir_Fronts.xlsx')
+        make_print_file('BACKS',  True,  relixir_white, f'{OUT_DIR}/{DATE_STR}_Elixir_Backs.xlsx')
+    # Elixir clear label roll
+    if relixir_clear:
+        make_print_file('FRONTS', False, relixir_clear, f'{OUT_DIR}/{DATE_STR}_Elixir_Clear_Fronts.xlsx')
+        make_print_file('BACKS',  True,  relixir_clear, f'{OUT_DIR}/{DATE_STR}_Elixir_Clear_Backs.xlsx')
 
     # ── SPECIAL customers only: one fronts+backs file per customer ──
     import re as _re
