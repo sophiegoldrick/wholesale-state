@@ -1744,8 +1744,10 @@ if GEN_TYPE in ('prints','all'):
     sr_regular_clear = [r for r in sr if not is_special_row(r) and is_clear_row(r)]
     r350_white=[r for r in sr_regular_white if r.get('Product')=='350']
     r350_clear=[r for r in sr_regular_clear if r.get('Product')=='350']
-    rtea=[r for r in sr_regular_white if r.get('Product')=='TEA']
-    r1l =[r for r in sr_regular_white if r.get('Product')=='1L']
+    rtea      =[r for r in sr_regular_white if r.get('Product')=='TEA']
+    rtea_clear=[r for r in sr_regular_clear if r.get('Product')=='TEA']
+    r1l       =[r for r in sr_regular_white if r.get('Product')=='1L']
+    r1l_clear =[r for r in sr_regular_clear if r.get('Product')=='1L']
     relixir_white=[r for r in sr_regular_white if r.get('Product')=='ELIXIR']
     relixir_clear=[r for r in sr_regular_clear if r.get('Product')=='ELIXIR']
 
@@ -1777,16 +1779,25 @@ if GEN_TYPE in ('prints','all'):
         make_print_file('BACKS',  True,  r350_clear, f'{OUT_DIR}/{DATE_STR}_350ml_Clear_Backs.xlsx')
         _cl_items += [('350ml Clear — Fronts', _qty(r350_clear)), ('350ml Clear — Backs', _qty(r350_clear))]
     # ── Iced Tea ──
-    if rtea:
+    if rtea or rtea_clear:
         _cl_items.append(('Iced Tea', None))
+    if rtea:
         make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Fronts.xlsx')
         make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
         _cl_items += [('Tea — Fronts', _qty(rtea)), ('Tea — Backs', _qty(rtea))]
+    if rtea_clear:
+        make_print_file('FRONTS', False, rtea_clear, f'{OUT_DIR}/{DATE_STR}_Tea_Clear_Fronts.xlsx')
+        make_print_file('BACKS',  True,  rtea_clear, f'{OUT_DIR}/{DATE_STR}_Tea_Clear_Backs.xlsx')
+        _cl_items += [('Tea Clear — Fronts', _qty(rtea_clear)), ('Tea Clear — Backs', _qty(rtea_clear))]
     # ── 1L ──
-    if r1l:
+    if r1l or r1l_clear:
         _cl_items.append(('1L', None))
+    if r1l:
         make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
         _cl_items.append(('1L — Fronts', _qty(r1l)))
+    if r1l_clear:
+        make_print_file('FRONTS', False, r1l_clear, f'{OUT_DIR}/{DATE_STR}_1L_Clear_Fronts.xlsx', folder_override='1L')
+        _cl_items.append(('1L Clear — Fronts', _qty(r1l_clear)))
     # ── Elixir ──
     if relixir_white or relixir_clear:
         _cl_items.append(('Elixir', None))
