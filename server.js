@@ -1745,6 +1745,9 @@ if GEN_TYPE in ('prints','all'):
     relixir_white=[r for r in sr_regular_white if r.get('Product')=='ELIXIR']
     relixir_clear=[r for r in sr_regular_clear if r.get('Product')=='ELIXIR']
 
+    _cl_items = []  # (label_text, qty_count) — populated as each print file is generated
+    def _qty(rr): return sum(int(float(r.get('Quantity',0) or 0)) for r in rr)
+
     # 350ml white label roll — combined or split VIC/Interstate
     total_350_units = sum(int(float(r.get('Quantity',0) or 0)) for r in r350_white)
     if SPLIT_INPUT == 'split' and total_350_units > 3000:
@@ -1754,28 +1757,38 @@ if GEN_TYPE in ('prints','all'):
         if r350_vic:
             make_print_file('FRONTS', False, r350_vic,  f'{OUT_DIR}/{DATE_STR}_350ml_VIC_Fronts.xlsx')
             make_print_file('BACKS',  True,  r350_vic,  f'{OUT_DIR}/{DATE_STR}_350ml_VIC_Backs.xlsx')
+            _cl_items += [('350ml White VIC — Fronts', _qty(r350_vic)), ('350ml White VIC — Backs', _qty(r350_vic))]
         if r350_intl:
             make_print_file('FRONTS', False, r350_intl, f'{OUT_DIR}/{DATE_STR}_350ml_Interstate_Fronts.xlsx')
             make_print_file('BACKS',  True,  r350_intl, f'{OUT_DIR}/{DATE_STR}_350ml_Interstate_Backs.xlsx')
+            _cl_items += [('350ml White Interstate — Fronts', _qty(r350_intl)), ('350ml White Interstate — Backs', _qty(r350_intl))]
         print(f'✅ 350ml SPLIT — VIC:{len(r350_vic)} Interstate:{len(r350_intl)}', file=sys.stderr)
     else:
         make_print_file('FRONTS', False, r350_white, f'{OUT_DIR}/{DATE_STR}_350ml_Fronts.xlsx')
         make_print_file('BACKS',  True,  r350_white, f'{OUT_DIR}/{DATE_STR}_350ml_Backs.xlsx')
+        _cl_items += [('350ml White — Fronts', _qty(r350_white)), ('350ml White — Backs', _qty(r350_white))]
     # Clear label roll — all REGULAR+CLEAR customers combined
     if r350_clear:
         make_print_file('FRONTS', False, r350_clear, f'{OUT_DIR}/{DATE_STR}_350ml_Clear_Fronts.xlsx')
         make_print_file('BACKS',  True,  r350_clear, f'{OUT_DIR}/{DATE_STR}_350ml_Clear_Backs.xlsx')
-    if rtea: make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Fronts.xlsx')
-    if rtea: make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
-    if r1l:  make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
+        _cl_items += [('350ml Clear — Fronts', _qty(r350_clear)), ('350ml Clear — Backs', _qty(r350_clear))]
+    if rtea:
+        make_print_file('FRONTS', False, rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Fronts.xlsx')
+        make_print_file('BACKS',  True,  rtea, f'{OUT_DIR}/{DATE_STR}_Tea_Backs.xlsx')
+        _cl_items += [('Tea — Fronts', _qty(rtea)), ('Tea — Backs', _qty(rtea))]
+    if r1l:
+        make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
+        _cl_items.append(('1L — Fronts', _qty(r1l)))
     # Elixir white label roll
     if relixir_white:
         make_print_file('FRONTS', False, relixir_white, f'{OUT_DIR}/{DATE_STR}_Elixir_Fronts.xlsx')
         make_print_file('BACKS',  True,  relixir_white, f'{OUT_DIR}/{DATE_STR}_Elixir_Backs.xlsx')
+        _cl_items += [('Elixir — Fronts', _qty(relixir_white)), ('Elixir — Backs', _qty(relixir_white))]
     # Elixir clear label roll
     if relixir_clear:
         make_print_file('FRONTS', False, relixir_clear, f'{OUT_DIR}/{DATE_STR}_Elixir_Clear_Fronts.xlsx')
         make_print_file('BACKS',  True,  relixir_clear, f'{OUT_DIR}/{DATE_STR}_Elixir_Clear_Backs.xlsx')
+        _cl_items += [('Elixir Clear — Fronts', _qty(relixir_clear)), ('Elixir Clear — Backs', _qty(relixir_clear))]
 
     # ── SPECIAL customers only: one fronts+backs file per customer ──
     import re as _re
@@ -1797,12 +1810,65 @@ if GEN_TYPE in ('prints','all'):
             if c350:
                 make_print_file('FRONTS', False, c350, f'{OUT_DIR}/{safe}_{label}_350ml_Fronts.xlsx')
                 make_print_file('BACKS',  True,  c350, f'{OUT_DIR}/{safe}_{label}_350ml_Backs.xlsx')
+                _cl_items += [(f'{cd["name"]} 350ml — Fronts', _qty(c350)), (f'{cd["name"]} 350ml — Backs', _qty(c350))]
             if ctea:
                 make_print_file('FRONTS', False, ctea, f'{OUT_DIR}/{safe}_Tea_Fronts.xlsx')
                 make_print_file('BACKS',  True,  ctea, f'{OUT_DIR}/{safe}_Tea_Backs.xlsx')
+                _cl_items += [(f'{cd["name"]} Tea — Fronts', _qty(ctea)), (f'{cd["name"]} Tea — Backs', _qty(ctea))]
             if c1l:
                 make_print_file('FRONTS', False, c1l,  f'{OUT_DIR}/{safe}_1L_Fronts.xlsx', folder_override='1L')
+                _cl_items.append((f'{cd["name"]} 1L — Fronts', _qty(c1l)))
         print(f'✅ Non-standard prints — {len(ns_by_cid)} customer(s)', file=sys.stderr)
+
+# ══ Print Run Checklist PDF ══
+try:
+    from reportlab.lib.pagesizes import A4 as _A4
+    from reportlab.pdfgen import canvas as _rcanvas
+    from reportlab.lib.units import mm as _mm
+    _pdf_ok = True
+except ImportError:
+    import subprocess as _rsp
+    _rsp.run(['pip3','install','reportlab','--break-system-packages','-q'], capture_output=True)
+    try:
+        from reportlab.lib.pagesizes import A4 as _A4
+        from reportlab.pdfgen import canvas as _rcanvas
+        from reportlab.lib.units import mm as _mm
+        _pdf_ok = True
+    except ImportError:
+        _pdf_ok = False
+        print('⚠️  reportlab not available — checklist PDF skipped', file=sys.stderr)
+
+if _pdf_ok and _cl_items:
+    _cl_path = f'{OUT_DIR}/{DATE_STR}_Print_Checklist.pdf'
+    _c = _rcanvas.Canvas(_cl_path, pagesize=_A4)
+    _pw, _ph = _A4
+    _mg = 20 * _mm
+    _y  = _ph - 22 * _mm
+    # ── Header ──
+    _c.setFont('Helvetica-Bold', 30)
+    _c.drawString(_mg, _y, 'Wholesale State')
+    _y -= 11 * _mm
+    _c.setFont('Helvetica', 18)
+    _c.drawString(_mg, _y, f'{_day_prefix}  —  Print Run')
+    _y -= 7 * _mm
+    _c.setLineWidth(2)
+    _c.line(_mg, _y, _pw - _mg, _y)
+    _y -= 12 * _mm
+    # ── Checklist rows ──
+    for _lbl, _cnt in _cl_items:
+        if _y < 25 * _mm:
+            _c.showPage()
+            _y = _ph - 22 * _mm
+        _c.setLineWidth(1.5)
+        _c.rect(_mg, _y - 4 * _mm, 7 * _mm, 7 * _mm)          # checkbox
+        _c.setFont('Helvetica', 17)
+        _c.drawString(_mg + 11 * _mm, _y, _lbl)
+        _c.setFont('Helvetica-Bold', 17)
+        _c.drawRightString(_pw - _mg, _y, f'{_cnt:,} labels')
+        _y -= 11 * _mm
+    _c.save()
+    generated.append(_cl_path)
+    print(f'✅ Print checklist — {len(_cl_items)} items', file=sys.stderr)
 
 # ══ ZIP all generated files ══
 zip_path = f'{OUT_DIR}/{DATE_STR}_Wholesale_State_Files.zip'
