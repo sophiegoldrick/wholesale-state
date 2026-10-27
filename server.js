@@ -1827,14 +1827,14 @@ try:
     from reportlab.lib.units import mm as _mm
     _pdf_ok = True
 except ImportError:
-    import subprocess as _rsp
-    _rsp.run(['pip3','install','reportlab','--break-system-packages','-q'], capture_output=True)
     try:
+        import subprocess as _rsp, sys as _sys
+        _rsp.run([_sys.executable,'-m','pip','install','reportlab','--break-system-packages','-q'], capture_output=True)
         from reportlab.lib.pagesizes import A4 as _A4
         from reportlab.pdfgen import canvas as _rcanvas
         from reportlab.lib.units import mm as _mm
         _pdf_ok = True
-    except ImportError:
+    except Exception:
         _pdf_ok = False
         print('⚠️  reportlab not available — checklist PDF skipped', file=sys.stderr)
 
