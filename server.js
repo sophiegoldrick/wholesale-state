@@ -1121,6 +1121,10 @@ CSV_PATH = sys.argv[1] if len(sys.argv) > 1 else '/mnt/user-data/uploads/ORDER_I
 OUT_DIR  = sys.argv[2] if len(sys.argv) > 2 else '/tmp/gen_out'
 DATE_STR = sys.argv[3] if len(sys.argv) > 3 else datetime.date.today().strftime('%d-%m-%Y')
 GEN_TYPE = sys.argv[4] if len(sys.argv) > 4 else 'all'
+# Human-readable date heading used by PDF checklist (always computed at module level)
+_d_now   = datetime.date.today()
+_d_sfx   = 'th' if 11 <= _d_now.day <= 13 else {1:'st',2:'nd',3:'rd'}.get(_d_now.day % 10,'th')
+_day_prefix = f"{_d_now.strftime('%A')} {_d_now.day}{_d_sfx} {_d_now.strftime('%B')}"
 TPL_DIR  = sys.argv[5] if len(sys.argv) > 5 else '/mnt/user-data/uploads'
 SPLIT_INPUT = sys.argv[6] if len(sys.argv) > 6 else 'combined'  # 'split' | 'combined'
 
