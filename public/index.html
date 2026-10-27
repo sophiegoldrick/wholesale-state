@@ -1619,6 +1619,7 @@ function GenSuccessModal({modal, onClose, apiFetch, T}){
   const[sheetsUploading,setSheetsUploading]=useState(false);
   const[sheetsUploaded,setSheetsUploaded]=useState(false);
   const[sheetsErr,setSheetsErr]=useState(null);
+  const[customName,setCustomName]=useState(()=>modal.zipName.replace(/\.zip$/i,''));
 
   const SHEETS_ID="1pXOchOdEVlJ8cQNS90Yus-F1O1fwk9ONMreNt4_L_g0";
   const PRODUCTION_RECIPIENTS=[
@@ -1631,7 +1632,7 @@ function GenSuccessModal({modal, onClose, apiFetch, T}){
   async function handleDownload(){
     const url=URL.createObjectURL(modal.zipBlob);
     const a=document.createElement("a");
-    a.href=url;a.download=modal.zipName;
+    a.href=url;a.download=customName+'.zip';
     document.body.appendChild(a);a.click();
     setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
   }
@@ -1670,7 +1671,7 @@ function GenSuccessModal({modal, onClose, apiFetch, T}){
         method:'POST',
         body:JSON.stringify({
           zipBase64:base64,
-          zipName:modal.zipName,
+          zipName:customName+'.zip',
           dateLabel:modal.dateLabel,
           recipients:PRODUCTION_RECIPIENTS,
         }),
@@ -1691,7 +1692,7 @@ function GenSuccessModal({modal, onClose, apiFetch, T}){
           <div style={{width:44,height:44,borderRadius:12,background:T.sageL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>✅</div>
           <div style={{flex:1}}>
             <div style={{fontFamily:"'Montserrat',sans-serif",fontWeight:800,fontSize:15,color:T.ink,marginBottom:3}}>Files generated successfully</div>
-            <div style={{fontSize:12,color:T.inkL}}>{modal.zipName}</div>
+            <div style={{fontSize:12,color:T.inkL}}>{customName}.zip</div>
           </div>
           <button className="btn-o" onClick={onClose} style={{flexShrink:0,padding:"5px 10px"}}>✕</button>
         </div>
@@ -1723,6 +1724,16 @@ function GenSuccessModal({modal, onClose, apiFetch, T}){
                 {r}
               </div>
             ))}
+          </div>
+
+          {/* Folder / ZIP name */}
+          <div style={{background:T.creamD,borderRadius:10,padding:"10px 14px"}}>
+            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:10,fontWeight:700,color:T.inkL,letterSpacing:1,marginBottom:6}}>FOLDER / ZIP NAME</div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <input value={customName} onChange={e=>setCustomName(e.target.value)} disabled={emailSent}
+                style={{flex:1,fontSize:13,padding:"6px 10px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.ink,fontFamily:"inherit"}}/>
+              <span style={{fontSize:11,color:T.inkL,flexShrink:0}}>.zip</span>
+            </div>
           </div>
 
           {/* Action buttons */}
