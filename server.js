@@ -1746,8 +1746,7 @@ if GEN_TYPE in ('prints','all'):
     r350_clear=[r for r in sr_regular_clear if r.get('Product')=='350']
     rtea      =[r for r in sr_regular_white if r.get('Product')=='TEA']
     rtea_clear=[r for r in sr_regular_clear if r.get('Product')=='TEA']
-    r1l       =[r for r in sr_regular_white if r.get('Product')=='1L']
-    r1l_clear =[r for r in sr_regular_clear if r.get('Product')=='1L']
+    r1l       =[r for r in sr if not is_special_row(r) and r.get('Product')=='1L']
     relixir_white=[r for r in sr_regular_white if r.get('Product')=='ELIXIR']
     relixir_clear=[r for r in sr_regular_clear if r.get('Product')=='ELIXIR']
 
@@ -1790,14 +1789,10 @@ if GEN_TYPE in ('prints','all'):
         make_print_file('BACKS',  True,  rtea_clear, f'{OUT_DIR}/{DATE_STR}_Tea_Clear_Backs.xlsx')
         _cl_items += [('Tea Clear — Fronts', _qty(rtea_clear)), ('Tea Clear — Backs', _qty(rtea_clear))]
     # ── 1L ──
-    if r1l or r1l_clear:
-        _cl_items.append(('1L', None))
     if r1l:
-        make_print_file('FRONTS', False, r1l,  f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx', folder_override='1L')
+        _cl_items.append(('1L', None))
+        make_print_file('FRONTS', False, r1l, f'{OUT_DIR}/{DATE_STR}_1L_Fronts.xlsx')
         _cl_items.append(('1L — Fronts', _qty(r1l)))
-    if r1l_clear:
-        make_print_file('FRONTS', False, r1l_clear, f'{OUT_DIR}/{DATE_STR}_1L_Clear_Fronts.xlsx', folder_override='1L')
-        _cl_items.append(('1L Clear — Fronts', _qty(r1l_clear)))
     # ── Elixir ──
     if relixir_white or relixir_clear:
         _cl_items.append(('Elixir', None))
@@ -1838,7 +1833,7 @@ if GEN_TYPE in ('prints','all'):
                 make_print_file('BACKS',  True,  ctea, f'{OUT_DIR}/{safe}_Tea_Backs.xlsx')
                 _cl_items += [(f'{cd["name"]} Tea — Fronts', _qty(ctea)), (f'{cd["name"]} Tea — Backs', _qty(ctea))]
             if c1l:
-                make_print_file('FRONTS', False, c1l,  f'{OUT_DIR}/{safe}_1L_Fronts.xlsx', folder_override='1L')
+                make_print_file('FRONTS', False, c1l,  f'{OUT_DIR}/{safe}_1L_Fronts.xlsx')
                 _cl_items.append((f'{cd["name"]} 1L — Fronts', _qty(c1l)))
             if celixir:
                 make_print_file('FRONTS', False, celixir, f'{OUT_DIR}/{safe}_{label}_Elixir_Fronts.xlsx')
