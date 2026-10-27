@@ -1845,27 +1845,38 @@ if _pdf_ok and _cl_items:
     _mg = 20 * _mm
     _y  = _ph - 22 * _mm
     # ── Header ──
-    _c.setFont('Helvetica-Bold', 30)
-    _c.drawString(_mg, _y, 'Wholesale State')
-    _y -= 11 * _mm
-    _c.setFont('Helvetica', 18)
-    _c.drawString(_mg, _y, f'{_day_prefix}  —  Print Run')
-    _y -= 7 * _mm
-    _c.setLineWidth(2)
+    _gr, _gg, _gb = 0.118, 0.302, 0.208    # #1E4D35 deep green
+    _c.setFillColorRGB(_gr, _gg, _gb)
+    _c.setFont('Helvetica-Bold', 34)
+    _c.drawString(_mg, _y, _day_prefix)
+    _y -= 10 * _mm
+    _c.setFillColorRGB(0.35, 0.35, 0.35)
+    _c.setFont('Helvetica', 16)
+    _c.drawString(_mg, _y, 'Wholesale State  —  Print Run')
+    _y -= 9 * _mm
+    _c.setStrokeColorRGB(_gr, _gg, _gb)
+    _c.setLineWidth(2.5)
     _c.line(_mg, _y, _pw - _mg, _y)
-    _y -= 12 * _mm
+    _y -= 14 * _mm
     # ── Checklist rows ──
     for _lbl, _cnt in _cl_items:
         if _y < 25 * _mm:
             _c.showPage()
             _y = _ph - 22 * _mm
-        _c.setLineWidth(1.5)
-        _c.rect(_mg, _y - 4 * _mm, 7 * _mm, 7 * _mm)          # checkbox
-        _c.setFont('Helvetica', 17)
-        _c.drawString(_mg + 11 * _mm, _y, _lbl)
-        _c.setFont('Helvetica-Bold', 17)
+        _c.setStrokeColorRGB(0.15, 0.15, 0.15)
+        _c.setFillColorRGB(1, 1, 1)
+        _c.setLineWidth(1.2)
+        _c.rect(_mg, _y - 4 * _mm, 6.5 * _mm, 6.5 * _mm)      # checkbox
+        _c.setFillColorRGB(0.08, 0.08, 0.08)
+        _c.setFont('Helvetica', 16)
+        _c.drawString(_mg + 10 * _mm, _y, _lbl)
+        _c.setFillColorRGB(_gr, _gg, _gb)
+        _c.setFont('Helvetica-Bold', 16)
         _c.drawRightString(_pw - _mg, _y, f'{_cnt:,} labels')
-        _y -= 11 * _mm
+        _c.setStrokeColorRGB(0.88, 0.88, 0.88)
+        _c.setLineWidth(0.5)
+        _c.line(_mg, _y - 6 * _mm, _pw - _mg, _y - 6 * _mm)   # row separator
+        _y -= 12 * _mm
     _c.save()
     generated.append(_cl_path)
     print(f'✅ Print checklist — {len(_cl_items)} items', file=sys.stderr)
