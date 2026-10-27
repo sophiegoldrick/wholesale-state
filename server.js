@@ -1798,12 +1798,10 @@ if GEN_TYPE in ('prints','all'):
         _cl_items.append(('Elixir', None))
     if relixir_white:
         make_print_file('FRONTS', False, relixir_white, f'{OUT_DIR}/{DATE_STR}_Elixir_Fronts.xlsx')
-        make_print_file('BACKS',  True,  relixir_white, f'{OUT_DIR}/{DATE_STR}_Elixir_Backs.xlsx')
-        _cl_items += [('Elixir — Fronts', _qty(relixir_white)), ('Elixir — Backs', _qty(relixir_white))]
+        _cl_items.append(('Elixir — Fronts', _qty(relixir_white)))
     if relixir_clear:
         make_print_file('FRONTS', False, relixir_clear, f'{OUT_DIR}/{DATE_STR}_Elixir_Clear_Fronts.xlsx')
-        make_print_file('BACKS',  True,  relixir_clear, f'{OUT_DIR}/{DATE_STR}_Elixir_Clear_Backs.xlsx')
-        _cl_items += [('Elixir Clear — Fronts', _qty(relixir_clear)), ('Elixir Clear — Backs', _qty(relixir_clear))]
+        _cl_items.append(('Elixir Clear — Fronts', _qty(relixir_clear)))
 
     # ── SPECIAL customers only: one fronts+backs file per customer ──
     import re as _re
@@ -1837,8 +1835,7 @@ if GEN_TYPE in ('prints','all'):
                 _cl_items.append((f'{cd["name"]} 1L — Fronts', _qty(c1l)))
             if celixir:
                 make_print_file('FRONTS', False, celixir, f'{OUT_DIR}/{safe}_{label}_Elixir_Fronts.xlsx')
-                make_print_file('BACKS',  True,  celixir, f'{OUT_DIR}/{safe}_{label}_Elixir_Backs.xlsx')
-                _cl_items += [(f'{cd["name"]} Elixir — Fronts', _qty(celixir)), (f'{cd["name"]} Elixir — Backs', _qty(celixir))]
+                _cl_items.append((f'{cd["name"]} Elixir — Fronts', _qty(celixir)))
         print(f'✅ Non-standard prints — {len(ns_by_cid)} customer(s)', file=sys.stderr)
 
 # ══ Print Run Checklist PDF ══
