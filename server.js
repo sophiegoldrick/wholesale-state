@@ -1847,7 +1847,7 @@ if _pdf_ok and _cl_items:
     # ── Header ──
     _gr, _gg, _gb = 0.118, 0.302, 0.208    # #1E4D35 deep green
     _c.setFillColorRGB(_gr, _gg, _gb)
-    _c.setFont('Helvetica-Bold', 34)
+    _c.setFont('Helvetica', 34)
     _c.drawString(_mg, _y, _day_prefix)
     _y -= 10 * _mm
     _c.setFillColorRGB(0.35, 0.35, 0.35)
