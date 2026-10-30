@@ -1856,7 +1856,7 @@ except ImportError:
         _pdf_ok = False
         print('⚠️  reportlab not available — checklist PDF skipped', file=sys.stderr)
 
-if _pdf_ok and _cl_items:
+if GEN_TYPE in ('prints','all') and _pdf_ok and _cl_items:
     _cl_path = f'{OUT_DIR}/{DATE_STR}_Print_Checklist.pdf'
     _c = _rcanvas.Canvas(_cl_path, pagesize=_A4)
     _pw, _ph = _A4
