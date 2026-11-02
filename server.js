@@ -1160,12 +1160,22 @@ by_order = defaultdict(list)
 for r in rows:
     by_order[r['OrderNumber']].append(r)
 
+def _qty(r):
+    """Safely parse Quantity — Ordermentum sometimes exports rows where a note/description
+    field bleeds into Quantity, producing a non-integer string."""
+    v = r.get('Quantity', 0)
+    try:
+        return int(v or 0)
+    except (ValueError, TypeError):
+        print(f'  WARNING: bad Quantity skipped — order {r.get("OrderNumber","?")} ({repr(str(v)[:60])})', file=sys.stderr)
+        return 0
+
 def total_cartons(ords):
     # Sum ALL qty by product type first, THEN divide — mixed SKUs fill the same carton
-    q350 = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='350')
-    qtea = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='TEA')
-    q1l  = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='1L')
-    qelx = sum(int(r.get('Quantity',0) or 0) for r in ords if r.get('Product')=='ELIXIR')
+    q350 = sum(_qty(r) for r in ords if r.get('Product')=='350')
+    qtea = sum(_qty(r) for r in ords if r.get('Product')=='TEA')
+    q1l  = sum(_qty(r) for r in ords if r.get('Product')=='1L')
+    qelx = sum(_qty(r) for r in ords if r.get('Product')=='ELIXIR')
     t  = math.ceil(q350/24) if q350 else 0
     t += math.ceil(qtea/18) if qtea else 0
     t += math.ceil(q1l /12) if q1l  else 0
@@ -1173,7 +1183,7 @@ def total_cartons(ords):
     return t
 
 def inv_value(ords):
-    return sum(float(r.get('UnitPrice',0) or 0)*int(r.get('Quantity',0) or 0) for r in ords if r.get('Product'))
+    return sum(float(r.get('UnitPrice',0) or 0)*_qty(r) for r in ords if r.get('Product'))
 
 def courier_orders(courier):
     return {k:v for k,v in by_order.items() if v[0].get('Courier','')==courier}
@@ -1308,7 +1318,7 @@ if GEN_TYPE in ('production','all'):
             if not pr: continue
             r0 = ords[0]
             sq = defaultdict(int)
-            for r in pr: sq[r['Name']] += int(r.get('Quantity', 0) or 0)
+            for r in pr: sq[r['Name']] += _qty(r)
             total_qty = sum(sq.values())
             divisor = 24 if product_filter in ('350','ELIXIR') else 18 if product_filter=='TEA' else 12
             tot_crt = total_qty / divisor  # exact decimal e.g. 2.5, not rounded up

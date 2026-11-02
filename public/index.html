@@ -363,10 +363,20 @@ const GST=1.10;
 function ceCost(ctns,zone){const r=CE_RATES[zone]||CE_RATES.cou1;return parseFloat(((r.base+Math.max(0,ctns-r.thresh)*r.extra)*(1+FUEL_LEVY)*GST).toFixed(2));}
 
 function parseCSV(text){
-  const lines=text.split(/\r?\n/).filter(Boolean);
-  if(lines.length<2)return[];
-  const headers=lines[0].split(",").map(h=>h.replace(/^"|"$/g,"").trim());
-  return lines.slice(1).map(line=>{
+  // RFC 4180: split into logical rows, respecting quoted fields containing newlines
+  const lines=[];let buf='',q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(c==='"'){q=!q;buf+=c;}
+    else if(!q&&c==='\r'&&text[i+1]==='\n'){lines.push(buf);buf='';i++;}
+    else if(!q&&(c==='\n'||c==='\r')){lines.push(buf);buf='';}
+    else{buf+=c;}
+  }
+  if(buf)lines.push(buf);
+  const filtered=lines.filter(Boolean);
+  if(filtered.length<2)return[];
+  const headers=filtered[0].split(",").map(h=>h.replace(/^"|"$/g,"").trim());
+  return filtered.slice(1).map(line=>{
     const vals=[];let inQ=false,cur="";
     for(const ch of line){if(ch==='"'){inQ=!inQ}else if(ch===','&&!inQ){vals.push(cur);cur=""}else cur+=ch}
     vals.push(cur);
