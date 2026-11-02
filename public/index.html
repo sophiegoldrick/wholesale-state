@@ -2191,8 +2191,16 @@ function App(){
     setValModal(null);setGen(type);
     await new Promise(r=>setTimeout(r,80));
     try{
-      const rows=rowsRef.current;
+      // Re-apply run assignments — rows may be fresh after a CSV re-upload
+      // while run stops are still populated in state from a previous split session.
+      let rows=rowsRef.current;
       if(!rows||rows.length===0){alert("No CSV data loaded. Please drop your CSV file first.");setGen(null);return;}
+      const _runMap={};
+      run1Stops.forEach(function(s){_runMap[s.orderNumber]="RUN1";});
+      run2Stops.forEach(function(s){_runMap[s.orderNumber]="RUN2";});
+      run3Stops.forEach(function(s){_runMap[s.orderNumber]="RUN3";});
+      run4Stops.forEach(function(s){_runMap[s.orderNumber]="RUN4";});
+      if(Object.keys(_runMap).length>0){rows=rows.map(function(r){var _rk=_runMap[r.OrderNumber];return _rk?Object.assign({},r,{Courier:_rk}):r;});}
       const d=new Date().toLocaleDateString("en-AU").replace(/\//g,"-");
       const activeSplit=splitOverride!==null?splitOverride:genSplitChoice;
 
